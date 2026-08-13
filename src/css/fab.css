@@ -1,13 +1,15 @@
 /* Morph FAB + Speed Dial（移植自 LexiCull，适配 Desktop tokens）
    位置参照 LexiCull：距右 28px；距底 = 底栏（屏高 1/8）顶部 + 16px 间隙
    （LexiCull 悬浮胶囊底栏顶 ≈ panel+84，FAB bottom = panel+100，间隙 16px）。
-   大小/形状为初始形态（36px 圆形）。 */
+   层级参照 LexiCull：FAB 为页面层最顶（1500，高于 Dialog 1300 / buildinfo 1200 /
+   Drawer 1100），任意面板打开时始终可见可点；仅瞬态 toast(2000) 与
+   取景器调试层(9998+)在其上。 */
 .mode-switch-fab {
   --fab-radius: 50%;
   position: fixed;
   bottom: calc(12.5vh + 16px);
   right: 28px;
-  z-index: 701;
+  z-index: 1500;
   width: 36px;
   height: 36px;
   border: 1px solid var(--color-border);
@@ -52,7 +54,7 @@
 .fab-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 700;
+  z-index: 1499;
   background: rgba(0,0,0,0.18);
   opacity: 0;
   pointer-events: none;
@@ -70,7 +72,7 @@
   right: 28px;
   width: 36px;
   height: 36px;
-  z-index: 1003;
+  z-index: 1501;
   pointer-events: none;
 }
 

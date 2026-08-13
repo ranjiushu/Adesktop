@@ -31,12 +31,7 @@ App.inspector = (function () {
   // ==================== 初始化 ====================
 
   function initInspector() {
-    // FAB z-index 提升到所有遮罩之上
-    let s = document.createElement('style')
-    s.id = 'scope-style'
-    s.textContent = '#mode-switch-fab{z-index:1002!important}'
-    document.head.appendChild(s)
-
+    // FAB 层级由 fab.css 全局控制（1500，页面层最顶），无需运行时注入
     let fab = document.getElementById('mode-switch-fab')
     if (!fab) return
 

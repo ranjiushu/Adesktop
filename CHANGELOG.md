@@ -42,6 +42,10 @@
   WebView 内核检测焦点离开自动隐藏 IME
 - 「提交与构建」入口从 Drawer 底部固定区移入「操作」区（普通工具项，
   位于切换根目录之后），不再始终钉在 Drawer 底部
+- Morph FAB 始终可见：z-index 提升至页面层最顶（1500/backdrop 1499/Speed Dial 1501，
+  高于 Dialog 1300 / buildinfo 1200 / Drawer 1100），任意面板打开时 FAB 仍可见可点；
+  移除取景器运行时注入的 z-index:1002!important 旧逻辑（该注入反把 FAB 压回 1002
+  被 Dialog/buildinfo 盖住）
 - SAF 创建文件自动追加 .txt：DocumentFile.createFile 固定传 text/plain，
   ExternalStorageProvider 按 MIME 补齐扩展名（无扩展名 → .txt、「哈哈哈.js」→
   「哈哈哈.js.txt」）；改为按扩展名映射 MIME（.js → application/javascript），

@@ -17,7 +17,7 @@ App.Drawer = (function () {
       d.setAttribute('aria-hidden', 'false')
     }
     if (o) o.classList.add('drawer-overlay-visible')
-    App.bridge.vibrate()
+    // 无震动反馈（用户指定移除开启/关闭震动）
   }
 
   function close() {

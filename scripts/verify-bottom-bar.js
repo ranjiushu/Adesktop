@@ -122,7 +122,20 @@ async function main() {
   if (dlgOpen) pass('加号点击 → 对话框打开且输入框聚焦')
   else fail('加号点击未打开对话框')
 
+  // ── 2b. open() 同步聚焦（不经延时，防异步聚焦回归——真机依赖手势上下文弹键盘） ──
+  const syncFocus = await page.evaluate(() => {
+    App.CreateDialog.close()
+    App.CreateDialog.open()
+    const focused = document.activeElement === document.getElementById('create-name')
+    App.CreateDialog.close()
+    return focused
+  })
+  if (syncFocus) pass('open() 同步聚焦输入框')
+  else fail('open() 未同步聚焦输入框')
+
   // ── 3. 输入名称「报告.md」+ 点「文件」→ 名称原样创建（不补后缀） ──
+  // 2b 的同步聚焦断言已关闭对话框，重新打开
+  await tap(client, bar.addInfo.x, bar.addInfo.y, 60)
   await page.evaluate(() => {
     document.getElementById('create-name').value = '报告.md'
   })

@@ -24,8 +24,13 @@ App.CreateDialog = (function () {
     let input = _getEl(INPUT_ID)
     if (input) {
       input.value = ''
-      // 延迟聚焦：等 overlay 可见后再拉起软键盘（WebView 下立即聚焦可能被吞）
-      setTimeout(function () { input.focus() }, 120)
+      // 同步聚焦：open() 由加号 touchend 手势同步调用，仍在用户手势上下文内，
+      // Android WebView 才允许拉起软键盘（延迟聚焦会脱离手势上下文导致不弹键盘）。
+      // 延迟补一次：防 WebView 渲染时序吞掉同步焦点。
+      input.focus()
+      setTimeout(function () {
+        if (document.activeElement !== input) input.focus()
+      }, 120)
     }
   }
 

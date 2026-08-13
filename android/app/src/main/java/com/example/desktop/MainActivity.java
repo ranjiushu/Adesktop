@@ -8,7 +8,11 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -33,9 +37,48 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        // 允许页面动态 focus() 输入框时获得初始焦点（配合前端新建对话框自动拉起键盘）
+        settings.setNeedInitialFocus(true);
 
         // 页面内导航一律留在 WebView，不跳系统浏览器
         webView.setWebViewClient(new WebViewClient());
+
+        // ── 主动拉起软键盘（仅条件触发）：WebView 内核只在「触摸目标为输入框」时
+        //    自动弹键盘——加号按钮触摸后前端 focus() 输入框，内核不会补弹。
+        //    此处借 ACTION_UP 手势窗口延迟检查：对话框可见且输入框已聚焦才请求 IME
+        //    （SHOW_IMPLICIT）。条件守卫避免误伤：
+        //      - Drawer 开/关等无输入框聚焦场景不弹（此前无差别 SHOW_IMPLICIT 会触发
+        //        Android 12「键盘恢复」机制，把上次的键盘会话重新拉起）
+        //    Android 12+ 丢弃非用户手势的 showSoftInput，必须在手势窗口内调用。
+        webView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_UP) {
+                    v.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            webView.evaluateJavascript(
+                                "(function(){" +
+                                "var o=document.getElementById('create-dialog-overlay');" +
+                                "return (o && o.classList.contains('dialog-overlay-visible')" +
+                                " && document.activeElement" +
+                                " && document.activeElement.tagName==='INPUT')?'1':'0';" +
+                                "})()",
+                                new ValueCallback<String>() {
+                                    @Override
+                                    public void onReceiveValue(String value) {
+                                        if ("1".equals(value)) {
+                                            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                                            if (imm != null) imm.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT);
+                                        }
+                                    }
+                                });
+                        }
+                    }, 100);
+                }
+                return false;  // 不消费事件，WebView 正常处理触摸
+            }
+        });
 
         setContentView(webView);
 

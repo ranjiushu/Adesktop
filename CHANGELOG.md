@@ -31,6 +31,13 @@
 - 构建注入 JSON 未转义 `</`：提交信息/文件名含 `</script>` 可闭合 script 块，统一转义
 - build-info 排序后详情索引错位（__origIdx 重渲染被覆盖）
 - 私有目录越界校验前缀误判（/root 命中 /root2）、read 无大小上限（10MB 护栏）
+- 新建对话框输入框无法触摸聚焦：bindPress 的 touchstart preventDefault 阻断
+  触摸聚焦（INPUT/TEXTAREA/SELECT/contentEditable 豁免）
+- 新建对话框打开后键盘不拉起：延迟聚焦脱离用户手势上下文，改为同步聚焦
+  （加号 touchend 手势链内）+ 延迟补焦兜底；MainActivity 补 setNeedInitialFocus(true)，
+  并在触摸 ACTION_UP 后 100ms 借手势窗口请求 IME（SHOW_IMPLICIT，Android 12+ 会丢弃
+  非手势 showSoftInput；无输入框聚焦时 no-op）
+- Drawer 开启震动移除（用户指定关闭开启/关闭震动反馈）
 
 ### 工程
 

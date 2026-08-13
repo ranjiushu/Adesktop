@@ -23,7 +23,13 @@ App.utils = (function () {
     let pressed = false
 
     btn.addEventListener('touchstart', function (e) {
-      e.preventDefault()
+      // 可编辑元素不拦截默认行为：否则输入框无法触摸聚焦、软键盘不拉起
+      // （touchstart preventDefault 会阻止触摸聚焦；输入框事件冒泡到遮罩的
+      //   bindPress 时同样命中，须豁免 INPUT/TEXTAREA/SELECT/contentEditable）
+      let t = e.target
+      let editable = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+        t.tagName === 'SELECT' || t.isContentEditable)
+      if (!editable) e.preventDefault()
       pressed = true
       touchFired = false
     }, { passive: false })

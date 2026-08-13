@@ -13,6 +13,7 @@ App.fabSpeedDial = (function () {
 
   let _expanded = false
   let _mode = null
+  let _selectionActive = false
 
   function _getEl(id) { return document.getElementById(id) }
 
@@ -36,6 +37,20 @@ App.fabSpeedDial = (function () {
       case 'switch-root':
         collapse()
         App.Actions.switchRoot()
+        return
+      case 'clear-selection':
+        if (App.Desktop && typeof App.Desktop.clearSelection === 'function') {
+          App.Desktop.clearSelection()
+        }
+        collapse()
+        return
+      case 'open':
+      case 'rename':
+      case 'delete':
+      case 'properties':
+        // 阶段 C 实现操作动作，阶段 B 占位
+        if (App.toast) App.toast.show('操作「' + action + '」阶段 C 实现')
+        collapse()
         return
     }
     collapse()
@@ -77,6 +92,28 @@ App.fabSpeedDial = (function () {
   function getMode() { return _mode }
   function getState() { return { expanded: _expanded, mode: _mode } }
 
+  // 选中态驱动：非空 → 自动展开 selection 按钮集；空 → 收起
+  // 选中态操作栏是「非模态」的：不加全屏遮罩，桌面保持可交互（长按拖拽/框选/点空白清空）
+  function setSelection(hasSelection) {
+    _selectionActive = !!hasSelection
+    let fab = _getEl(FAB_ID)
+    let sd = _getEl(SPEED_DIAL_ID)
+    let bd = _getEl(BACKDROP_ID)
+    if (!fab || !sd) return
+    if (hasSelection) {
+      _expanded = true
+      _mode = 'selection'
+      sd.setAttribute('data-mode', 'selection')
+      if (bd) bd.classList.remove('fab-backdrop-visible')
+      sd.classList.add('fab-speed-dial-expanded')
+      fab.classList.add('fab-speed-dial-active')
+    } else {
+      collapse()
+    }
+  }
+
+  function isSelectionActive() { return _selectionActive }
+
   // ── 初始化 ──
   function init() {
     let bd = _getEl(BACKDROP_ID)
@@ -98,6 +135,8 @@ App.fabSpeedDial = (function () {
     isExpanded: isExpanded,
     getMode: getMode,
     getState: getState,
+    setSelection: setSelection,
+    isSelectionActive: isSelectionActive,
     init: init
   }
 })()

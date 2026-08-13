@@ -37,6 +37,8 @@ build-web.sh 每次构建注入到 JS 尾部（`var` 声明，避免被 minify m
 ## 体积控制
 
 - minify-bundle.js：terser(JS) + clean-css(CSS)，顶层标识符不 rename（toplevel:false）
+- 体积棘轮（build-web.sh --strict）：本次产物超过基线（dist/.size-baseline）130% 判为膨胀并拦截；
+  严格模式构建后更新基线（verify.sh 与提交前门禁均以 --strict 运行）
 - 每次 minify 输出体积对比，异常增长需在提交信息说明
 
 ## Android 壳

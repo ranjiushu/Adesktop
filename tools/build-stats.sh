@@ -65,7 +65,7 @@ try:
         out.append({'hash': c['hash'][:7], 'fullHash': c['hash'], 'msg': c['msg'],
                     'date': c['date'], 'author': c['author'],
                     'stat': stat, 'files': c['files']})
-    print('var RECENT_COMMITS=' + json.dumps(out, ensure_ascii=False) + ';')
+    print('var RECENT_COMMITS=' + json.dumps(out, ensure_ascii=False).replace('</', '<\\/') + ';')
 except Exception:
     print('var RECENT_COMMITS=[];')
 PYEOF
@@ -137,7 +137,7 @@ try:
             'daily': day_levels,
             'maxDay': str(max_day),
             'maxCount': max_count
-        }, ensure_ascii=False) + ';')
+        }, ensure_ascii=False).replace('</', '<\\/') + ';')
 except Exception:
     print('var CONTRIBUTION_GRID={startDate:"",today:"",daily:{},maxDay:"",maxCount:0};')
 PYEOF
@@ -296,7 +296,7 @@ try:
 except: pass
 
 files.sort(key=lambda x: -x['lines'])
-print('var FILE_STATS=' + json.dumps(files, ensure_ascii=False) + ';')
+print('var FILE_STATS=' + json.dumps(files, ensure_ascii=False).replace('</', '<\\/') + ';')
 
 # ── 生成仓库地图 repo-map.md（Agent 定向用） ──
 repo_map_path = os.path.join(SCRIPT, 'docs', 'repo-map.md')
@@ -529,7 +529,7 @@ try:
 except: pass
 
 non_source_files.sort(key=lambda x: -x['lines'])
-print('var NON_SOURCE_STATS=' + json.dumps(non_source_files, ensure_ascii=False) + ';')
+print('var NON_SOURCE_STATS=' + json.dumps(non_source_files, ensure_ascii=False).replace('</', '<\\/') + ';')
 PYEOF
 if ! grep -q 'var NON_SOURCE_STATS=' "$TMP_JS" 2>/dev/null; then
   echo "var NON_SOURCE_STATS=[];" >> "$TMP_JS"

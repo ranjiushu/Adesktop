@@ -252,6 +252,31 @@ check_consistency() {
   fi
 }
 
+# ── 体积棘轮（--strict）：超过基线 30% 判为膨胀 fail；strict 构建后更新基线 ──
+size_gate() {
+  local output="$1"
+  local baseline_file="$SCRIPT_DIR/dist/.size-baseline"
+  local size
+  size=$(wc -c < "$output" | tr -d ' ')
+  if [[ ! -f "$baseline_file" ]]; then
+    echo "$size" > "$baseline_file"
+    ok "体积棘轮：首次构建，基线建立 ($size bytes)"
+    return 0
+  fi
+  local baseline
+  baseline=$(cat "$baseline_file")
+  if [[ $STRICT_MODE == true ]]; then
+    local limit=$((baseline * 130 / 100))
+    if (( size > limit )); then
+      fail "体积膨胀：$size bytes > 基线 $baseline 的 130%（$limit）——疑似大块内容重复拼入，请检查"
+    fi
+    echo "$size" > "$baseline_file"
+    ok "体积棘轮：$size bytes（基线 $baseline，+$(( (size - baseline) * 100 / baseline ))%）"
+  else
+    warn "体积棘轮：$size bytes（基线 $baseline，--strict 时超 130% 将拦截）"
+  fi
+}
+
 # ══════════════════════════ 主流程 ══════════════════════════
 echo "================================================"
 echo "  Desktop 构建（src/ → dist/desktop.bundle.html）"
@@ -276,6 +301,7 @@ build_html "$TMP_CSS" "$TMP_JS" "$OUTPUT"
 rm -f "$TMP_JS" "$TMP_CSS"
 
 verify_output "$OUTPUT"
+size_gate "$OUTPUT"
 echo "================================================"
 echo "  构建完成: $OUTPUT"
 echo "================================================"

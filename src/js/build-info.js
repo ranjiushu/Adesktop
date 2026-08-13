@@ -6,7 +6,7 @@
 'use strict'
 
 App.BuildInfo = (function () {
-  var _open = false
+  let _open = false
 
   function _getEl(id) { return document.getElementById(id) }
 
@@ -15,9 +15,9 @@ App.BuildInfo = (function () {
   function formatBuildTime(isoStr) {
     if (!isoStr) return '--'
     try {
-      var d = new Date(isoStr)
+      let d = new Date(isoStr)
       if (isNaN(d.getTime())) return isoStr
-      var p = function (n) { return (n < 10 ? '0' : '') + n }
+      let p = function (n) { return (n < 10 ? '0' : '') + n }
       return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
         ' ' + p(d.getHours()) + ':' + p(d.getMinutes())
     } catch (e) { return isoStr }
@@ -35,25 +35,25 @@ App.BuildInfo = (function () {
 
   function wrapSection(titleHtml, bodyHtml, opts) {
     opts = opts || {}
-    var secCls = 'sub-section' + (opts.secCls ? ' ' + opts.secCls : '')
-    var titleCls = 'sub-section-title' + (opts.titleCls ? ' ' + opts.titleCls : '')
-    var secId = opts.secId ? ' id="' + opts.secId + '"' : ''
-    var titleId = opts.titleId ? ' id="' + opts.titleId + '"' : ''
+    let secCls = 'sub-section' + (opts.secCls ? ' ' + opts.secCls : '')
+    let titleCls = 'sub-section-title' + (opts.titleCls ? ' ' + opts.titleCls : '')
+    let secId = opts.secId ? ' id="' + opts.secId + '"' : ''
+    let titleId = opts.titleId ? ' id="' + opts.titleId + '"' : ''
     return '<div class="' + secCls + '"' + secId + '>' +
       '<div class="' + titleCls + '"' + titleId + '>' + titleHtml + '</div>' +
       bodyHtml + '</div>'
   }
 
   function renderKvCard(rows) {
-    var html = '<div class="sub-info-card">'
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i]
+    let html = '<div class="sub-info-card">'
+    for (let i = 0; i < rows.length; i++) {
+      let r = rows[i]
       if (r.divider) {
         html += '<div style="height:1px;background:var(--border-color);margin:6px 0"></div>'
         continue
       }
-      var rowStyle = r.rowStyle ? ' style="' + r.rowStyle + '"' : ''
-      var valueStyle = r.valueStyle || 'font-weight:500'
+      let rowStyle = r.rowStyle ? ' style="' + r.rowStyle + '"' : ''
+      let valueStyle = r.valueStyle || 'font-weight:500'
       html += '<div class="sub-info-card-row"' + rowStyle + '>' +
         '<span class="sub-info-label">' + App.utils.escapeHtml(r.label) + '</span>' +
         '<span class="sub-info-value" style="' + valueStyle + '">' + App.utils.escapeHtml(r.value) + '</span>' +
@@ -63,24 +63,25 @@ App.BuildInfo = (function () {
     return html
   }
 
-  var _barOptsCache = {}
+  let _barOptsCache = {}
 
   function renderBarList(items, opts) {
-    var maxShow = 8
+    let maxShow = 8
     if (opts.slice === 'doc' || opts.slice === 'other') {
-      var kept = []
-      for (var si = 0; si < items.length; si++) {
-        var sIt = items[si]
-        sIt.__origIdx = si
+      let kept = []
+      for (let si = 0; si < items.length; si++) {
+        let sIt = items[si]
+        // 只首次打标原始索引；重渲染（排序）传已过滤数组，跳过覆盖防止索引错位
+        if (sIt.__origIdx === undefined) sIt.__origIdx = si
         if (opts.slice === 'doc' ? sIt.type === 'doc' : sIt.type !== 'doc') kept.push(sIt)
       }
       items = kept
     }
-    var sortKey = opts.sortKey || 'lines'
-    var order = []
-    for (var oi = 0; oi < items.length; oi++) order.push(oi)
+    let sortKey = opts.sortKey || 'lines'
+    let order = []
+    for (let oi = 0; oi < items.length; oi++) order.push(oi)
     if (opts.sortKeys && opts.sortKeys.indexOf(sortKey) >= 0) {
-      var key = sortKey
+      let key = sortKey
       order.sort(function (a, b) {
         if (key === 'name') return items[a].name.localeCompare(items[b].name)
         if (key === 'modified') return (items[b].modified || '').localeCompare(items[a].modified || '')
@@ -88,14 +89,14 @@ App.BuildInfo = (function () {
       })
     }
 
-    var body = ''
+    let body = ''
     if (opts.sortKeys) {
-      var chipsHtml = '<div style="display:flex;gap:6px;margin:6px 0 8px">'
-      for (var k = 0; k < opts.sortKeys.length; k++) {
-        var sk = opts.sortKeys[k]
-        var label = (opts.sortLabels && opts.sortLabels[k]) || sk
-        var active = sk === sortKey
-        var chipStyle = active
+      let chipsHtml = '<div style="display:flex;gap:6px;margin:6px 0 8px">'
+      for (let k = 0; k < opts.sortKeys.length; k++) {
+        let sk = opts.sortKeys[k]
+        let label = (opts.sortLabels && opts.sortLabels[k]) || sk
+        let active = sk === sortKey
+        let chipStyle = active
           ? 'background:var(--accent-blue);color:#fff'
           : 'background:var(--bg-card);color:var(--text-secondary)'
         chipsHtml += '<span data-sort="' + sk + '" style="' + chipStyle + ';padding:4px 10px;font-size:11px;border-radius:10px;cursor:pointer;touch-action:manipulation">' + App.utils.escapeHtml(label) + '</span>'
@@ -104,21 +105,21 @@ App.BuildInfo = (function () {
       body += chipsHtml
     }
 
-    var maxLines = 1
-    for (var mi = 0; mi < items.length; mi++) {
+    let maxLines = 1
+    for (let mi = 0; mi < items.length; mi++) {
       if (items[mi].lines > maxLines) maxLines = items[mi].lines
     }
     body += '<div class="sub-info-card" style="padding:8px 12px">'
-    for (var i = 0; i < order.length; i++) {
-      var o = order[i]
-      var it = items[o]
-      var pct = Math.round(it.lines / maxLines * 100)
-      var color = (opts.colorMap && opts.colorMap[it.type]) || '#999'
-      var dotStyle = 'display:inline-block;width:8px;height:8px;border-radius:2px;background:' + color + ';vertical-align:middle;margin-right:4px'
-      var nameShort = it.name.split('/').pop()
-      var valueText = (it.chars ? it.chars + '字 · ' : '') + it.lines + ' 行'
-      var rowStyle = 'cursor:pointer;padding:2px 0' + (i >= maxShow ? ';display:none' : '')
-      var dataIdx = it.__origIdx !== undefined ? it.__origIdx : o
+    for (let i = 0; i < order.length; i++) {
+      let o = order[i]
+      let it = items[o]
+      let pct = Math.round(it.lines / maxLines * 100)
+      let color = (opts.colorMap && opts.colorMap[it.type]) || '#999'
+      let dotStyle = 'display:inline-block;width:8px;height:8px;border-radius:2px;background:' + color + ';vertical-align:middle;margin-right:4px'
+      let nameShort = it.name.split('/').pop()
+      let valueText = (it.chars ? it.chars + '字 · ' : '') + it.lines + ' 行'
+      let rowStyle = 'cursor:pointer;padding:2px 0' + (i >= maxShow ? ';display:none' : '')
+      let dataIdx = it.__origIdx !== undefined ? it.__origIdx : o
 
       body += '<div class="' + opts.rowClass + '" data-idx="' + dataIdx + '" style="' + rowStyle + '" onclick="App.BuildInfo.showFileDetailModal(' + opts.globalRef + '[' + dataIdx + '])">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1px">' +
@@ -142,12 +143,12 @@ App.BuildInfo = (function () {
   }
 
   function bindExpandToggle(toggleId, itemSelector, maxShow) {
-    var btn = document.getElementById(toggleId)
+    let btn = document.getElementById(toggleId)
     if (!btn) return
     btn.addEventListener('click', function () {
-      var items = document.querySelectorAll(itemSelector)
-      var expanded = this.getAttribute('data-expanded') === '1'
-      for (var i = maxShow; i < items.length; i++) {
+      let items = document.querySelectorAll(itemSelector)
+      let expanded = this.getAttribute('data-expanded') === '1'
+      for (let i = maxShow; i < items.length; i++) {
         items[i].style.display = expanded ? 'none' : ''
       }
       this.textContent = expanded ? this.getAttribute('data-expanded-text') : '收起'
@@ -156,15 +157,15 @@ App.BuildInfo = (function () {
   }
 
   function bindSortChips(bodyId) {
-    var wrap = document.getElementById(bodyId)
+    let wrap = document.getElementById(bodyId)
     if (!wrap) return
-    var chips = wrap.querySelectorAll('[data-sort]')
-    for (var i = 0; i < chips.length; i++) {
+    let chips = wrap.querySelectorAll('[data-sort]')
+    for (let i = 0; i < chips.length; i++) {
       chips[i].addEventListener('click', function () {
-        var cached = _barOptsCache[bodyId]
+        let cached = _barOptsCache[bodyId]
         if (!cached) return
         cached.sortKey = this.getAttribute('data-sort')
-        var box = document.getElementById(bodyId)
+        let box = document.getElementById(bodyId)
         if (box) box.innerHTML = renderBarList(cached.items, cached.opts).replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '')
         bindExpandToggle(cached.opts.toggleId, '.' + cached.opts.rowClass, 8)
         bindSortChips(bodyId)
@@ -173,10 +174,10 @@ App.BuildInfo = (function () {
   }
 
   function renderCommitList(commits, maxShow) {
-    var html = '<div id="build-commit-list">'
-    for (var i = 0; i < commits.length; i++) {
-      var c = commits[i]
-      var rowStyle = 'cursor:pointer' + (i >= maxShow ? ';display:none' : '')
+    let html = '<div id="build-commit-list">'
+    for (let i = 0; i < commits.length; i++) {
+      let c = commits[i]
+      let rowStyle = 'cursor:pointer' + (i >= maxShow ? ';display:none' : '')
       html += '<div class="build-commit-item" data-idx="' + i + '" style="' + rowStyle + '" onclick="App.BuildInfo.showCommitDetailModal(RECENT_COMMITS[' + i + '])">' +
         '<span class="build-commit-hash">' + App.utils.escapeHtml(c.hash || '') + '</span>' +
         '<span class="build-commit-msg">' + App.utils.escapeHtml(c.msg || '') + '</span>' +
@@ -193,55 +194,55 @@ App.BuildInfo = (function () {
 
   function renderContributionGrid(data) {
     if (!data || !data.daily || !data.today) return ''
-    var startDate = data.startDate
-    var today = data.today
-    var daily = data.daily
-    var monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
+    let startDate = data.startDate
+    let today = data.today
+    let daily = data.daily
+    let monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 
     function addDays(dateStr, delta) {
-      var d = new Date(dateStr + 'T00:00:00Z')
+      let d = new Date(dateStr + 'T00:00:00Z')
       d.setUTCDate(d.getUTCDate() + delta)
       return d.toISOString().slice(0, 10)
     }
     function weekdayOf(dateStr) { return new Date(dateStr + 'T00:00:00Z').getUTCDay() }
     function monthOf(dateStr) { return parseInt(dateStr.slice(5, 7), 10) }
 
-    var cols = []
-    for (var k = 0; ; k++) {
-      var bottom = addDays(today, -7 * k)
-      var top = addDays(bottom, -6)
+    let cols = []
+    for (let k = 0; ; k++) {
+      let bottom = addDays(today, -7 * k)
+      let top = addDays(bottom, -6)
       if (startDate && bottom < startDate) break
-      var rows = []
-      for (var r = 0; r < 7; r++) rows.push(addDays(top, r))
+      let rows = []
+      for (let r = 0; r < 7; r++) rows.push(addDays(top, r))
       cols.push({ rows: rows })
     }
-    var renderCols = cols.slice().reverse()
+    let renderCols = cols.slice().reverse()
 
-    var dayLabels = []
-    for (var r2 = 0; r2 < 7; r2++) {
-      var wd = weekdayOf(addDays(today, -6 + r2))
+    let dayLabels = []
+    for (let r2 = 0; r2 < 7; r2++) {
+      let wd = weekdayOf(addDays(today, -6 + r2))
       dayLabels[r2] = wd === 2 ? '星期二' : (wd === 4 ? '星期四' : (wd === 6 ? '星期六' : ''))
     }
 
-    var monthAtCol = []
-    var prevMonth = -1
-    for (var i = 0; i < renderCols.length; i++) {
-      var btm = renderCols[i].rows[6]
-      var m = monthOf(btm)
+    let monthAtCol = []
+    let prevMonth = -1
+    for (let i = 0; i < renderCols.length; i++) {
+      let btm = renderCols[i].rows[6]
+      let m = monthOf(btm)
       monthAtCol[i] = (m !== prevMonth) ? monthNames[m - 1] : ''
       prevMonth = m
     }
 
-    var html = '<div class="heatmap-card"><div class="heatmap-scroll-row">'
+    let html = '<div class="heatmap-card"><div class="heatmap-scroll-row">'
     html += '<div class="heatmap-days">'
-    for (var r3 = 0; r3 < 7; r3++) {
+    for (let r3 = 0; r3 < 7; r3++) {
       html += '<span class="heatmap-day-label">' + App.utils.escapeHtml(dayLabels[r3]) + '</span>'
     }
     html += '</div>'
 
     html += '<div class="heatmap-scroll">'
     html += '<div class="heatmap-months">'
-    for (var i2 = 0; i2 < renderCols.length; i2++) {
+    for (let i2 = 0; i2 < renderCols.length; i2++) {
       html += '<span class="heatmap-month-label"' +
         (monthAtCol[i2] ? '' : ' style="visibility:hidden"') + '>' +
         App.utils.escapeHtml(monthAtCol[i2]) + '</span>'
@@ -249,11 +250,11 @@ App.BuildInfo = (function () {
     html += '</div>'
 
     html += '<div class="heatmap-grid">'
-    for (var i3 = 0; i3 < renderCols.length; i3++) {
-      var col = renderCols[i3]
-      for (var r4 = 0; r4 < 7; r4++) {
-        var dateStr = col.rows[r4]
-        var level = daily[dateStr] || 0
+    for (let i3 = 0; i3 < renderCols.length; i3++) {
+      let col = renderCols[i3]
+      for (let r4 = 0; r4 < 7; r4++) {
+        let dateStr = col.rows[r4]
+        let level = daily[dateStr] || 0
         html += '<span class="heatmap-cell" data-level="' + level + '" data-date="' + dateStr + '"></span>'
       }
     }
@@ -278,9 +279,9 @@ App.BuildInfo = (function () {
   // ==================== 详情弹窗 ====================
 
   function closeDetailModal() {
-    var overlays = document.querySelectorAll('.modal-overlay')
-    for (var i = overlays.length - 1; i >= 0; i--) {
-      var o = overlays[i]
+    let overlays = document.querySelectorAll('.modal-overlay')
+    for (let i = overlays.length - 1; i >= 0; i--) {
+      let o = overlays[i]
       if (o.parentNode) o.parentNode.removeChild(o)
       break
     }
@@ -288,10 +289,10 @@ App.BuildInfo = (function () {
 
   function showFileDetailModal(f) {
     if (!f) return
-    var overlay = document.createElement('div')
+    let overlay = document.createElement('div')
     overlay.className = 'modal-overlay'
     overlay.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;animation:fadeIn .15s'
-    var modal = document.createElement('div')
+    let modal = document.createElement('div')
     modal.style.cssText = 'width:84vw;max-width:340px;max-height:70vh;background:var(--bg-card);border-radius:14px;padding:16px;box-sizing:border-box;overflow-y:auto'
     modal.innerHTML =
       '<div class="commit-modal-title" style="font-size:15px;font-weight:700;margin-bottom:8px;cursor:pointer">' + App.utils.escapeHtml((f.name || '').split('/').pop()) + '</div>' +
@@ -313,7 +314,7 @@ App.BuildInfo = (function () {
     })
     modal.querySelectorAll('.commit-modal-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var act = btn.getAttribute('data-copy')
+        let act = btn.getAttribute('data-copy')
         if (act === 'close') { closeDetailModal(); return }
         _copyToClipboard(act === 'name' ? (f.name || '').split('/').pop() : (f.name || ''), act === 'name' ? '已复制文件名' : '已复制路径')
       })
@@ -322,14 +323,14 @@ App.BuildInfo = (function () {
 
   function showCommitDetailModal(commit) {
     if (!commit) return
-    var statHtml = ''
+    let statHtml = ''
     if (commit.stat) {
-      var parts = commit.stat.split(',')
-      var files = parts[0] || ''
-      var ins = ''
-      var del = ''
-      for (var p = 1; p < parts.length; p++) {
-        var t = parts[p].trim()
+      let parts = commit.stat.split(',')
+      let files = parts[0] || ''
+      let ins = ''
+      let del = ''
+      for (let p = 1; p < parts.length; p++) {
+        let t = parts[p].trim()
         if (t.indexOf('+') >= 0) ins = t
         else if (t.indexOf('-') >= 0) del = t
       }
@@ -338,10 +339,10 @@ App.BuildInfo = (function () {
       if (del) statHtml += ' <span style="color:#E57373">' + App.utils.escapeHtml(del) + '</span>'
       statHtml += '</div>'
     }
-    var filesHtml = ''
+    let filesHtml = ''
     if (commit.files && commit.files.length > 0) {
-      for (var i = 0; i < commit.files.length; i++) {
-        var f = commit.files[i]
+      for (let i = 0; i < commit.files.length; i++) {
+        let f = commit.files[i]
         filesHtml += '<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">' +
           '<span style="color:var(--text-primary);word-break:break-all;flex:1">' + App.utils.escapeHtml(f.name || '') + '</span>' +
           '<span style="flex-shrink:0;margin-left:8px">' +
@@ -351,10 +352,10 @@ App.BuildInfo = (function () {
       }
     }
 
-    var overlay = document.createElement('div')
+    let overlay = document.createElement('div')
     overlay.className = 'modal-overlay'
     overlay.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;animation:fadeIn .15s'
-    var modal = document.createElement('div')
+    let modal = document.createElement('div')
     modal.style.cssText = 'width:84vw;max-width:340px;max-height:70vh;background:var(--bg-card);border-radius:14px;padding:16px;box-sizing:border-box;overflow-y:auto'
     modal.innerHTML =
       '<div class="commit-modal-title" style="font-size:15px;font-weight:700;margin-bottom:6px;cursor:pointer">' + App.utils.escapeHtml(commit.msg || '') + '</div>' +
@@ -369,12 +370,12 @@ App.BuildInfo = (function () {
       if (e.target === overlay) closeDetailModal()
     })
     modal.addEventListener('click', function () { closeDetailModal() })
-    var titleEl = modal.querySelector('.commit-modal-title')
+    let titleEl = modal.querySelector('.commit-modal-title')
     if (titleEl) titleEl.addEventListener('click', function (e) {
       e.stopPropagation()
       _copyToClipboard(commit.msg || '', '已复制提交信息')
     })
-    var hashEl = modal.querySelector('.commit-modal-hash')
+    let hashEl = modal.querySelector('.commit-modal-hash')
     if (hashEl) hashEl.addEventListener('click', function (e) {
       e.stopPropagation()
       _copyToClipboard(commit.fullHash || commit.hash || '', '已复制完整 Hash')
@@ -384,14 +385,14 @@ App.BuildInfo = (function () {
   // ==================== 主渲染 ====================
 
   function render() {
-    var container = _getEl('buildinfo-body')
+    let container = _getEl('buildinfo-body')
     if (!container) return
 
-    var sections = []
+    let sections = []
 
     // 数据解析（容忍缺失）
-    var buildCount = '--', buildTime = '--', commitCount = '--', aheadMain = '--', branch = '--'
-    var recentCommits = []
+    let buildCount = '--', buildTime = '--', commitCount = '--', aheadMain = '--', branch = '--'
+    let recentCommits = []
     _safe(function () {
       if (typeof BUILD_COUNT !== 'undefined') buildCount = BUILD_COUNT
       if (typeof BUILD_TIMESTAMP !== 'undefined') buildTime = formatBuildTime(BUILD_TIMESTAMP)
@@ -401,13 +402,13 @@ App.BuildInfo = (function () {
       if (typeof RECENT_COMMITS !== 'undefined' && Array.isArray(RECENT_COMMITS)) recentCommits = RECENT_COMMITS
     }, null)
 
-    var contribGrid = _safe(function () {
+    let contribGrid = _safe(function () {
       return (typeof CONTRIBUTION_GRID !== 'undefined' && CONTRIBUTION_GRID.today && CONTRIBUTION_GRID.daily) ? CONTRIBUTION_GRID : null
     }, null)
-    var sourceStats = _safe(function () { return typeof SOURCE_STATS !== 'undefined' ? SOURCE_STATS : null }, null)
-    var fileStats = _safe(function () { return (typeof FILE_STATS !== 'undefined' && Array.isArray(FILE_STATS)) ? FILE_STATS : [] }, [])
-    var nsStats = _safe(function () { return (typeof NON_SOURCE_STATS !== 'undefined' && Array.isArray(NON_SOURCE_STATS)) ? NON_SOURCE_STATS : [] }, [])
-    var changelogHtml = _safe(function () { return (typeof CHANGELOG_HTML !== 'undefined' && CHANGELOG_HTML) ? CHANGELOG_HTML : null }, null)
+    let sourceStats = _safe(function () { return typeof SOURCE_STATS !== 'undefined' ? SOURCE_STATS : null }, null)
+    let fileStats = _safe(function () { return (typeof FILE_STATS !== 'undefined' && Array.isArray(FILE_STATS)) ? FILE_STATS : [] }, [])
+    let nsStats = _safe(function () { return (typeof NON_SOURCE_STATS !== 'undefined' && Array.isArray(NON_SOURCE_STATS)) ? NON_SOURCE_STATS : [] }, [])
+    let changelogHtml = _safe(function () { return (typeof CHANGELOG_HTML !== 'undefined' && CHANGELOG_HTML) ? CHANGELOG_HTML : null }, null)
 
     // 区块组装
     if (contribGrid) {
@@ -421,7 +422,7 @@ App.BuildInfo = (function () {
       { label: '当前分支', value: branch }
     ])))
     if (sourceStats) {
-      var repoRows = [
+      let repoRows = [
         { label: 'JavaScript', value: sourceStats.js.files + ' 个文件 · ' + sourceStats.js.lines + ' 行', valueStyle: 'font-size:12px;font-weight:500' },
         { label: 'CSS', value: (sourceStats.css.files || 0) + ' 个文件 · ' + sourceStats.css.lines + ' 行', valueStyle: 'font-size:12px;font-weight:500' },
         { label: 'HTML', value: (sourceStats.html.files || 0) + ' 个文件 · ' + sourceStats.html.lines + ' 行', valueStyle: 'font-size:12px;font-weight:500' }
@@ -437,7 +438,7 @@ App.BuildInfo = (function () {
       sections.push(wrapSection('仓库规模', renderKvCard(repoRows)))
     }
     if (fileStats.length > 0) {
-      var colorMap = { js: '#F7DF1E', css: '#2965F1', html: '#E34F26', java: '#E76F00', sh: '#4EAA25', json: '#8BC34A', md: '#9E9E9E' }
+      let colorMap = { js: '#F7DF1E', css: '#2965F1', html: '#E34F26', java: '#E76F00', sh: '#4EAA25', json: '#8BC34A', md: '#9E9E9E' }
       sections.push(wrapSection('源码规模', '<div id="build-source-body">' + renderBarList(fileStats, {
         rowClass: 'file-bar-row', colorMap: colorMap, globalRef: 'FILE_STATS',
         toggleId: 'file-bar-toggle', expandUnit: '文件',
@@ -446,7 +447,7 @@ App.BuildInfo = (function () {
       }) + '</div>'))
     }
     if (nsStats.length > 0) {
-      var hasDoc = nsStats.some(function (it) { return it.type === 'doc' })
+      let hasDoc = nsStats.some(function (it) { return it.type === 'doc' })
       if (hasDoc) {
         sections.push(wrapSection('Markdown 文档', '<div id="build-doc-body">' + renderBarList(nsStats, {
           slice: 'doc', rowClass: 'doc-bar-row', globalRef: 'NON_SOURCE_STATS',
@@ -484,20 +485,20 @@ App.BuildInfo = (function () {
     bindSortChips('build-doc-body')
     bindSortChips('build-other-body')
 
-    var guideToggle = _getEl('build-guide-toggle')
+    let guideToggle = _getEl('build-guide-toggle')
     if (guideToggle) {
       guideToggle.addEventListener('click', function () {
-        var content = _getEl('build-guide-content')
-        var arrow = _getEl('build-guide-arrow')
+        let content = _getEl('build-guide-content')
+        let arrow = _getEl('build-guide-arrow')
         if (!content) return
-        var show = content.style.display === 'none'
+        let show = content.style.display === 'none'
         content.style.display = show ? '' : 'none'
         if (arrow) arrow.style.transform = show ? 'rotate(90deg)' : ''
       })
     }
 
     // 热力图默认定位到最右（最新提交）
-    var hScroll = container.querySelector('.heatmap-scroll')
+    let hScroll = container.querySelector('.heatmap-scroll')
     if (hScroll) hScroll.scrollLeft = hScroll.scrollWidth
   }
 
@@ -507,8 +508,11 @@ App.BuildInfo = (function () {
     if (_open) return
     _open = true
     render()
-    var p = _getEl('buildinfo')
-    if (p) p.classList.add('buildinfo-open')
+    let p = _getEl('buildinfo')
+    if (p) {
+      p.classList.add('buildinfo-open')
+      p.setAttribute('aria-hidden', 'false')
+    }
     if (App.Drawer && typeof App.Drawer.close === 'function') App.Drawer.close()
     App.bridge.vibrate()
     // 系统返回键支持：MainActivity 返回键 → webView.goBack() → popstate → close()
@@ -518,8 +522,11 @@ App.BuildInfo = (function () {
   function close() {
     if (!_open) return
     _open = false
-    var p = _getEl('buildinfo')
-    if (p) p.classList.remove('buildinfo-open')
+    let p = _getEl('buildinfo')
+    if (p) {
+      p.classList.remove('buildinfo-open')
+      p.setAttribute('aria-hidden', 'true')
+    }
   }
 
   function _onPopState() {
@@ -529,9 +536,9 @@ App.BuildInfo = (function () {
   function isOpen() { return _open }
 
   function init() {
-    var btn = _getEl('btn-build-info')
+    let btn = _getEl('btn-build-info')
     if (btn) App.utils.bindPress(btn, open)
-    var backBtn = _getEl('buildinfo-back')
+    let backBtn = _getEl('buildinfo-back')
     if (backBtn) {
       App.utils.bindPress(backBtn, function () {
         // 优先走历史返回（触发 popstate 关闭）；栈无记录时直接关

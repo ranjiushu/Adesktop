@@ -157,8 +157,10 @@ async function main() {
   if (closedByBack) pass('返回按钮关闭面板')
   else fail('返回按钮未关闭面板')
 
-  // ── 4b. 系统返回键（history.back 触发 popstate） ──
-  // 重新打开 → page.goBack() 模拟系统返回
+  // ── 4b. 系统返回键（Android 壳 onKeyDown → evaluateJavascript('App.handleSystemBack()')） ──
+  // 注：page.goBack() 只测 Web 端 history.back() 语义，与真机 WebView 返回键不等价
+  // （MainActivity.onKeyDown 先试 canGoBack，再询问 App.handleSystemBack）。
+  // 此处直接验证前端消费函数本体。
   const reopen = await page.evaluate(() => window.App.BuildInfo.open())
   await sleep(400)
   const reopened = await page.evaluate(() => {
@@ -167,14 +169,20 @@ async function main() {
   })
   if (reopened) pass('再次打开面板')
   else fail('未能重新打开面板')
-  await page.goBack()
+  const handled = await page.evaluate(() => window.App.handleSystemBack() === true)
   await sleep(400)
   const closedBySystem = await page.evaluate(() => {
     const p = document.getElementById('buildinfo')
     return !(p && p.classList.contains('buildinfo-open'))
   })
-  if (closedBySystem) pass('系统返回键退出面板')
+  if (handled && closedBySystem) pass('系统返回键退出面板（handleSystemBack=true）')
+  else if (!handled) fail('handleSystemBack 未消费返回键')
   else fail('系统返回键未退出面板')
+
+  // ── 4c. 无 overlay 时 handleSystemBack 必须返回 false（壳才可退出 App） ──
+  const notHandled = await page.evaluate(() => window.App.handleSystemBack() === false)
+  if (notHandled) pass('无 overlay 时 handleSystemBack 返回 false')
+  else fail('无 overlay 时 handleSystemBack 误返回 true（App 将无法退出）')
 
   // ── 5. 零 pageerror ──
   if (pageErrors.length === 0) pass('全程零 pageerror')

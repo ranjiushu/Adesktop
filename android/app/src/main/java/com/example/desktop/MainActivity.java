@@ -94,8 +94,25 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK && webView != null && webView.canGoBack()) {
-            webView.goBack();
+        if (keyCode == KeyEvent.KEYCODE_BACK && webView != null) {
+            // 1) WebView 内部历史（整页 pushState 路径的兜底，可正常 goBack）
+            if (webView.canGoBack()) {
+                webView.goBack();
+                return true;
+            }
+            // 2) 前端 overlay（Drawer / 整页面板）：询问 JS 是否消费返回键。
+            //    避免依赖 pushState 是否被 WebView 计入 canGoBack（file:// 场景存疑）。
+            webView.evaluateJavascript(
+                "(function(){ if (window.App && typeof App.handleSystemBack === 'function')" +
+                " { return App.handleSystemBack() ? 'handled' : 'not-handled'; }" +
+                " return 'not-handled'; })()",
+                value -> {
+                    String v = value == null ? "" : value.replace("\"", "").trim();
+                    if (!"handled".equals(v)) {
+                        // JS 无打开的 overlay：退出 App
+                        runOnUiThread(MainActivity.this::finish);
+                    }
+                });
             return true;
         }
         return super.onKeyDown(keyCode, event);

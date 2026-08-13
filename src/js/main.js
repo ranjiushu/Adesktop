@@ -2,14 +2,14 @@
 'use strict'
 
 App.boot = function boot() {
-  var titleEl = document.getElementById('app-title')
+  let titleEl = document.getElementById('app-title')
   if (titleEl) {
     titleEl.textContent = App.NAME
   }
   // FAB：短按 = 展开/收起 Speed Dial（长按 800ms 取景器由 inspector.js 接管）
   if (App.fabSpeedDial && typeof App.fabSpeedDial.init === 'function') {
     App.fabSpeedDial.init()
-    var fabEl = document.getElementById('mode-switch-fab')
+    let fabEl = document.getElementById('mode-switch-fab')
     if (fabEl && App.utils && typeof App.utils.bindPress === 'function') {
       App.utils.bindPress(fabEl, function () {
         App.bridge.vibrate()
@@ -41,6 +41,25 @@ App.onRootChanged = function onRootChanged() {
   if (App.Desktop) {
     App.Desktop.refresh()
   }
+}
+
+// 系统返回键（Android 壳 onKeyDown → evaluateJavascript 询问）：
+// 依次消费 Drawer → 整页面板；均未打开返回 false（壳退出 App）。
+// 不依赖 pushState 是否被 WebView 计入 canGoBack。
+App.handleSystemBack = function handleSystemBack() {
+  if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()) {
+    App.Drawer.close()
+    return true
+  }
+  if (App.BuildInfo && typeof App.BuildInfo.isOpen === 'function' && App.BuildInfo.isOpen()) {
+    App.BuildInfo.close()
+    // 清掉 pushState 残留条目（popstate → _onPopState 幂等，安全）
+    try {
+      if (history.state && history.state._buildInfoOpen) history.back()
+    } catch (e) { /* 忽略 */ }
+    return true
+  }
+  return false
 }
 
 if (typeof document !== 'undefined' && document.readyState === 'loading') {

@@ -2,17 +2,20 @@
 'use strict'
 
 App.Drawer = (function () {
-  var DRAWER_ID = 'drawer'
-  var OVERLAY_ID = 'drawer-overlay'
-  var _open = false
+  let DRAWER_ID = 'drawer'
+  let OVERLAY_ID = 'drawer-overlay'
+  let _open = false
 
   function _getEl(id) { return document.getElementById(id) }
 
   function open() {
     if (_open) return
     _open = true
-    var d = _getEl(DRAWER_ID), o = _getEl(OVERLAY_ID)
-    if (d) d.classList.add('drawer-open')
+    let d = _getEl(DRAWER_ID), o = _getEl(OVERLAY_ID)
+    if (d) {
+      d.classList.add('drawer-open')
+      d.setAttribute('aria-hidden', 'false')
+    }
     if (o) o.classList.add('drawer-overlay-visible')
     App.bridge.vibrate()
   }
@@ -20,8 +23,11 @@ App.Drawer = (function () {
   function close() {
     if (!_open) return
     _open = false
-    var d = _getEl(DRAWER_ID), o = _getEl(OVERLAY_ID)
-    if (d) d.classList.remove('drawer-open')
+    let d = _getEl(DRAWER_ID), o = _getEl(OVERLAY_ID)
+    if (d) {
+      d.classList.remove('drawer-open')
+      d.setAttribute('aria-hidden', 'true')
+    }
     if (o) o.classList.remove('drawer-overlay-visible')
   }
 
@@ -33,32 +39,32 @@ App.Drawer = (function () {
 
   // 更新根目录路径显示（顶栏标题与 Drawer 头部同步）
   function updatePath(displayPath, rootName, mode) {
-    var titleEl = document.getElementById('app-title')
+    let titleEl = document.getElementById('app-title')
     if (titleEl) {
       titleEl.textContent = displayPath || rootName || App.NAME
     }
-    var pathEl = document.getElementById('drawer-root-path')
+    let pathEl = document.getElementById('drawer-root-path')
     if (pathEl) {
       pathEl.textContent = displayPath || '未知'
     }
-    var modeEl = document.getElementById('drawer-root-mode')
+    let modeEl = document.getElementById('drawer-root-mode')
     if (modeEl) {
       modeEl.textContent = mode === 'saf' ? '外部存储' : (mode === 'private' ? '应用私有目录' : '')
     }
   }
 
   function init() {
-    var btn = document.getElementById('btn-drawer')
+    let btn = document.getElementById('btn-drawer')
     if (btn) App.utils.bindPress(btn, toggle)
-    var o = _getEl(OVERLAY_ID)
+    let o = _getEl(OVERLAY_ID)
     if (o) App.utils.bindPress(o, close)
-    var d = _getEl(DRAWER_ID)
+    let d = _getEl(DRAWER_ID)
     if (d) {
       // 动作项（与 FAB 共享 App.Actions）
-      var items = d.querySelectorAll('.drawer-item[data-action]')
-      for (var i = 0; i < items.length; i++) {
+      let items = d.querySelectorAll('.drawer-item[data-action]')
+      for (let i = 0; i < items.length; i++) {
         App.utils.bindPress(items[i], function () {
-          var action = this.getAttribute('data-action')
+          let action = this.getAttribute('data-action')
           if (!action) return
           close()
           if (action === 'new-folder') App.Actions.createFolder()
@@ -68,7 +74,7 @@ App.Drawer = (function () {
         })
       }
       // 头部关闭按钮
-      var closeBtn = d.querySelector('.drawer-close')
+      let closeBtn = d.querySelector('.drawer-close')
       if (closeBtn) App.utils.bindPress(closeBtn, close)
     }
   }

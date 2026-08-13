@@ -30,6 +30,7 @@
   --bg-page: var(--color-bg);
   --bg-app: var(--color-bg);
   --bg-card: var(--color-surface);
+  --border-color: var(--color-border);
   --border-outer: var(--color-border);
   --accent-blue: var(--color-accent);
   --hover-dim: rgba(0, 0, 0, 0.04);

@@ -1,7 +1,9 @@
 # Desktop
 
-与 LexiCull 相同技术栈的纯前端单文件 App + Android WebView 壳。零框架零依赖。
-`src/` → `dist/desktop.bundle.html` → `dist/desktop.bundle.min.html` → `android/app/src/main/assets/index.html` → APK。
+以**真实文件系统**为基础的移动端空间化工作台（Windows Desktop 隐喻：文件即对象、图标自由摆放、位置可记忆）。
+纯前端单文件 + Android WebView 壳。零框架零依赖。
+文件系统访问经 Java Bridge（`@JavascriptInterface`）暴露给前端，Promise 化调用；
+桌面布局等元数据以隐藏文件形式存于文件系统，保持「文件即真相」。
 包名占位 `com.example.desktop`（发布前确认）。
 
 - **发布线**: `main`（仅 `merge --no-ff`，需用户批准，禁止主动合流）

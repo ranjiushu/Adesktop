@@ -1,0 +1,50 @@
+/* 桌面样式：图标网格（第一阶段：固定网格，后续支持自由摆放） */
+.desktop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.desktop-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.desktop-icon:active {
+  background: #eef2f7;
+}
+
+.desktop-icon-glyph {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.desktop-icon.is-dir .desktop-icon-glyph {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+.desktop-icon-name {
+  width: 100%;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-empty {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--color-text-secondary);
+}

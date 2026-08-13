@@ -41,9 +41,13 @@ check(/var BUILD_TIMESTAMP='[^']+';/.test(s), 'BUILD_TIMESTAMP 注入存在')
 
 // 4. 关键内容存在
 check(s.includes('App.NAME'), 'namespace.js 已进产物')
+check(s.includes('App.FileAPI'), 'file-api.js 已进产物')
+check(s.includes('App.Desktop'), 'desktop.js 已进产物')
 check(s.includes('App.boot'), 'main.js 已进产物')
 check(s.includes('--color-accent'), 'tokens.css 已进产物')
 check(s.includes('app-shell'), 'shell.css 已进产物')
+check(s.includes('desktop-grid'), 'desktop.css 已进产物')
+check(s.includes('desktop-grid') && s.includes('id="desktop-grid"'), 'index.html 桌面容器已进产物')
 
 if (failures > 0) {
   console.error('[fail] 冒烟测试失败 ' + failures + ' 项')

@@ -7,7 +7,8 @@ cd "$(git rev-parse --show-toplevel)"
 # ── 防线 1: main 保护 ──
 _branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
 if [ "$_branch" = "main" ]; then
-  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  # 无 HEAD（新仓库首个提交）允许：main 需要初始基线
+  if git rev-parse -q --verify HEAD >/dev/null 2>&1 && ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
     echo "[pre-commit] main 是稳定发布分支，禁止直接提交" >&2
     echo "[pre-commit] 请在 topic 分支（feat/|fix/）上开发，稳定后 merge --no-ff 合入" >&2
     exit 1

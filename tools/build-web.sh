@@ -21,11 +21,11 @@ OUTPUT="$SCRIPT_DIR/dist/desktop.bundle.html"
 mkdir -p "$(dirname "$OUTPUT")"
 
 JS_ORDER=(
-  namespace.js main.js
+  namespace.js file-api.js desktop.js main.js
 )
 
 CSS_ORDER=(
-  tokens.css shell.css
+  tokens.css shell.css desktop.css
 )
 
 # ── 颜色 ──

@@ -3,18 +3,21 @@
 
 App.boot = function boot() {
   var titleEl = document.getElementById('app-title')
-  var statusEl = document.getElementById('status-text')
   if (titleEl) {
     titleEl.textContent = App.NAME
   }
-  if (statusEl) {
-    statusEl.textContent =
-      App.NAME + ' v' + App.VERSION +
-      ' · build ' + App.BUILD +
-      (App.BUILD_TIME ? ' · ' + App.BUILD_TIME : '') +
-      ' · 骨架初始化完成'
+  // 桌面：以文件系统为数据源渲染
+  if (window.App && App.Desktop && typeof document !== 'undefined') {
+    App.Desktop.refresh()
   }
   return true
+}
+
+// 根目录授权变更（SAF 授权完成后由原生桥调用）
+App.onRootChanged = function onRootChanged() {
+  if (App.Desktop) {
+    App.Desktop.refresh()
+  }
 }
 
 if (typeof document !== 'undefined' && document.readyState === 'loading') {

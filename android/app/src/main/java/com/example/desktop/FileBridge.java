@@ -1,0 +1,365 @@
+/* 文件系统桥：前端经 window.FileBridge 调用，全部异步回调。
+ * 根目录 = SAF 授权 Uri（setRootUri）或私有目录 filesDir/root（兜底）。
+ * 路径一律相对根目录；校验拒绝绝对路径与 .. 逃逸。
+ * 回调协议: JS 调用 list(path, cbId)，完成后 evaluateJavascript("window.__fbResolve('cbId', 'json')")
+ */
+package com.example.desktop;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
+
+import androidx.documentfile.provider.DocumentFile;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class FileBridge {
+
+    private final Activity activity;
+    private final WebView webView;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private volatile Uri rootUri;          // SAF 授权根（null 时用私有目录）
+    private volatile File privateRoot;     // 兜底根 filesDir/root
+
+    FileBridge(Activity activity, WebView webView, Uri rootUri) {
+        this.activity = activity;
+        this.webView = webView;
+        this.rootUri = rootUri;
+        File filesDir = activity.getFilesDir();
+        this.privateRoot = new File(filesDir, "root");
+        if (!privateRoot.exists()) {
+            privateRoot.mkdirs();
+        }
+    }
+
+    void setRootUri(Uri uri) {
+        this.rootUri = uri;
+    }
+
+    boolean isAuthorized() {
+        return rootUri != null;
+    }
+
+    /* ── 工具 ── */
+
+    /** 解析相对路径 → DocumentFile（SAF 模式）或 File（私有模式） */
+    private Object resolve(String relPath) throws IOException {
+        if (!isSafeRelPath(relPath)) {
+            throw new IOException("非法路径: " + relPath);
+        }
+        if (rootUri != null) {
+            DocumentFile dir = DocumentFile.fromTreeUri(activity, rootUri);
+            if (dir == null) throw new IOException("根目录不可用");
+            if (relPath.isEmpty() || relPath.equals("/")) return dir;
+            String[] parts = relPath.split("/");
+            DocumentFile cur = dir;
+            for (String p : parts) {
+                if (p.isEmpty()) continue;
+                cur = cur.findFile(p);
+                if (cur == null) throw new IOException("不存在: " + relPath);
+            }
+            return cur;
+        }
+        File f = new File(privateRoot, relPath);
+        if (!f.getCanonicalPath().startsWith(privateRoot.getCanonicalPath())) {
+            throw new IOException("非法路径: " + relPath);
+        }
+        return f;
+    }
+
+    private boolean isSafeRelPath(String p) {
+        if (p == null) return false;
+        if (p.startsWith("/")) return false;                    // 拒绝绝对路径
+        String[] parts = p.split("/");
+        for (String part : parts) {
+            if (part.equals("..")) return false;                 // 拒绝逃逸
+        }
+        return true;
+    }
+
+    private void resolveOk(String cbId, Object data) {
+        postResolve(cbId, true, data);
+    }
+
+    private void resolveErr(String cbId, String err) {
+        postResolve(cbId, false, err);
+    }
+
+    private void postResolve(final String cbId, final boolean ok, final Object payload) {
+        activity.runOnUiThread(() -> {
+            try {
+                JSONObject out = new JSONObject();
+                if (ok) {
+                    out.put("ok", true);
+                    out.put("data", payload);
+                } else {
+                    out.put("ok", false);
+                    out.put("error", payload == null ? "未知错误" : String.valueOf(payload));
+                }
+                webView.evaluateJavascript(
+                    "window.__fbResolve('" + cbId + "', " + out.toString() + ")",
+                    null);
+            } catch (Exception e) {
+                webView.evaluateJavascript(
+                    "window.__fbResolve('" + cbId + "', {ok:false,error:'回调序列化失败'})",
+                    null);
+            }
+        });
+    }
+
+    private JSONObject fileToJson(DocumentFile df) {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("name", df.getName() == null ? "" : df.getName());
+            o.put("isDir", df.isDirectory());
+            o.put("size", df.isFile() ? df.length() : 0);
+            o.put("mtime", df.lastModified());
+        } catch (Exception ignored) {
+        }
+        return o;
+    }
+
+    private JSONObject fileToJson(File f) {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("name", f.getName());
+            o.put("isDir", f.isDirectory());
+            o.put("size", f.isFile() ? f.length() : 0);
+            o.put("mtime", f.lastModified());
+        } catch (Exception ignored) {
+        }
+        return o;
+    }
+
+    /* ── 桥接口 ── */
+
+    @JavascriptInterface
+    public void rootInfo(String cbId) {
+        executor.execute(() -> {
+            try {
+                JSONObject o = new JSONObject();
+                if (rootUri != null) {
+                    DocumentFile df = DocumentFile.fromTreeUri(activity, rootUri);
+                    o.put("rootName", df != null && df.getName() != null ? df.getName() : "外部存储");
+                    o.put("mode", "saf");
+                } else {
+                    o.put("rootName", "应用私有目录");
+                    o.put("mode", "private");
+                }
+                resolveOk(cbId, o);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void list(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(path);
+                JSONArray arr = new JSONArray();
+                if (resolved instanceof DocumentFile) {
+                    DocumentFile dir = (DocumentFile) resolved;
+                    if (!dir.isDirectory()) throw new IOException("非目录: " + path);
+                    DocumentFile[] children = dir.listFiles();
+                    if (children != null) {
+                        for (DocumentFile c : children) arr.put(fileToJson(c));
+                    }
+                } else {
+                    File dir = (File) resolved;
+                    if (!dir.isDirectory()) throw new IOException("非目录: " + path);
+                    File[] children = dir.listFiles();
+                    if (children != null) {
+                        for (File c : children) arr.put(fileToJson(c));
+                    }
+                }
+                resolveOk(cbId, arr);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void read(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(path);
+                String content;
+                if (resolved instanceof DocumentFile) {
+                    DocumentFile df = (DocumentFile) resolved;
+                    if (!df.isFile()) throw new IOException("非文件: " + path);
+                    java.io.InputStream is = activity.getContentResolver().openInputStream(df.getUri());
+                    if (is == null) throw new IOException("无法打开: " + path);
+                    content = new String(readAll(is), StandardCharsets.UTF_8);
+                    is.close();
+                } else {
+                    File f = (File) resolved;
+                    if (!f.isFile()) throw new IOException("非文件: " + path);
+                    try (FileInputStream fis = new FileInputStream(f)) {
+                        content = new String(readAll(fis), StandardCharsets.UTF_8);
+                    }
+                }
+                resolveOk(cbId, content);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    private byte[] readAll(java.io.InputStream is) throws IOException {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = is.read(buf)) != -1) bos.write(buf, 0, n);
+        return bos.toByteArray();
+    }
+
+    @JavascriptInterface
+    public void write(String path, String content, String cbId) {
+        executor.execute(() -> {
+            try {
+                if (!isSafeRelPath(path)) throw new IOException("非法路径: " + path);
+                if (rootUri != null) {
+                    writeSaf(path, content);
+                } else {
+                    writePrivate(path, content);
+                }
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    private void writeSaf(String path, String content) throws IOException {
+        DocumentFile dir = DocumentFile.fromTreeUri(activity, rootUri);
+        if (dir == null) throw new IOException("根目录不可用");
+        String[] parts = path.split("/");
+        DocumentFile cur = dir;
+        for (int i = 0; i < parts.length - 1; i++) {
+            if (parts[i].isEmpty()) continue;
+            DocumentFile next = cur.findFile(parts[i]);
+            if (next == null) next = cur.createDirectory(parts[i]);
+            if (next == null || !next.isDirectory()) throw new IOException("无法进入目录: " + parts[i]);
+            cur = next;
+        }
+        String name = parts[parts.length - 1];
+        DocumentFile target = cur.findFile(name);
+        if (target == null) target = cur.createFile("text/plain", name);
+        if (target == null) throw new IOException("无法创建文件: " + name);
+        java.io.OutputStream os = activity.getContentResolver().openOutputStream(target.getUri(), "wt");
+        if (os == null) throw new IOException("无法写入: " + name);
+        os.write(content.getBytes(StandardCharsets.UTF_8));
+        os.flush();
+        os.close();
+    }
+
+    private void writePrivate(String path, String content) throws IOException {
+        File f = new File(privateRoot, path);
+        if (!f.getCanonicalPath().startsWith(privateRoot.getCanonicalPath())) {
+            throw new IOException("非法路径: " + path);
+        }
+        File parent = f.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("无法创建目录: " + parent);
+        }
+        // 原子写：临时文件 + rename
+        File tmp = new File(parent, f.getName() + ".tmp");
+        try (FileOutputStream fos = new FileOutputStream(tmp)) {
+            fos.write(content.getBytes(StandardCharsets.UTF_8));
+            fos.flush();
+        }
+        if (!tmp.renameTo(f)) {
+            tmp.delete();
+            throw new IOException("写入失败: " + path);
+        }
+    }
+
+    @JavascriptInterface
+    public void mkdir(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                if (!isSafeRelPath(path)) throw new IOException("非法路径: " + path);
+                boolean created;
+                if (rootUri != null) {
+                    DocumentFile dir = DocumentFile.fromTreeUri(activity, rootUri);
+                    if (dir == null) throw new IOException("根目录不可用");
+                    String[] parts = path.split("/");
+                    DocumentFile cur = dir;
+                    for (String p : parts) {
+                        if (p.isEmpty()) continue;
+                        DocumentFile next = cur.findFile(p);
+                        if (next == null) next = cur.createDirectory(p);
+                        if (next == null) throw new IOException("创建失败: " + p);
+                        cur = next;
+                    }
+                    created = true;
+                } else {
+                    File f = new File(privateRoot, path);
+                    created = f.mkdirs() || f.isDirectory();
+                }
+                resolveOk(cbId, created);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void delete(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(path);
+                boolean deleted;
+                if (resolved instanceof DocumentFile) {
+                    deleted = ((DocumentFile) resolved).delete();
+                } else {
+                    deleted = ((File) resolved).delete();
+                }
+                if (!deleted) throw new IOException("删除失败: " + path);
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void rename(String oldPath, String newPath, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(oldPath);
+                if (!isSafeRelPath(newPath)) throw new IOException("非法路径: " + newPath);
+                boolean ok;
+                if (resolved instanceof DocumentFile) {
+                    DocumentFile df = (DocumentFile) resolved;
+                    String newName = newPath.contains("/")
+                        ? newPath.substring(newPath.lastIndexOf('/') + 1) : newPath;
+                    ok = df.renameTo(newName);
+                } else {
+                    File f = (File) resolved;
+                    File target = new File(privateRoot, newPath);
+                    ok = f.renameTo(target);
+                }
+                if (!ok) throw new IOException("重命名失败: " + oldPath);
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+}

@@ -29,5 +29,6 @@ android {
 }
 
 dependencies {
-    // 运行时零依赖：最小 WebView 壳使用 android.app.Activity，无需 androidx
+    // FileBridge 经 SAF（Storage Access Framework）访问真实文件系统
+    implementation 'androidx.documentfile:documentfile:1.0.1'
 }

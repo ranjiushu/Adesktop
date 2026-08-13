@@ -16,7 +16,7 @@ App.fabSpeedDial = (function () {
 
   function _getEl(id) { return document.getElementById(id) }
 
-  // ── 动作路由（Desktop：文件系统操作） ──
+  // ── 动作路由（共享 App.Actions，与 Drawer 同源） ──
   function _onChildClick(e) {
     var action = this.getAttribute('data-action')
     if (!action) return
@@ -25,67 +25,20 @@ App.fabSpeedDial = (function () {
         collapse()
         return
       case 'new-folder':
-        _createFolder()
+        App.Actions.createFolder()
         break
       case 'new-file':
-        _createFile()
+        App.Actions.createFile()
         break
       case 'refresh':
-        App.Desktop.refresh()
-        App.toast.show('已刷新')
+        App.Actions.refresh()
         break
       case 'switch-root':
         collapse()
-        if (!App.bridge.requestRootAccess()) {
-          App.toast.show('当前环境不支持切换根目录')
-        }
+        App.Actions.switchRoot()
         return
     }
     collapse()
-  }
-
-  // ── 新建文件夹（重名自动加序号） ──
-  function _createFolder() {
-    var base = '新建文件夹'
-    var name = base
-    var seq = 2
-    App.FileAPI.list('').then(function (items) {
-      function exists(n) {
-        for (var i = 0; i < items.length; i++) {
-          if (items[i].name === n && items[i].isDir) return true
-        }
-        return false
-      }
-      while (exists(name)) { name = base + ' ' + seq; seq++ }
-      return App.FileAPI.mkdir(name)
-    }).then(function () {
-      App.toast.show('已创建文件夹')
-      App.Desktop.refresh()
-    }).catch(function (err) {
-      App.toast.show('创建失败: ' + err.message)
-    })
-  }
-
-  // ── 新建文本文件（重名自动加序号） ──
-  function _createFile() {
-    var base = '新建文件.txt'
-    var name = base
-    var seq = 2
-    App.FileAPI.list('').then(function (items) {
-      function exists(n) {
-        for (var i = 0; i < items.length; i++) {
-          if (items[i].name === n && !items[i].isDir) return true
-        }
-        return false
-      }
-      while (exists(name)) { name = '新建文件 ' + seq + '.txt'; seq++ }
-      return App.FileAPI.write(name, '')
-    }).then(function () {
-      App.toast.show('已创建文件')
-      App.Desktop.refresh()
-    }).catch(function (err) {
-      App.toast.show('创建失败: ' + err.message)
-    })
   }
 
   // ── 遮罩点击 ──

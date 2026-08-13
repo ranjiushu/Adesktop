@@ -1,0 +1,61 @@
+/* 文件系统动作（FAB 与 Drawer 共享）：新建文件夹/新建文件/刷新/切换根目录 */
+'use strict'
+
+App.Actions = (function () {
+  // 重名自动加序号：遍历根目录找不冲突的名字
+  function _uniqueName(items, base, isDir) {
+    var name = base
+    var seq = 2
+    function exists(n) {
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].name === n && items[i].isDir === isDir) return true
+      }
+      return false
+    }
+    while (exists(name)) {
+      name = isDir ? base + ' ' + seq : '新建文件 ' + seq + '.txt'
+      seq++
+    }
+    return name
+  }
+
+  function createFolder() {
+    App.FileAPI.list('').then(function (items) {
+      return App.FileAPI.mkdir(_uniqueName(items, '新建文件夹', true))
+    }).then(function () {
+      App.toast.show('已创建文件夹')
+      App.Desktop.refresh()
+    }).catch(function (err) {
+      App.toast.show('创建失败: ' + err.message)
+    })
+  }
+
+  function createFile() {
+    App.FileAPI.list('').then(function (items) {
+      return App.FileAPI.write(_uniqueName(items, '新建文件.txt', false), '')
+    }).then(function () {
+      App.toast.show('已创建文件')
+      App.Desktop.refresh()
+    }).catch(function (err) {
+      App.toast.show('创建失败: ' + err.message)
+    })
+  }
+
+  function refresh() {
+    App.Desktop.refresh()
+    App.toast.show('已刷新')
+  }
+
+  function switchRoot() {
+    if (!App.bridge.requestRootAccess()) {
+      App.toast.show('当前环境不支持切换根目录')
+    }
+  }
+
+  return {
+    createFolder: createFolder,
+    createFile: createFile,
+    refresh: refresh,
+    switchRoot: switchRoot
+  }
+})()

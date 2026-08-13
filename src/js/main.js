@@ -21,6 +21,10 @@ App.boot = function boot() {
       })
     }
   }
+  // 顶栏汉堡 + Drawer 工具栏
+  if (App.Drawer && typeof App.Drawer.init === 'function') {
+    App.Drawer.init()
+  }
   // 桌面：以文件系统为数据源渲染
   if (App.Desktop && typeof App.Desktop.refresh === 'function') {
     App.Desktop.refresh()

@@ -1,0 +1,146 @@
+/* 顶栏汉堡 + 左侧 Drawer 工具栏 */
+.btn-drawer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-right: var(--space-xs);
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  border-radius: var(--radius-sm);
+}
+.btn-drawer:active {
+  background: var(--color-bg);
+}
+
+/* 标题：路径过长省略 */
+.app-header h1 {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Drawer 遮罩 */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0,0,0,0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.drawer-overlay-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Drawer 面板 */
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 1101;
+  width: 78vw;
+  max-width: 320px;
+  background: var(--color-surface);
+  box-shadow: 2px 0 16px rgba(0,0,0,0.12);
+  transform: translateX(-100%);
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.drawer.drawer-open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+.drawer-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+.drawer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  border-radius: var(--radius-sm);
+}
+.drawer-close:active {
+  background: var(--color-bg);
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm) 0;
+}
+.drawer-section {
+  padding: var(--space-sm) var(--space-md);
+}
+.drawer-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+}
+.drawer-root-path {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  word-break: break-all;
+}
+.drawer-root-mode {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 12px var(--space-md);
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+.drawer-item:active {
+  background: var(--color-bg);
+}
+.drawer-item-icon {
+  width: 22px;
+  text-align: center;
+  font-size: 18px;
+}

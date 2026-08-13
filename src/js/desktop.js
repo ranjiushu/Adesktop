@@ -43,8 +43,17 @@ App.Desktop = (function () {
       .then(function (info) {
         state.rootName = info.rootName
         state.mode = info.mode
+        // 顶栏标题 + Drawer 头部显示授权路径
+        if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
+          App.Drawer.updatePath(info.displayPath || info.rootName, info.rootName, info.mode)
+        }
       })
-      .catch(function () { state.rootName = '无法读取' })
+      .catch(function () {
+        state.rootName = '无法读取'
+        if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
+          App.Drawer.updatePath(App.NAME, App.NAME, '')
+        }
+      })
       .then(function () { return App.FileAPI.list('') })
       .then(function (items) {
         state.items = items

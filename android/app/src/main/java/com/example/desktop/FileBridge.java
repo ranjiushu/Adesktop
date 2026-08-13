@@ -164,15 +164,28 @@ public class FileBridge {
                     DocumentFile df = DocumentFile.fromTreeUri(activity, rootUri);
                     o.put("rootName", df != null && df.getName() != null ? df.getName() : "外部存储");
                     o.put("mode", "saf");
+                    o.put("displayPath", safDisplayPath(rootUri));
                 } else {
                     o.put("rootName", "应用私有目录");
                     o.put("mode", "private");
+                    o.put("displayPath", privateRoot.getAbsolutePath());
                 }
                 resolveOk(cbId, o);
             } catch (Exception e) {
                 resolveErr(cbId, e.getMessage());
             }
         });
+    }
+
+    /* SAF tree uri → 可显示路径：tree/primary%3ADesktop → "内部存储/Desktop" */
+    private String safDisplayPath(Uri treeUri) {
+        String seg = treeUri.getLastPathSegment();
+        if (seg == null) return "外部存储";
+        String decoded = Uri.decode(seg);
+        if (decoded.startsWith("primary:")) {
+            return "内部存储/" + decoded.substring("primary:".length());
+        }
+        return decoded.replace(':', '/');
     }
 
     @JavascriptInterface

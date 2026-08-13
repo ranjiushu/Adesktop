@@ -12,6 +12,9 @@
 <body>
 <main id="app" class="app-shell">
   <header class="app-header">
+    <button id="btn-drawer" class="btn-drawer" aria-label="打开菜单">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <h1 id="app-title">Desktop</h1>
   </header>
   <section class="app-content">
@@ -19,6 +22,39 @@
     <div id="desktop-grid" class="desktop-grid"></div>
   </section>
 </main>
+
+<!-- ===== 左侧 Drawer 工具栏（汉堡呼出） ===== -->
+<div id="drawer-overlay" class="drawer-overlay"></div>
+<nav id="drawer" class="drawer" aria-hidden="true">
+  <div class="drawer-header">
+    <span class="drawer-title">工具栏</span>
+    <button class="drawer-close" aria-label="关闭菜单">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-section">
+      <div class="drawer-label">根目录</div>
+      <div class="drawer-root-path" id="drawer-root-path">未知</div>
+      <div class="drawer-root-mode" id="drawer-root-mode"></div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-label">操作</div>
+      <button class="drawer-item" data-action="new-folder">
+        <span class="drawer-item-icon">📁</span><span>新建文件夹</span>
+      </button>
+      <button class="drawer-item" data-action="new-file">
+        <span class="drawer-item-icon">📄</span><span>新建文件</span>
+      </button>
+      <button class="drawer-item" data-action="refresh">
+        <span class="drawer-item-icon">🔄</span><span>刷新</span>
+      </button>
+      <button class="drawer-item" data-action="switch-root">
+        <span class="drawer-item-icon">🗂️</span><span>切换根目录</span>
+      </button>
+    </div>
+  </div>
+</nav>
 
 <!-- ===== Morph FAB + Speed Dial（短按展开菜单 / 长按 800ms 激活取景器） ===== -->
 <button id="mode-switch-fab" class="mode-switch-fab" title="更多选项" aria-label="更多选项">

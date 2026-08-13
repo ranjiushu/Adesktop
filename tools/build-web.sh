@@ -21,12 +21,12 @@ OUTPUT="$SCRIPT_DIR/dist/desktop.bundle.html"
 mkdir -p "$(dirname "$OUTPUT")"
 
 JS_ORDER=(
-  namespace.js utils.js bridge.js toast.js file-api.js desktop.js
-  fab-speed-dial.js inspector.js ui.js main.js
+  namespace.js utils.js bridge.js toast.js file-api.js desktop.js actions.js
+  fab-speed-dial.js drawer.js inspector.js ui.js main.js
 )
 
 CSS_ORDER=(
-  tokens.css shell.css desktop.css fab.css toast.css
+  tokens.css shell.css desktop.css fab.css drawer.css toast.css
 )
 
 # ── 颜色 ──

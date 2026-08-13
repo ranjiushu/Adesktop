@@ -1,5 +1,6 @@
-/* 桌面模块：以真实文件系统为数据源，渲染图标（世界坐标绝对定位，无限画布）。
- * 阶段 B：选择系统——单击选中/反选、矩形框选、长按拿起拖移、FAB 自动展开操作栏。
+/* 桌面模块：以真实文件系统为数据源，渲染图标（世界坐标绝对定位，无限画布 + 网格吸附）。
+ * 阶段 B：选择系统——单击选中/反选、框选、长按拿起整组拖移（网格吸附）、FAB 自动展开操作栏、
+ *        localStorage 布局持久化（位置 + 相机视角）。
  * 根目录 = SAF 授权目录 或 私有目录兜底（由桥决定）。
  */
 'use strict'
@@ -7,9 +8,7 @@
 App.Desktop = (function () {
   const ICON_W = 84
   const ICON_H = 76
-  const GAP = 16
-  const CELL_W = ICON_W + GAP
-  const CELL_H = ICON_H + GAP
+  // 网格常量统一在 App.DesktopGrid（origin 16,16 / step 100,92）
 
   let state = {
     rootName: '…',
@@ -22,8 +21,9 @@ App.Desktop = (function () {
   let bounds = {}      // name → {x, y, w, h}（世界坐标 AABB，命中测试用）
   let selection = new Set()
   let iconEls = {}     // name → DOM 元素
-  let dragTarget = null
-  let dragOffset = null
+  let dragTargets = []        // 移动的图标 name 列表（组移动）
+  let dragStartWorld = null   // 手指起始世界坐标
+  let dragStartPositions = {} // name → 起始世界坐标（保持组内相对位置）
 
   function el(tag, className, text) {
     let node = document.createElement(tag)
@@ -37,16 +37,13 @@ App.Desktop = (function () {
     return (vp && vp.clientWidth) || 360
   }
 
-  // 自动排布：世界坐标按网格铺开（已有位置优先，阶段 D 改为读 .desktop-layout.json）
+  // 自动排布：世界坐标按网格铺开（已有位置优先，位置来自 LayoutStore 持久化）
   function layout(items) {
-    let cols = Math.max(3, Math.min(8, Math.floor(viewportWidth() / CELL_W)))
+    let cols = Math.max(3, Math.min(8, Math.floor(viewportWidth() / App.DesktopGrid.GRID_W)))
     return items.map(function (item, i) {
       let pos = positions[item.name]
       if (!pos) {
-        pos = {
-          x: GAP + (i % cols) * CELL_W,
-          y: GAP + Math.floor(i / cols) * CELL_H
-        }
+        pos = App.DesktopGrid.cellToWorld(i % cols, Math.floor(i / cols))
       }
       return { item: item, x: pos.x, y: pos.y }
     })
@@ -156,37 +153,77 @@ App.Desktop = (function () {
   function handleLongPress(world) {
     const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
     if (!name) return
-    dragTarget = name
-    dragOffset = { dx: positions[name].x - world.x, dy: positions[name].y - world.y }
-    setPickedUp(name, true)
+    // 长按未选中 → 先单选再移；已选中 → 拿起整个选中组（Windows 组合拖动语义）
+    if (!selection.has(name)) {
+      selection = App.DesktopSelection.selectOnly(name)
+      applySelection()
+    }
+    dragTargets = Array.from(selection)
+    dragStartWorld = { x: world.x, y: world.y }
+    dragStartPositions = {}
+    dragTargets.forEach(function (n) {
+      dragStartPositions[n] = { x: positions[n].x, y: positions[n].y }
+      setPickedUp(n, true)
+    })
     if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
   }
 
+  // 拖动过程：无极跟随（不吸附），放置时再吸附 + 避让
+  function applyDrag(world) {
+    const dx = world.x - dragStartWorld.x
+    const dy = world.y - dragStartWorld.y
+    dragTargets.forEach(function (n) {
+      const x = dragStartPositions[n].x + dx
+      const y = dragStartPositions[n].y + dy
+      positions[n] = { x: x, y: y }
+      bounds[n] = { x: x, y: y, w: bounds[n].w, h: bounds[n].h }
+      const el = iconEls[n]
+      if (el) {
+        el.style.left = x + 'px'
+        el.style.top = y + 'px'
+      }
+    })
+  }
+
   function handleDrag(world) {
-    if (!dragTarget) return
-    const x = world.x + dragOffset.dx
-    const y = world.y + dragOffset.dy
-    positions[dragTarget] = { x: x, y: y }
-    bounds[dragTarget] = { x: x, y: y, w: bounds[dragTarget].w, h: bounds[dragTarget].h }
-    const el = iconEls[dragTarget]
-    if (el) {
-      el.style.left = x + 'px'
-      el.style.top = y + 'px'
-    }
+    if (dragTargets.length) applyDrag(world)
   }
 
   function handleDrop(world, moved) {
-    if (!dragTarget) return
-    setPickedUp(dragTarget, false)
+    if (!dragTargets.length) return
     if (moved) {
-      const x = world.x + dragOffset.dx
-      const y = world.y + dragOffset.dy
-      positions[dragTarget] = { x: x, y: y }
-      bounds[dragTarget] = { x: x, y: y, w: bounds[dragTarget].w, h: bounds[dragTarget].h }
+      // 1. 移动组期望位：snap 到网格
+      const dx = world.x - dragStartWorld.x
+      const dy = world.y - dragStartWorld.y
+      const moving = dragTargets.map(function (n) {
+        const raw = { x: dragStartPositions[n].x + dx, y: dragStartPositions[n].y + dy }
+        const snapped = App.DesktopGrid.snapToGrid(raw.x, raw.y)
+        return { name: n, x: snapped.x, y: snapped.y }
+      })
+      // 2. 静止图标（非移动组）
+      const movingSet = new Set(dragTargets)
+      const statics = Object.keys(positions).filter(function (n) {
+        return !movingSet.has(n)
+      }).map(function (n) {
+        return { name: n, x: positions[n].x, y: positions[n].y }
+      })
+      // 3. 避让解析：移动组放期望位，冲突的静止图标让位到最近空位
+      const resolved = App.DesktopGrid.resolvePlacement(moving, statics)
+      Object.keys(resolved).forEach(function (n) {
+        positions[n] = resolved[n]
+        bounds[n] = { x: resolved[n].x, y: resolved[n].y, w: bounds[n].w, h: bounds[n].h }
+        const el = iconEls[n]
+        if (el) {
+          el.style.left = resolved[n].x + 'px'
+          el.style.top = resolved[n].y + 'px'
+        }
+      })
     }
-    // 阶段 D：写盘 .desktop-layout.json
-    dragTarget = null
-    dragOffset = null
+    dragTargets.forEach(function (n) { setPickedUp(n, false) })
+    dragTargets = []
+    dragStartWorld = null
+    dragStartPositions = {}
+    if (moved) saveLayout()
   }
 
   function refresh() {
@@ -207,6 +244,12 @@ App.Desktop = (function () {
       .then(function () { return App.FileAPI.list('') })
       .then(function (items) {
         state.items = items
+        // 清理失效布局条目（文件已删/改名，避免残留在存储表）
+        const valid = {}
+        items.forEach(function (it) { valid[it.name] = true })
+        Object.keys(positions).forEach(function (name) {
+          if (!valid[name]) delete positions[name]
+        })
         render()
       })
       .catch(function (err) {
@@ -215,9 +258,36 @@ App.Desktop = (function () {
       })
   }
 
+  // 加载布局（位置 + 相机视角），无数据/损坏回退默认
+  function initLayout() {
+    const saved = App.LayoutStore.load()
+    if (saved && saved.icons) {
+      Object.keys(saved.icons).forEach(function (name) {
+        positions[name] = saved.icons[name]
+      })
+    }
+    if (saved && saved.camera) {
+      camera = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
+    } else {
+      camera = App.DesktopCamera.create()
+    }
+  }
+
+  // 保存布局（位置 + 相机），失败告警（铁律：写入路径失败必须告警）
+  function saveLayout() {
+    const data = {
+      version: 1,
+      icons: positions,
+      camera: { x: camera.x, y: camera.y, zoom: camera.zoom }
+    }
+    if (!App.LayoutStore.save(data)) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败')
+    }
+  }
+
   // 启动相机 + 手势（pan/zoom + tap/marquee/longpress/drag）
   function initGesture() {
-    camera = App.DesktopCamera.create()
+    initLayout()
     App.DesktopGesture.init({
       viewport: document.getElementById('desktop-viewport'),
       canvas: document.getElementById('desktop-canvas'),

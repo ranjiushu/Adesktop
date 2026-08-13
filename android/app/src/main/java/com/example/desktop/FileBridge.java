@@ -8,6 +8,9 @@ package com.example.desktop;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
@@ -25,6 +28,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class FileBridge {
+
+    /** 单次 read 上限：防止大文件整读导致 OOM（预览/编辑功能上线前先做护栏） */
+    private static final long MAX_READ_BYTES = 10L * 1024 * 1024;
 
     private final Activity activity;
     private final WebView webView;
@@ -62,6 +68,24 @@ public class FileBridge {
         });
     }
 
+    /* 触觉反馈：前端经 window.FileBridge.vibrate 调用（浏览器预览兜底 navigator.vibrate） */
+    @JavascriptInterface
+    public void vibrate(int ms) {
+        activity.runOnUiThread(() -> {
+            try {
+                Vibrator vib = (Vibrator) activity.getSystemService(Activity.VIBRATOR_SERVICE);
+                if (vib == null || !vib.hasVibrator()) return;
+                int duration = Math.max(1, Math.min(ms, 500));
+                if (Build.VERSION.SDK_INT >= 26) {
+                    vib.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE));
+                } else {
+                    vib.vibrate(duration);
+                }
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
     /* ── 工具 ── */
 
     /** 解析相对路径 → DocumentFile（SAF 模式）或 File（私有模式） */
@@ -83,10 +107,17 @@ public class FileBridge {
             return cur;
         }
         File f = new File(privateRoot, relPath);
-        if (!f.getCanonicalPath().startsWith(privateRoot.getCanonicalPath())) {
+        if (!isUnderPrivateRoot(f)) {
             throw new IOException("非法路径: " + relPath);
         }
         return f;
+    }
+
+    /** 私有模式越界校验：canonical 路径必须等于根或位于根之下（带分隔符，防 /root 前缀命中 /root2） */
+    private boolean isUnderPrivateRoot(File f) throws IOException {
+        String root = privateRoot.getCanonicalPath();
+        String path = f.getCanonicalPath();
+        return path.equals(root) || path.startsWith(root + File.separator);
     }
 
     private boolean isSafeRelPath(String p) {
@@ -225,6 +256,7 @@ public class FileBridge {
                 if (resolved instanceof DocumentFile) {
                     DocumentFile df = (DocumentFile) resolved;
                     if (!df.isFile()) throw new IOException("非文件: " + path);
+                    if (df.length() > MAX_READ_BYTES) throw new IOException("文件过大(>" + (MAX_READ_BYTES / 1024 / 1024) + "MB): " + path);
                     java.io.InputStream is = activity.getContentResolver().openInputStream(df.getUri());
                     if (is == null) throw new IOException("无法打开: " + path);
                     content = new String(readAll(is), StandardCharsets.UTF_8);
@@ -232,6 +264,7 @@ public class FileBridge {
                 } else {
                     File f = (File) resolved;
                     if (!f.isFile()) throw new IOException("非文件: " + path);
+                    if (f.length() > MAX_READ_BYTES) throw new IOException("文件过大(>" + (MAX_READ_BYTES / 1024 / 1024) + "MB): " + path);
                     try (FileInputStream fis = new FileInputStream(f)) {
                         content = new String(readAll(fis), StandardCharsets.UTF_8);
                     }
@@ -293,7 +326,7 @@ public class FileBridge {
 
     private void writePrivate(String path, String content) throws IOException {
         File f = new File(privateRoot, path);
-        if (!f.getCanonicalPath().startsWith(privateRoot.getCanonicalPath())) {
+        if (!isUnderPrivateRoot(f)) {
             throw new IOException("非法路径: " + path);
         }
         File parent = f.getParentFile();

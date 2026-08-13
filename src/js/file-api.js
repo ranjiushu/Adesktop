@@ -6,8 +6,8 @@
 'use strict'
 
 App.FileAPI = (function () {
-  var pending = {}
-  var seq = 0
+  let pending = {}
+  let seq = 0
 
   function call(method, args, timeoutMs) {
     return new Promise(function (resolve, reject) {
@@ -15,9 +15,9 @@ App.FileAPI = (function () {
         reject(new Error('FileBridge 不可用（当前环境无原生桥）'))
         return
       }
-      var id = 'cb' + (++seq)
+      let id = 'cb' + (++seq)
       pending[id] = { resolve: resolve, reject: reject }
-      var callArgs = args.concat([id])
+      let callArgs = args.concat([id])
       try {
         window.FileBridge[method].apply(window.FileBridge, callArgs)
       } catch (e) {
@@ -35,7 +35,7 @@ App.FileAPI = (function () {
 
   // 全局回调（Java 桥 evaluateJavascript 调用）
   window.__fbResolve = function (id, result) {
-    var p = pending[id]
+    let p = pending[id]
     if (!p) return
     delete pending[id]
     if (result && result.ok) {

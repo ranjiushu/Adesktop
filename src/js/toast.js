@@ -2,10 +2,10 @@
 'use strict'
 
 App.toast = (function () {
-  var _el = null
-  var _queue = []
-  var _timer = null
-  var _active = false
+  let _el = null
+  let _queue = []
+  let _timer = null
+  let _active = false
 
   function ensureEl() {
     if (_el) return _el
@@ -17,13 +17,13 @@ App.toast = (function () {
 
   function showNext() {
     if (_active) return
-    var msg = _queue.shift()
+    let msg = _queue.shift()
     if (msg === undefined) {
       if (_el) _el.classList.remove('toast-visible')
       return
     }
     _active = true
-    var el = ensureEl()
+    let el = ensureEl()
     el.textContent = msg
     el.classList.add('toast-visible')
     if (_timer) clearTimeout(_timer)

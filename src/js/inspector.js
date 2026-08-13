@@ -13,7 +13,7 @@
 'use strict'
 
 App.inspector = (function () {
-  var _scope = {
+  let _scope = {
     active: false,
     toolbarAtTop: false,
     _currentEl: null,
@@ -26,18 +26,18 @@ App.inspector = (function () {
   }
 
   // FAB 长按判定状态（fab 拖动开始时需主动取消长按 timer）
-  var _fabPressed = false
+  let _fabPressed = false
 
   // ==================== 初始化 ====================
 
   function initInspector() {
     // FAB z-index 提升到所有遮罩之上
-    var s = document.createElement('style')
+    let s = document.createElement('style')
     s.id = 'scope-style'
     s.textContent = '#mode-switch-fab{z-index:1002!important}'
     document.head.appendChild(s)
 
-    var fab = document.getElementById('mode-switch-fab')
+    let fab = document.getElementById('mode-switch-fab')
     if (!fab) return
 
     // FAB 短按屏蔽：Scope 激活时，捕获阶段拦截 touchend，防止 bindPress 触发模式切换
@@ -61,7 +61,7 @@ App.inspector = (function () {
 
     fab.addEventListener('touchmove', function(e) {
       if (!_fabPressed) return
-      var t = e.touches[0], r = fab.getBoundingClientRect()
+      let t = e.touches[0], r = fab.getBoundingClientRect()
       if (t.clientX < r.left-20 || t.clientX > r.right+20 || t.clientY < r.top-20 || t.clientY > r.bottom+20) {
         _fabPressed = false
         if (_scope._fabTimer) { clearTimeout(_scope._fabTimer); _scope._fabTimer = null }
@@ -102,7 +102,7 @@ App.inspector = (function () {
     _scope._lockUntil = Date.now() + 500  // 防穿透：先设锁
     destroyScopeDOM()
     // 延迟移除监听器，让锁有机会拦截残留的 touchend/click
-    var _scopeRef = _scope
+    let _scopeRef = _scope
     setTimeout(function() {
       if (!_scopeRef.active && _scopeRef._lockUntil && Date.now() > _scopeRef._lockUntil) {
         document.body.removeEventListener('click', onScopeClick, true)
@@ -115,13 +115,13 @@ App.inspector = (function () {
 
   function buildScopeDOM() {
     // 高亮框
-    var hl = document.createElement('div')
+    let hl = document.createElement('div')
     hl.id = 'scope-highlight'
     hl.style.cssText = 'position:fixed;pointer-events:none;z-index:9998;border:2px solid #4A90D9;background:rgba(74,144,217,0.08);display:none;border-radius:3px;transition:all .12s ease'
     _scope._highlight = hl; document.body.appendChild(hl)
 
     // 信息面板（高度自适应，可拖动）
-    var panel = document.createElement('div')
+    let panel = document.createElement('div')
     panel.id = 'scope-panel'
     panel.style.cssText = 'position:fixed;z-index:9999;width:300px;left:50%;top:120px;margin-left:-150px;background:#1E1E2E;color:#CDD6F4;font:11px/1.5 monospace;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.55);display:none;overflow:hidden;user-select:none;-webkit-user-select:none'
     panel._baseHeight = 200
@@ -144,7 +144,7 @@ App.inspector = (function () {
     panel.addEventListener('touchend', endDragPanel)
 
     // 工具栏
-    var tb = document.createElement('div')
+    let tb = document.createElement('div')
     tb.id = 'scope-toolbar'
     tb.style.cssText = 'position:fixed;z-index:10000;left:8px;right:8px;display:flex;gap:6px;justify-content:center;padding:6px 8px;transition:all .25s ease;background:#1E1E2E;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.5)'
     positionToolbar(tb)
@@ -184,10 +184,10 @@ App.inspector = (function () {
   // 扩大/缩小选区：在 DOM 树中上下穿梭
   function navigateScope(direction) {
     if (!_scope._currentEl) { toast('请先点击一个元素'); return }
-    var el = _scope._currentEl
+    let el = _scope._currentEl
     if (direction === 'up') {
       // 扩大到父元素
-      var p = el.parentElement
+      let p = el.parentElement
       if (p && p !== document.body && p !== document.documentElement) {
         _scope._currentEl = p
         highlightEl(p)
@@ -198,7 +198,7 @@ App.inspector = (function () {
       }
     } else {
       // 缩小到第一个有意义的子元素
-      var children = el.children
+      let children = el.children
       if (children.length > 0) {
         _scope._currentEl = children[0]
         highlightEl(children[0])
@@ -214,7 +214,7 @@ App.inspector = (function () {
 
   function onScopeTouch(e) {
     if (_scope._lockUntil && Date.now() < _scope._lockUntil) return
-    var t = e.target
+    let t = e.target
     if (t && (t.closest('#scope-toolbar') || t.closest('#scope-panel'))) return
     e.preventDefault(); e.stopPropagation()
     onScopeClick(e)
@@ -223,7 +223,7 @@ App.inspector = (function () {
   function onScopeClick(e) {
     if (_scope._lockUntil && Date.now() < _scope._lockUntil) return
     if (!_scope.active) return
-    var t = e.target
+    let t = e.target
     if (t && (t.closest('#scope-toolbar') || t.closest('#scope-panel'))) return
     e.preventDefault(); e.stopPropagation()
     _scope._currentEl = e.target
@@ -232,9 +232,9 @@ App.inspector = (function () {
   }
 
   function highlightEl(el) {
-    var hl = _scope._highlight
+    let hl = _scope._highlight
     if (!hl || !el) return
-    var r = el.getBoundingClientRect()
+    let r = el.getBoundingClientRect()
     hl.style.display = 'block'
     hl.style.left = r.left + 'px'; hl.style.top = r.top + 'px'
     hl.style.width = r.width + 'px'; hl.style.height = r.height + 'px'
@@ -242,30 +242,30 @@ App.inspector = (function () {
 
   // ==================== 信息面板 ====================
 
-  var _panelProps = {}  // 缓存当前面板的属性，供逐条复制
+  let _panelProps = {}  // 缓存当前面板的属性，供逐条复制
 
   function showPanel(el) {
-    var panel = _scope._panel
-    var content = document.getElementById('scope-panel-content')
+    let panel = _scope._panel
+    let content = document.getElementById('scope-panel-content')
     if (!panel || !content) return
 
-    var r = el.getBoundingClientRect()
-    var cs = window.getComputedStyle(el)
-    var tag = el.tagName.toLowerCase()
-    var id = el.id || ''
-    var cls = (typeof el.className === 'string') ? el.className.replace(/\s+/g, '.') : ''
+    let r = el.getBoundingClientRect()
+    let cs = window.getComputedStyle(el)
+    let tag = el.tagName.toLowerCase()
+    let id = el.id || ''
+    let cls = (typeof el.className === 'string') ? el.className.replace(/\s+/g, '.') : ''
 
     // 选择器标识（构建纯文本，供复制使用）
-    var selText = tag
+    let selText = tag
     if (id) selText += '#' + id
     if (cls) selText += '.' + cls
 
-    var selHtml = '<span style="color:#89B4FA;font-weight:700">' + tag + '</span>'
+    let selHtml = '<span style="color:#89B4FA;font-weight:700">' + tag + '</span>'
     if (id) selHtml += '<span style="color:#F9E2AF">#' + App.utils.escapeHtml(id) + '</span>'
     if (cls) selHtml += '<span style="color:#A6E3A1">.' + App.utils.escapeHtml(cls) + '</span>'
 
     // 属性列表（每一项可点击复制）
-    var rows = [
+    let rows = [
       ['选择器', selText], ['标签', tag], ['ID', id || '(无)'], ['Class', cls || '(无)'],
       ['尺寸', Math.round(r.width) + '×' + Math.round(r.height)],
       ['位置', Math.round(r.left) + ',' + Math.round(r.top)],
@@ -280,10 +280,10 @@ App.inspector = (function () {
     ]
 
     _panelProps = {}
-    var html = '<div style="margin-bottom:6px;cursor:pointer;padding:2px 4px;border-radius:3px" class="scope-prop-val" data-key="选择器">' + selHtml + '</div>'
+    let html = '<div style="margin-bottom:6px;cursor:pointer;padding:2px 4px;border-radius:3px" class="scope-prop-val" data-key="选择器">' + selHtml + '</div>'
     html += '<div style="display:grid;grid-template-columns:auto 1fr;gap:1px 6px">'
     rows.forEach(function(row) {
-      var key = row[0], val = row[1]
+      let key = row[0], val = row[1]
       _panelProps[key] = val
       html += '<div style="color:#6C7086;white-space:nowrap">' + key + '</div>'
       html += '<div class="scope-prop-val" data-key="' + key + '" style="color:#CDD6F4;word-break:break-all;cursor:pointer;padding:1px 2px;border-radius:2px;transition:background .1s" onmouseover="this.style.background=\'rgba(255,255,255,0.05)\'" onmouseout="this.style.background=\'none\'">' + App.utils.escapeHtml(String(val)) + '</div>'
@@ -294,18 +294,18 @@ App.inspector = (function () {
     panel.style.display = 'block'
 
     // 自适应高度：内容行数 × 行高 + 头部 + 底部按钮 + 内边距
-    var lineH = 18
-    var contentH = rows.length * lineH + 50
-    var toolbarH = _scope._toolbar ? _scope._toolbar.offsetHeight + 16 : 60
-    var safeH = window.innerHeight - toolbarH - 24
-    var maxH = Math.min(safeH, 520)
-    var h = Math.round(Math.max(panel._baseHeight, Math.min(contentH + 40, maxH)))
+    let lineH = 18
+    let contentH = rows.length * lineH + 50
+    let toolbarH = _scope._toolbar ? _scope._toolbar.offsetHeight + 16 : 60
+    let safeH = window.innerHeight - toolbarH - 24
+    let maxH = Math.min(safeH, 520)
+    let h = Math.round(Math.max(panel._baseHeight, Math.min(contentH + 40, maxH)))
     panel.style.height = h + 'px'
 
     // 每条属性可点击复制
     content.querySelectorAll('.scope-prop-val').forEach(function(el) {
       bindEl(el, function() {
-        var k = el.dataset.key
+        let k = el.dataset.key
         App.ui.copyText(_panelProps[k] || '', '已复制: ' + k)
       })
     })
@@ -313,8 +313,8 @@ App.inspector = (function () {
 
   function copyAllInfo() {
     if (Object.keys(_panelProps).length === 0) { toast('请先选取一个元素'); return }
-    var lines = []
-    for (var k in _panelProps) { lines.push(k + ': ' + _panelProps[k]) }
+    let lines = []
+    for (let k in _panelProps) { lines.push(k + ': ' + _panelProps[k]) }
     App.ui.copyText(lines.join('\n'), '已复制全部属性')
   }
 
@@ -345,9 +345,9 @@ App.inspector = (function () {
   function moveDragPanel(e) {
     if (!_scope._dragState) return
     e.preventDefault()
-    var t = e.touches[0]
-    var ds = _scope._dragState
-    var panel = _scope._panel
+    let t = e.touches[0]
+    let ds = _scope._dragState
+    let panel = _scope._panel
     panel.style.left = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, ds.startLeft + t.clientX - ds.startX)) + 'px'
     panel.style.top = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, ds.startTop + t.clientY - ds.startY)) + 'px'
     panel.style.marginLeft = '0'  // 首次拖动后取消居中
@@ -361,9 +361,9 @@ App.inspector = (function () {
     if (!el) return
     // 移动端一次触摸会依次合成 touchstart → mousedown → click，三监听器若不
     // 去重会导致 fn 一次执行 3 次。250ms 时间去重：同一手势只放行第一个事件。
-    var lastFire = 0
+    let lastFire = 0
     function fire() {
-      var now = Date.now()
+      let now = Date.now()
       if (now - lastFire < 250) return
       lastFire = now
       fn()
@@ -375,7 +375,7 @@ App.inspector = (function () {
   }
 
   function tagStr(el) {
-    var s = el.tagName.toLowerCase()
+    let s = el.tagName.toLowerCase()
     if (el.id) s += '#' + el.id
     return s
   }

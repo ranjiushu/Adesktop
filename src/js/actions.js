@@ -4,10 +4,10 @@
 App.Actions = (function () {
   // 重名自动加序号：遍历根目录找不冲突的名字
   function _uniqueName(items, base, isDir) {
-    var name = base
-    var seq = 2
+    let name = base
+    let seq = 2
     function exists(n) {
-      for (var i = 0; i < items.length; i++) {
+      for (let i = 0; i < items.length; i++) {
         if (items[i].name === n && items[i].isDir === isDir) return true
       }
       return false

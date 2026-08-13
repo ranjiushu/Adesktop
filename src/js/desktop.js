@@ -4,22 +4,22 @@
 'use strict'
 
 App.Desktop = (function () {
-  var state = {
+  let state = {
     rootName: '…',
     mode: 'unknown',
     items: []
   }
 
   function el(tag, className, text) {
-    var node = document.createElement(tag)
+    let node = document.createElement(tag)
     if (className) node.className = className
     if (text != null) node.textContent = text
     return node
   }
 
   function render() {
-    var statusEl = document.getElementById('status-text')
-    var gridEl = document.getElementById('desktop-grid')
+    let statusEl = document.getElementById('status-text')
+    let gridEl = document.getElementById('desktop-grid')
     if (!gridEl) return
     gridEl.innerHTML = ''
 
@@ -29,9 +29,9 @@ App.Desktop = (function () {
     }
 
     state.items.forEach(function (item) {
-      var card = el('div', 'desktop-icon' + (item.isDir ? ' is-dir' : ''))
-      var icon = el('div', 'desktop-icon-glyph', item.isDir ? '📁' : '📄')
-      var name = el('div', 'desktop-icon-name', item.name)
+      let card = el('div', 'desktop-icon' + (item.isDir ? ' is-dir' : ''))
+      let icon = el('div', 'desktop-icon-glyph', item.isDir ? '📁' : '📄')
+      let name = el('div', 'desktop-icon-name', item.name)
       card.appendChild(icon)
       card.appendChild(name)
       gridEl.appendChild(card)
@@ -60,7 +60,7 @@ App.Desktop = (function () {
         render()
       })
       .catch(function (err) {
-        var statusEl = document.getElementById('status-text')
+        let statusEl = document.getElementById('status-text')
         if (statusEl) statusEl.textContent = '读取失败: ' + err.message
       })
   }

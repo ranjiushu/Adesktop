@@ -7,18 +7,18 @@
 'use strict'
 
 App.fabSpeedDial = (function () {
-  var SPEED_DIAL_ID = 'fab-speed-dial'
-  var BACKDROP_ID = 'fab-backdrop'
-  var FAB_ID = 'mode-switch-fab'
+  let SPEED_DIAL_ID = 'fab-speed-dial'
+  let BACKDROP_ID = 'fab-backdrop'
+  let FAB_ID = 'mode-switch-fab'
 
-  var _expanded = false
-  var _mode = null
+  let _expanded = false
+  let _mode = null
 
   function _getEl(id) { return document.getElementById(id) }
 
   // ── 动作路由（共享 App.Actions，与 Drawer 同源） ──
   function _onChildClick(e) {
-    var action = this.getAttribute('data-action')
+    let action = this.getAttribute('data-action')
     if (!action) return
     switch (action) {
       case 'close-speed-dial':
@@ -53,7 +53,7 @@ App.fabSpeedDial = (function () {
     if (_expanded) return
     _expanded = true
     _mode = mode || 'desktop'
-    var fab = _getEl(FAB_ID), sd = _getEl(SPEED_DIAL_ID), bd = _getEl(BACKDROP_ID)
+    let fab = _getEl(FAB_ID), sd = _getEl(SPEED_DIAL_ID), bd = _getEl(BACKDROP_ID)
     if (!fab || !sd) return
     sd.setAttribute('data-mode', _mode)
     if (bd) bd.classList.add('fab-backdrop-visible')
@@ -67,7 +67,7 @@ App.fabSpeedDial = (function () {
     if (!_expanded) return
     _expanded = false
     _mode = null
-    var fab = _getEl(FAB_ID), sd = _getEl(SPEED_DIAL_ID), bd = _getEl(BACKDROP_ID)
+    let fab = _getEl(FAB_ID), sd = _getEl(SPEED_DIAL_ID), bd = _getEl(BACKDROP_ID)
     if (bd) bd.classList.remove('fab-backdrop-visible')
     if (fab) fab.classList.remove('fab-speed-dial-active')
     if (sd) { sd.classList.remove('fab-speed-dial-expanded'); sd.removeAttribute('data-mode') }
@@ -79,16 +79,16 @@ App.fabSpeedDial = (function () {
 
   // ── 初始化 ──
   function init() {
-    var bd = _getEl(BACKDROP_ID)
+    let bd = _getEl(BACKDROP_ID)
     if (bd) App.utils.bindPress(bd, _onBackdropClick)
-    var sd = _getEl(SPEED_DIAL_ID)
+    let sd = _getEl(SPEED_DIAL_ID)
     if (sd) {
-      var children = sd.querySelectorAll('.fab-child')
-      for (var i = 0; i < children.length; i++) {
+      let children = sd.querySelectorAll('.fab-child')
+      for (let i = 0; i < children.length; i++) {
         App.utils.bindPress(children[i], _onChildClick)
       }
     }
-    var fab = _getEl(FAB_ID)
+    let fab = _getEl(FAB_ID)
     if (fab) fab.classList.add('fab-speed-dial-ready')
   }
 

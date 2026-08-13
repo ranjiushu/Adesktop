@@ -19,8 +19,8 @@ App.utils = (function () {
     btn._bindPressBound = true
     btn.removeAttribute('onclick')
 
-    var touchFired = false
-    var pressed = false
+    let touchFired = false
+    let pressed = false
 
     btn.addEventListener('touchstart', function (e) {
       e.preventDefault()
@@ -31,8 +31,8 @@ App.utils = (function () {
     // touchmove：手指滑出按钮区域则取消点击，避免误触
     btn.addEventListener('touchmove', function (e) {
       if (!pressed) return
-      var touch = e.touches[0]
-      var rect = btn.getBoundingClientRect()
+      let touch = e.touches[0]
+      let rect = btn.getBoundingClientRect()
       if (touch.clientX < rect.left || touch.clientX > rect.right ||
           touch.clientY < rect.top || touch.clientY > rect.bottom) {
         pressed = false

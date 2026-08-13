@@ -4,13 +4,13 @@
 App.ui = (function () {
   function copyText(text, msg) {
     // 优先 execCommand（WebView 兼容性最好，不依赖用户手势令牌）
-    var ta = document.createElement('textarea')
+    let ta = document.createElement('textarea')
     ta.value = text
     ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
     document.body.appendChild(ta)
     ta.select()
     try {
-      var ok = document.execCommand('copy')
+      let ok = document.execCommand('copy')
       if (ok) {
         if (msg) App.toast.show(msg)
         document.body.removeChild(ta)

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# 防线: 分支命名校验（main 为唯一允许的非 feat/fix 分支）
+set -uo pipefail
+
+_branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+case "$_branch" in
+  main) exit 0 ;;
+  feat/*|fix/*|exp/*) exit 0 ;;
+  *)
+    echo "[pre-push] 分支 '$_branch' 命名违规，允许: feat/ fix/ exp/（或 main）" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+# =============================================================================
+# build-web.sh — 将 src/ 下的拆分源码合并为单文件 dist/desktop.bundle.html
+#
+# 用法: bash tools/build-web.sh [--strict]
+# 功能: 1) 拼接 JS/CSS 2) 注入构建变量 3) 产物结构验证
+#       验证失败则中止，不会覆盖 dist/desktop.bundle.html
+#
+# 注入变量（构建时注入到 JS 尾部，每次构建自动更新）：
+#   BUILD_COUNT     — 构建次数（从 dist/.build-count 持久化文件递增）
+#   BUILD_TIMESTAMP — 构建时间（Asia/Shanghai, ISO 8601）
+#
+# 拼接清单：新增 src/js/*.js 或 src/css/*.css 必须登记到 JS_ORDER/CSS_ORDER，
+# 否则完整性自检会拦截构建（防「新文件忘登记 → 代码不进产物」）。
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SRC_DIR="$SCRIPT_DIR/src"
+OUTPUT="$SCRIPT_DIR/dist/desktop.bundle.html"
+mkdir -p "$(dirname "$OUTPUT")"
+
+JS_ORDER=(
+  namespace.js main.js
+)
+
+CSS_ORDER=(
+  tokens.css shell.css
+)
+
+# ── 颜色 ──
+RED=''; GREEN=''; NC=''; YELLOW=''
+if [[ -t 1 ]]; then
+  RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+fi
+fail() { echo -e "${RED}[FAIL]${NC} $1"; exit 1; }
+ok()   { echo -e "${GREEN}[OK]${NC}   $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
+STRICT_MODE=false
+for arg in "$@"; do
+  [[ "$arg" == "--strict" ]] && STRICT_MODE=true
+done
+
+# ── 前置检查：所有源文件存在 ──
+check_files_exist() {
+  local missing=0
+  for f in "${JS_ORDER[@]}"; do
+    [[ -f "$SRC_DIR/js/$f" ]] || { echo "  [缺失] src/js/$f"; missing=1; }
+  done
+  for f in "${CSS_ORDER[@]}"; do
+    [[ -f "$SRC_DIR/css/$f" ]] || { echo "  [缺失] src/css/$f"; missing=1; }
+  done
+  [[ -f "$SRC_DIR/index.html" ]] || { echo "  [缺失] src/index.html"; missing=1; }
+  [[ $missing -eq 0 ]] || fail "源文件缺失，中止构建"
+  ok "所有源文件存在"
+}
+
+# ── 反向完整性检查：src 目录内文件必须全部纳入拼接清单 ──
+list_contains() {
+  local target="$1" f
+  for f in "${@:2}"; do
+    [[ "$f" == "$target" ]] && return 0
+  done
+  return 1
+}
+
+check_order_completeness() {
+  local missing=0 f base
+  for f in "$SRC_DIR"/js/*.js; do
+    base=$(basename "$f")
+    if ! list_contains "$base" "${JS_ORDER[@]}"; then
+      echo "  [缺失登记] src/js/$base 未纳入 JS_ORDER"
+      missing=1
+    fi
+  done
+  for f in "$SRC_DIR"/css/*.css; do
+    base=$(basename "$f")
+    if ! list_contains "$base" "${CSS_ORDER[@]}"; then
+      echo "  [缺失登记] src/css/$base 未纳入 CSS_ORDER"
+      missing=1
+    fi
+  done
+  [[ $missing -eq 0 ]] || fail "存在未纳入拼接清单的源文件（新文件须加入 JS_ORDER/CSS_ORDER 才能进入构建）"
+  ok "拼接清单完整（src/js ${#JS_ORDER[@]} 个 / src/css ${#CSS_ORDER[@]} 个）"
+}
+
+# ── 拼接 JS ──
+concat_js() {
+  local tmp="$1"
+  > "$tmp"
+  for f in "${JS_ORDER[@]}"; do
+    cat "$SRC_DIR/js/$f" >> "$tmp"
+    printf '\n' >> "$tmp"
+  done
+  ok "JS 拼接完成 ($(wc -c < "$tmp") bytes)"
+}
+
+# ── 拼接 CSS ──
+concat_css() {
+  local tmp="$1"
+  > "$tmp"
+  for f in "${CSS_ORDER[@]}"; do
+    cat "$SRC_DIR/css/$f" >> "$tmp"
+  done
+  ok "CSS 拼接完成 ($(wc -c < "$tmp") bytes)"
+}
+
+# ── 验证 JS 语法 ──
+verify_js_syntax() {
+  local js_file="$1"
+  if command -v node &>/dev/null; then
+    if node --check "$js_file" 2>&1; then
+      ok "JS 语法正确"
+    else
+      fail "JS 语法错误（详见上方输出）"
+    fi
+  else
+    warn "未找到 node，跳过 JS 语法检查"
+  fi
+}
+
+# ── 注入构建变量 ──
+inject_vars() {
+  local js_file="$1"
+  local count=1
+  [[ -f "$SCRIPT_DIR/dist/.build-count" ]] && count=$(cat "$SCRIPT_DIR/dist/.build-count")
+  count=$((count + 1))
+  echo "$count" > "$SCRIPT_DIR/dist/.build-count"
+  local ts
+  ts=$(TZ=Asia/Shanghai date +"%Y-%m-%d %H:%M:%S %z" 2>/dev/null || date +"%Y-%m-%d %H:%M:%S")
+  cat >> "$js_file" <<EOF
+var BUILD_COUNT=${count};
+var BUILD_TIMESTAMP='${ts}';
+EOF
+  ok "注入构建变量（build ${count} @ ${ts}）"
+}
+
+# ── 验证注入变量存在 ──
+verify_injections() {
+  local js_file="$1"
+  for var in BUILD_COUNT BUILD_TIMESTAMP; do
+    grep -q "var ${var}=" "$js_file" || fail "注入变量缺失: ${var}"
+  done
+  ok "注入变量均已存在于产物中"
+}
+
+# ── 构建 HTML ──
+build_html() {
+  local css_tmp="$1" js_tmp="$2" output="$3"
+  local css_content
+  css_content=$(cat "$css_tmp")
+  > "$output"
+  while IFS= read -r line; do
+    case "$line" in
+      *__STYLE_PLACEHOLDER__*) printf '%s\n' "$css_content" ;;
+      *__JS_PLACEHOLDER__*)    cat "$js_tmp" ;;
+      *)                       printf '%s\n' "$line" ;;
+    esac
+  done < "$SRC_DIR/index.html" > "$output"
+  ok "HTML 构建完成 ($(wc -c < "$output") bytes)"
+}
+
+# ── 验证产物结构 ──
+verify_output() {
+  local output="$1"
+  local errors=0
+
+  # 1. 没有残留占位符
+  if grep -q '__STYLE_PLACEHOLDER__\|__JS_PLACEHOLDER__' "$output"; then
+    echo "  [残留] 产物中存在未替换的占位符"
+    errors=1
+  fi
+
+  # 2. 恰好一个 <style> + 一个 <script>
+  local style_open style_close script_open script_close
+  style_open=$(grep -c '<style>'  "$output" 2>/dev/null || echo 0)
+  style_close=$(grep -c '</style>' "$output" 2>/dev/null || echo 0)
+  script_open=$(grep -c '<script>' "$output" 2>/dev/null || echo 0)
+  script_close=$(grep -c '</script>' "$output" 2>/dev/null || echo 0)
+  [[ $style_open -eq 1 ]]  || { echo "  [结构] <style> 个数: $style_open (期望 1)"; errors=1; }
+  [[ $style_close -eq 1 ]] || { echo "  [结构] </style> 个数: $style_close (期望 1)"; errors=1; }
+  [[ $script_open -eq 1 ]] || { echo "  [结构] <script> 个数: $script_open (期望 1)"; errors=1; }
+  [[ $script_close -eq 1 ]]|| { echo "  [结构] </script> 个数: $script_close (期望 1)"; errors=1; }
+
+  # 3. 包含 DOCTYPE 声明
+  grep -q '<!DOCTYPE html>' "$output" || { echo "  [结构] 缺少 DOCTYPE"; errors=1; }
+
+  [[ $errors -eq 0 ]] || fail "产物结构验证失败"
+  ok "产物结构验证通过"
+}
+
+# ── 一致性检查模式（--check）：临时构建与当前产物对比 ──
+check_consistency() {
+  local tmp_js tmp_css tmp_output
+  tmp_js=$(mktemp -p /tmp desktop-check-js-XXXXXXXX.js)
+  tmp_css=$(mktemp -p /tmp desktop-check-css-XXXXXXXX.css)
+  tmp_output=$(mktemp -p /tmp desktop-check-XXXXXXXX.html)
+  concat_js "$tmp_js" &>/dev/null
+  concat_css "$tmp_css" &>/dev/null
+  build_html "$tmp_css" "$tmp_js" "$tmp_output" &>/dev/null
+  rm -f "$tmp_css"
+  if diff -I 'var BUILD_TIMESTAMP=' -I 'var BUILD_COUNT=' -q "$tmp_output" "$OUTPUT" &>/dev/null; then
+    echo "[check] src/ 与 dist/desktop.bundle.html 一致"
+    rm -f "$tmp_js" "$tmp_output"
+    exit 0
+  else
+    echo "[check] src/ 与 dist/desktop.bundle.html 不一致——需要重建"
+    rm -f "$tmp_js" "$tmp_output"
+    exit 1
+  fi
+}
+
+# ══════════════════════════ 主流程 ══════════════════════════
+echo "================================================"
+echo "  Desktop 构建（src/ → dist/desktop.bundle.html）"
+echo "================================================"
+
+[[ "$*" == *--check* ]] && check_consistency
+
+check_files_exist
+check_order_completeness
+
+TMP_JS=$(mktemp -p /tmp desktop-js-XXXXXXXX.js)
+TMP_CSS=$(mktemp -p /tmp desktop-css-XXXXXXXX.css)
+
+concat_js "$TMP_JS"
+verify_js_syntax "$TMP_JS"
+inject_vars "$TMP_JS"
+verify_injections "$TMP_JS"
+
+concat_css "$TMP_CSS"
+build_html "$TMP_CSS" "$TMP_JS" "$OUTPUT"
+
+rm -f "$TMP_JS" "$TMP_CSS"
+
+verify_output "$OUTPUT"
+echo "================================================"
+echo "  构建完成: $OUTPUT"
+echo "================================================"

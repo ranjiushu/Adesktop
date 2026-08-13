@@ -1,0 +1,10 @@
+{
+  "name": "desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop 构建工具依赖（运行时零依赖，仅构建期使用）",
+  "devDependencies": {
+    "clean-css": "^5.3.3",
+    "terser": "^5.31.0"
+  }
+}

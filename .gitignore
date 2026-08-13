@@ -1,0 +1,38 @@
+# 截图与临时文件
+screenshots/
+temp/
+tmp/
+*.log
+*.swp
+*.swo
+*~
+
+# 构建产物（由 build-web.sh / minify-bundle.js 生成，不入库）
+dist/*
+!dist/.gitkeep
+
+# Android build outputs
+android/app/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/
+
+# 签名密钥与本地凭证——永不入库
+*.jks
+*.keystore
+keystore.properties
+*.bundle
+
+# UI verify / node
+node_modules/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+
+# Python
+__pycache__/
+*.pyc

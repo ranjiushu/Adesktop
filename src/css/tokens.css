@@ -1,0 +1,23 @@
+/* 设计 token：颜色 / 间距 / 圆角 / 字号，全局唯一取值来源 */
+:root {
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-text: #1a1d21;
+  --color-text-secondary: #6b7280;
+  --color-accent: #3b82f6;
+  --color-border: #e5e7eb;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+
+  --font-size-sm: 13px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+
+  --header-height: 56px;
+}

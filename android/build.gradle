@@ -1,0 +1,4 @@
+// Desktop 根构建脚本（占位包名 com.example.desktop，发布前确认）
+plugins {
+    id 'com.android.application' version '8.2.0' apply false
+}

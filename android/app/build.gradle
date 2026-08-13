@@ -1,0 +1,33 @@
+// Desktop Android 应用模块构建脚本（最小 WebView 壳，零第三方运行时依赖）
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.example.desktop'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.desktop"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // 运行时零依赖：最小 WebView 壳使用 android.app.Activity，无需 androidx
+}

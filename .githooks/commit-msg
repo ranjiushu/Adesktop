@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# 防线: 禁止提交信息为纯英文的提交（merge commit 除外）
+# 非必要部分必须使用中文编写提交信息
+set -uo pipefail
+
+MSG_FILE="$1"
+
+MSG=$(grep -v '^#' "$MSG_FILE" 2>/dev/null || true)
+[ -n "$MSG" ] || exit 0
+
+FIRST_LINE=$(echo "$MSG" | head -1)
+if echo "$FIRST_LINE" | grep -qiE '^Merge\b'; then
+  exit 0
+fi
+
+if ! echo "$MSG" | grep -qP '[\x{4e00}-\x{9fff}]'; then
+  echo "[commit-msg] 提交信息必须包含中文（禁止纯英文提交）" >&2
+  exit 1
+fi
+exit 0

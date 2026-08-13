@@ -159,6 +159,12 @@ build_html() {
       *)                       printf '%s\n' "$line" ;;
     esac
   done < "$SRC_DIR/index.html" > "$output"
+  # 防回归：占位符字符串不得出现在 HTML 注释等非注入位置——
+  # 曾踩坑：index.html 首行注释含 __STYLE_PLACEHOLDER__ 字面量被通配误匹配，
+  # CSS 被输出到 DOCTYPE 之前，真机渲染成 body 文本（一长串 CSS 源码）。
+  if head -c 12 "$output" | grep -qv '<'; then
+    fail "产物不以 HTML 标签开头——占位符疑似被注释行误匹配"
+  fi
   ok "HTML 构建完成 ($(wc -c < "$output") bytes)"
 }
 

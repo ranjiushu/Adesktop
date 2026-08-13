@@ -35,6 +35,11 @@ check(styles === 1, '<style> 恰好 1 个 (实际 ' + styles + ')')
 check(scripts === 1, '<script> 恰好 1 个 (实际 ' + scripts + ')')
 check(s.includes('<!DOCTYPE html>'), '包含 DOCTYPE')
 
+// 2b. 防回归：产物必须以 HTML 标签开头（首个非空白字符是 <）
+// 曾踩坑：index.html 首行注释含 __STYLE_PLACEHOLDER__ 字面量被 build_html 通配
+// 误匹配，CSS 被输出到 DOCTYPE 之前，真机渲染成 body 文本（一长串 CSS 源码）
+check(/^\s*</.test(s), '产物以 HTML 标签开头（无 CSS/文本前置）')
+
 // 3. 注入变量存在
 check(/var BUILD_COUNT=\d+;/.test(s), 'BUILD_COUNT 注入存在')
 check(/var BUILD_TIMESTAMP='[^']+';/.test(s), 'BUILD_TIMESTAMP 注入存在')

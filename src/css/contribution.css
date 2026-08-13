@@ -1,0 +1,254 @@
+/* 贡献热力图、提交详情（上线移除） */
+/* ===== 贡献热力图 ===== */
+/* 卡片外层：边框/背景固定，footer 不随网格滚动（2026-08-02 调整） */
+.heatmap-card {
+  background: var(--bg-page);
+  border: 1px solid var(--border-outer);
+  border-radius: 14px;
+  padding: 12px 14px 10px;
+  margin-bottom: 4px;
+}
+/* 滚动行：纵轴（固定）+ 滚动区（仅 months+grid）并排 */
+.heatmap-scroll-row {
+  display: flex;
+  align-items: flex-start;
+}
+/* 滚动内层：仅月份/网格横向滚动；窗口宽度自适应，
+   完整整数列由列级吸附保证（滚动停止对齐列边界） */
+.heatmap-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  flex: 1;
+  min-width: 0;
+}
+.heatmap-months {
+  display: flex;
+  gap: 2px;
+  padding-left: 0; /* days 已移出滚动区，月份标签直接对齐网格首列 */
+  margin-bottom: 2px;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+.heatmap-month-label {
+  width: 10px;
+  flex-shrink: 0;
+  text-align: left;
+  overflow: visible;
+  white-space: nowrap;
+}
+.heatmap-body {
+  display: flex;
+  gap: 4px;
+}
+/* 纵轴：固定在滚动区外，横向滚动永不遮挡；padding-top 对齐月份标签行下方 */
+.heatmap-days {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 11px; /* months 高 9px + margin-bottom 2px */
+  flex-shrink: 0;
+}
+.heatmap-day-label {
+  font-size: 8px;
+  color: var(--text-tertiary);
+  width: 40px; /* 完整文字「星期二」等：3 字 × 8px + 留白 */
+  height: 10px;
+  line-height: 10px;
+  text-align: left;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.heatmap-grid {
+  display: grid;
+  grid-template-rows: repeat(7, 10px);
+  grid-auto-flow: column;
+  gap: 2px;
+}
+.heatmap-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--bg-card);
+}
+.heatmap-cell[data-level="1"] { background: var(--color-heat-1, #9be9a8); }
+.heatmap-cell[data-level="2"] { background: var(--color-heat-2, #40c463); }
+.heatmap-cell[data-level="3"] { background: var(--color-heat-3, #30a14e); }
+.heatmap-cell[data-level="4"] { background: var(--color-heat-4, #216e39); }
+.heatmap-cell[data-level="5"] { background: var(--color-heat-5, #0d4a1d); }
+[data-theme="dark"] .heatmap-cell[data-level="1"] { background: var(--color-heat-1, #0e4429); }
+[data-theme="dark"] .heatmap-cell[data-level="2"] { background: var(--color-heat-2, #006d32); }
+[data-theme="dark"] .heatmap-cell[data-level="3"] { background: var(--color-heat-3, #26a641); }
+[data-theme="dark"] .heatmap-cell[data-level="4"] { background: var(--color-heat-4, #216e39); }
+[data-theme="dark"] .heatmap-cell[data-level="5"] { background: var(--color-heat-5, #39d353); }
+
+.heatmap-footer {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  justify-content: flex-end;
+}
+.heatmap-legend-cell {
+  width: 8px;
+  height: 8px;
+  border-radius: 1.5px;
+  background: var(--bg-card);
+}
+.heatmap-legend-cell[data-level="0"] { background: var(--bg-card); }
+.heatmap-legend-cell[data-level="1"] { background: var(--color-heat-1, #9be9a8); }
+.heatmap-legend-cell[data-level="2"] { background: var(--color-heat-2, #40c463); }
+.heatmap-legend-cell[data-level="3"] { background: var(--color-heat-3, #30a14e); }
+.heatmap-legend-cell[data-level="4"] { background: var(--color-heat-4, #216e39); }
+.heatmap-legend-cell[data-level="5"] { background: var(--color-heat-5, #0d4a1d); }
+[data-theme="dark"] .heatmap-legend-cell[data-level="0"] { background: var(--bg-card); }
+[data-theme="dark"] .heatmap-legend-cell[data-level="1"] { background: var(--color-heat-1, #0e4429); }
+[data-theme="dark"] .heatmap-legend-cell[data-level="2"] { background: var(--color-heat-2, #006d32); }
+[data-theme="dark"] .heatmap-legend-cell[data-level="3"] { background: var(--color-heat-3, #26a641); }
+[data-theme="dark"] .heatmap-legend-cell[data-level="4"] { background: var(--color-heat-4, #216e39); }
+[data-theme="dark"] .heatmap-legend-cell[data-level="5"] { background: var(--color-heat-5, #39d353); }
+.heatmap-stat {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--text-tertiary);
+}
+
+/* 提交动态列表项 */
+.build-commit-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px;
+  margin: 0 0 2px 0;
+  background: var(--bg-page);
+  border: 1px solid var(--border-outer);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  transition: background 0.1s;
+}
+.build-commit-item:active {
+  background: var(--hover-dim);
+}
+.build-commit-hash {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  font-size: 10px;
+  color: var(--accent-blue);
+  flex-shrink: 0;
+  width: 52px;
+  letter-spacing: 0.02em;
+}
+.build-commit-msg {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.build-commit-date {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+/* ===== 提交详情弹窗 ===== */
+.commit-modal-scroll {
+  max-height: 55vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -20px;
+  padding: 0 20px;
+}
+.commit-modal-hash {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  font-size: 11px;
+  color: var(--accent-blue);
+  margin-bottom: 12px;
+  cursor: pointer;
+  display: inline-block;
+  padding: 2px 0;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.commit-modal-hash:active {
+  background: var(--hover-dim);
+}
+.commit-modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 2px;
+  word-break: break-word;
+  cursor: pointer;
+  padding: 2px 0;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.commit-modal-title:active {
+  background: var(--hover-dim);
+}
+.commit-modal-divider {
+  height: 0.5px;
+  background: var(--border-outer);
+  margin: 8px 0 10px;
+}
+.commit-modal-stat {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+.commit-modal-stat-num {
+  font-variant-numeric: tabular-nums;
+}
+.commit-modal-stat-num.ins {
+  color: var(--color-done, #48BB78);
+}
+.commit-modal-stat-num.del {
+  color: var(--accent-red, #BA1A1A);
+}
+.commit-modal-file {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+.commit-modal-file + .commit-modal-file {
+  border-top: 0.5px solid var(--border-outer);
+}
+.commit-modal-file-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  line-height: 1.5;
+}
+.commit-modal-file-ins {
+  flex-shrink: 0;
+  color: var(--color-done, #48BB78);
+  font-size: 12px;
+  min-width: 36px;
+  text-align: right;
+}
+.commit-modal-file-del {
+  flex-shrink: 0;
+  color: var(--accent-red, #BA1A1A);
+  font-size: 12px;
+  min-width: 36px;
+  text-align: right;
+}
+
+/* 布局恒定原则：用类名切换替代 style.display，避免 DOM 重排 */
+.is-layout-hidden { display: none !important; }
+

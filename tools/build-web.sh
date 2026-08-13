@@ -22,11 +22,11 @@ mkdir -p "$(dirname "$OUTPUT")"
 
 JS_ORDER=(
   namespace.js utils.js bridge.js toast.js file-api.js desktop.js actions.js
-  fab-speed-dial.js drawer.js inspector.js ui.js main.js
+  fab-speed-dial.js drawer.js build-info.js inspector.js ui.js main.js
 )
 
 CSS_ORDER=(
-  tokens.css shell.css desktop.css fab.css drawer.css toast.css
+  tokens.css shell.css desktop.css fab.css drawer.css buildinfo.css contribution.css toast.css
 )
 
 # ── 颜色 ──
@@ -122,6 +122,10 @@ verify_js_syntax() {
 }
 
 # ── 注入构建变量 ──
+# 变量与 LexiCull 同名（GIT_COMMIT_COUNT/GIT_AHEAD_MAIN/GIT_BRANCH 等），
+# 便于移植其构建信息页；非 git 仓库时降级默认值。
+# 扩展数据（RECENT_COMMITS 增强/CONTRIBUTION_GRID/SOURCE_STATS/FILE_STATS/
+# NON_SOURCE_STATS/CHANGELOG_HTML）由 tools/build-stats.sh 追加注入。
 inject_vars() {
   local js_file="$1"
   local count=1
@@ -130,17 +134,42 @@ inject_vars() {
   echo "$count" > "$SCRIPT_DIR/dist/.build-count"
   local ts
   ts=$(TZ=Asia/Shanghai date +"%Y-%m-%d %H:%M:%S %z" 2>/dev/null || date +"%Y-%m-%d %H:%M:%S")
+
+  local commit_count=0 ahead_main=0 branch="unknown"
+  if command -v git &>/dev/null && git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    commit_count=$(git -C "$SCRIPT_DIR" rev-list --count HEAD 2>/dev/null || echo 0)
+    ahead_main=$(git -C "$SCRIPT_DIR" rev-list --count main..HEAD 2>/dev/null || echo 0)
+    branch=$(git -C "$SCRIPT_DIR" symbolic-ref --short HEAD 2>/dev/null || echo "unknown")
+  fi
+
+  local first_ts="$ts"
+  if [[ -f "$SCRIPT_DIR/dist/.first-build-timestamp" ]]; then
+    first_ts=$(cat "$SCRIPT_DIR/dist/.first-build-timestamp")
+  else
+    echo "$ts" > "$SCRIPT_DIR/dist/.first-build-timestamp"
+  fi
+
   cat >> "$js_file" <<EOF
 var BUILD_COUNT=${count};
 var BUILD_TIMESTAMP='${ts}';
+var GIT_COMMIT_COUNT=${commit_count};
+var GIT_AHEAD_MAIN=${ahead_main};
+var GIT_BRANCH='${branch}';
+var FIRST_BUILD_TIMESTAMP='${first_ts}';
 EOF
-  ok "注入构建变量（build ${count} @ ${ts}）"
+
+  # 扩展注入（提交详情/热力图/文件统计/更新日志）
+  bash "$SCRIPT_DIR/tools/build-stats.sh" "$SRC_DIR" "$SCRIPT_DIR" "$js_file"
+
+  ok "注入构建变量（build ${count} @ ${ts}，commits=${commit_count}，branch=${branch}）"
 }
 
 # ── 验证注入变量存在 ──
 verify_injections() {
   local js_file="$1"
-  for var in BUILD_COUNT BUILD_TIMESTAMP; do
+  for var in BUILD_COUNT BUILD_TIMESTAMP GIT_COMMIT_COUNT GIT_AHEAD_MAIN GIT_BRANCH \
+    FIRST_BUILD_TIMESTAMP RECENT_COMMITS CONTRIBUTION_GRID SOURCE_STATS FILE_STATS \
+    NON_SOURCE_STATS CHANGELOG_HTML; do
     grep -q "var ${var}=" "$js_file" || fail "注入变量缺失: ${var}"
   done
   ok "注入变量均已存在于产物中"
@@ -207,7 +236,12 @@ check_consistency() {
   concat_css "$tmp_css" &>/dev/null
   build_html "$tmp_css" "$tmp_js" "$tmp_output" &>/dev/null
   rm -f "$tmp_css"
-  if diff -I 'var BUILD_TIMESTAMP=' -I 'var BUILD_COUNT=' -q "$tmp_output" "$OUTPUT" &>/dev/null; then
+  if diff -I 'var BUILD_TIMESTAMP=' -I 'var BUILD_COUNT=' \
+    -I 'var GIT_COMMIT_COUNT=' -I 'var GIT_AHEAD_MAIN=' -I 'var GIT_BRANCH=' \
+    -I 'var RECENT_COMMITS=' -I 'var FIRST_BUILD_TIMESTAMP=' \
+    -I 'var CONTRIBUTION_GRID=' -I 'var SOURCE_STATS=' -I 'var FILE_STATS=' \
+    -I 'var NON_SOURCE_STATS=' -I 'var CHANGELOG_HTML=' \
+    -q "$tmp_output" "$OUTPUT" &>/dev/null; then
     echo "[check] src/ 与 dist/desktop.bundle.html 一致"
     rm -f "$tmp_js" "$tmp_output"
     exit 0

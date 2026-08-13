@@ -54,7 +54,26 @@
       </button>
     </div>
   </div>
+  <div class="drawer-footer">
+    <button class="drawer-item" id="btn-build-info">
+      <span class="drawer-item-icon">🔨</span><span>提交与构建</span>
+    </button>
+  </div>
 </nav>
+
+<!-- ===== 提交与构建信息面板 ===== -->
+<div id="buildinfo" class="buildinfo" role="dialog" aria-hidden="true">
+  <header class="buildinfo-header">
+    <button id="buildinfo-back" class="buildinfo-back" aria-label="返回">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <span class="buildinfo-title">提交与构建</span>
+    <span class="buildinfo-header-spacer"></span>
+  </header>
+  <div class="buildinfo-body" id="buildinfo-body"></div>
+</div>
+  </div>
+</div>
 
 <!-- ===== Morph FAB + Speed Dial（短按展开菜单 / 长按 800ms 激活取景器） ===== -->
 <button id="mode-switch-fab" class="mode-switch-fab" title="更多选项" aria-label="更多选项">

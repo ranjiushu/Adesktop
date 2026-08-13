@@ -17,6 +17,9 @@ android/.gradle/
 android/local.properties
 android/app/src/main/assets/
 
+# 自动生成的仓库地图（build-stats.sh 构建时刷新，不入库）
+docs/repo-map.md
+
 # 签名密钥与本地凭证——永不入库
 *.jks
 *.keystore

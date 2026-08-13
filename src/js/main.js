@@ -25,6 +25,10 @@ App.boot = function boot() {
   if (App.Drawer && typeof App.Drawer.init === 'function') {
     App.Drawer.init()
   }
+  // 提交与构建信息面板（Drawer 底部入口）
+  if (App.BuildInfo && typeof App.BuildInfo.init === 'function') {
+    App.BuildInfo.init()
+  }
   // 桌面：以文件系统为数据源渲染
   if (App.Desktop && typeof App.Desktop.refresh === 'function') {
     App.Desktop.refresh()

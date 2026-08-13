@@ -21,3 +21,17 @@
 
   --header-height: 56px;
 }
+
+/* LexiCull 兼容变量（移植其构建信息页/热力图样式用，值映射本主题） */
+:root {
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-secondary);
+  --bg-page: var(--color-bg);
+  --bg-app: var(--color-bg);
+  --bg-card: var(--color-surface);
+  --border-outer: var(--color-border);
+  --accent-blue: var(--color-accent);
+  --hover-dim: rgba(0, 0, 0, 0.04);
+  --text-on-accent: #ffffff;
+}

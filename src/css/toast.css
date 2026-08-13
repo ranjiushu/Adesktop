@@ -1,0 +1,25 @@
+/* 轻量吐司：底部悬浮，短队列轮播 */
+.toast {
+  position: fixed;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 2000;
+  max-width: 80vw;
+  background: rgba(0,0,0,0.78);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 8px 14px;
+  border-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.toast.toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

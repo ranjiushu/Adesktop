@@ -67,6 +67,11 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** 供 FileBridge 调用：重新弹出授权选择器（需 UI 线程） */
+    void requestRootAccessFromBridge() {
+        requestRootAccess();
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);

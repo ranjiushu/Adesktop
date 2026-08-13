@@ -6,8 +6,23 @@ App.boot = function boot() {
   if (titleEl) {
     titleEl.textContent = App.NAME
   }
+  // FAB：短按 = 展开/收起 Speed Dial（长按 800ms 取景器由 inspector.js 接管）
+  if (App.fabSpeedDial && typeof App.fabSpeedDial.init === 'function') {
+    App.fabSpeedDial.init()
+    var fabEl = document.getElementById('mode-switch-fab')
+    if (fabEl && App.utils && typeof App.utils.bindPress === 'function') {
+      App.utils.bindPress(fabEl, function () {
+        App.bridge.vibrate()
+        if (App.fabSpeedDial.isExpanded()) {
+          App.fabSpeedDial.collapse()
+        } else {
+          App.fabSpeedDial.expand('desktop')
+        }
+      })
+    }
+  }
   // 桌面：以文件系统为数据源渲染
-  if (window.App && App.Desktop && typeof document !== 'undefined') {
+  if (App.Desktop && typeof App.Desktop.refresh === 'function') {
     App.Desktop.refresh()
   }
   return true

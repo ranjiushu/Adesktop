@@ -52,6 +52,16 @@ public class FileBridge {
         return rootUri != null;
     }
 
+    /* 前端请求重新授权根目录（FAB「切换根目录」） */
+    @JavascriptInterface
+    public void requestRootAccess() {
+        activity.runOnUiThread(() -> {
+            if (activity instanceof MainActivity) {
+                ((MainActivity) activity).requestRootAccessFromBridge();
+            }
+        });
+    }
+
     /* ── 工具 ── */
 
     /** 解析相对路径 → DocumentFile（SAF 模式）或 File（私有模式） */

@@ -1,0 +1,134 @@
+/* Morph FAB + Speed Dial（移植自 LexiCull，适配 Desktop tokens） */
+.mode-switch-fab {
+  --fab-radius: 50%;
+  position: fixed;
+  /* 88px：高于取景器底部工具栏（bottom 12px + 高 ~40px），避免长按抬手
+     的合成 click 命中刚出现的工具栏按钮（曾实锤：立即触发「取消」退出） */
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  right: 28px;
+  z-index: 701;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--fab-radius);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  transition: transform .5s ease, opacity .5s ease, background .2s, color .2s,
+              border-radius .4s cubic-bezier(.2,.8,.2,1);
+}
+.mode-switch-fab:active {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+.mode-switch-fab.spinning {
+  transform: rotate(180deg);
+}
+.mode-switch-fab.fab-hidden {
+  transform: translateY(120px);
+  opacity: 0;
+}
+
+/* FAB 图标系统（切换+指示）：plus=可展开，close=关闭菜单 */
+.fab-icon-plus { display: none; }
+.fab-icon-close { display: none; }
+.mode-switch-fab.fab-speed-dial-ready .fab-icon-plus { display: inline; }
+.mode-switch-fab.fab-speed-dial-active .fab-icon-plus { display: none; }
+.mode-switch-fab.fab-speed-dial-active .fab-icon-close { display: inline; }
+
+/* ===== Speed Dial 遮罩 ===== */
+.fab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(0,0,0,0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.fab-backdrop-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ===== Speed Dial 容器 ===== */
+.fab-speed-dial {
+  position: fixed;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  right: 28px;
+  z-index: 1003;
+  pointer-events: none;
+}
+
+/* 按钮组：data-mode 显隐 */
+.fab-btn-set { display: none; }
+[data-mode="desktop"] .fab-set-preview { display: contents; }
+
+/* ===== Speed Dial 子按钮 ===== */
+.fab-child {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1.1);
+  pointer-events: none;
+}
+.fab-child:active {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* 展开后子按钮可见 */
+.fab-speed-dial-expanded .fab-child {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+/* 向上展开：第 1-4 个按钮 */
+.fab-speed-dial-expanded .fab-child-up:nth-child(1) { transform: translateY(-48px) scale(1); }
+.fab-speed-dial-expanded .fab-child-up:nth-child(2) { transform: translateY(-92px) scale(1); }
+.fab-speed-dial-expanded .fab-child-up:nth-child(3) { transform: translateY(-136px) scale(1); }
+.fab-speed-dial-expanded .fab-child-up:nth-child(4) { transform: translateY(-180px) scale(1); }
+
+/* ===== 子按钮标签 ===== */
+.fab-child-label {
+  position: absolute;
+  right: 44px;
+  background: rgba(0,0,0,0.78);
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.fab-speed-dial-expanded .fab-child .fab-child-label {
+  opacity: 1;
+}

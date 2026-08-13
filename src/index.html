@@ -19,6 +19,38 @@
     <div id="desktop-grid" class="desktop-grid"></div>
   </section>
 </main>
+
+<!-- ===== Morph FAB + Speed Dial（短按展开菜单 / 长按 800ms 激活取景器） ===== -->
+<button id="mode-switch-fab" class="mode-switch-fab" title="更多选项" aria-label="更多选项">
+  <svg class="fab-icon-plus" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  <svg class="fab-icon-close" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+</button>
+
+<!-- Speed Dial 遮罩 -->
+<div id="fab-backdrop" class="fab-backdrop"></div>
+
+<!-- Speed Dial 子按钮容器（近 = 高频操作） -->
+<div id="fab-speed-dial" class="fab-speed-dial">
+  <div class="fab-btn-set fab-set-preview">
+    <button class="fab-child fab-child-up" data-action="new-folder">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="fab-child-label">新建文件夹</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="new-file">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+      <span class="fab-child-label">新建文件</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="refresh">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      <span class="fab-child-label">刷新</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="switch-root">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+      <span class="fab-child-label">切换根目录</span>
+    </button>
+  </div>
+</div>
+
 <script>
 // __JS_PLACEHOLDER__
 </script>

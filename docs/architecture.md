@@ -39,6 +39,8 @@
 | `mkdir(path)` / `delete(path)` | 目录/文件操作 |
 | `rename(old, new)` | 重命名/移动 |
 | `meta(path)` | 单文件元数据 |
+| `rootInfo(cb)` | 根目录信息 {rootName, mode: saf\|private} |
+| `requestRootAccess()` | 重新弹 SAF 目录选择器（FAB「切换根目录」） |
 
 ## 文件系统范围（决策中）
 

@@ -60,8 +60,8 @@ async function main() {
     const r = b.getBoundingClientRect()
     return { x: r.left + r.width / 2, y: r.top + r.height / 2, visible: r.width > 0 && r.height > 0 }
   })
-  if (!buildBtn || !buildBtn.visible) { fail('Drawer 底部「提交与构建」按钮可见'); process.exit(1) }
-  pass('「提交与构建」按钮渲染可见')
+  if (!buildBtn || !buildBtn.visible) { fail('Drawer 操作区「提交与构建」按钮可见'); process.exit(1) }
+  pass('「提交与构建」按钮渲染可见（Drawer 操作区）')
   await tap(client, buildBtn.x, buildBtn.y, 60)
   const opened = await page.evaluate(() => {
     const p = document.getElementById('buildinfo')

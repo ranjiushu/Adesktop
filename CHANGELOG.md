@@ -38,6 +38,8 @@
   并在触摸 ACTION_UP 后 100ms 借手势窗口请求 IME（SHOW_IMPLICIT，Android 12+ 会丢弃
   非手势 showSoftInput；无输入框聚焦时 no-op）
 - Drawer 开启震动移除（用户指定关闭开启/关闭震动反馈）
+- 新建对话框创建/取消后自动收起键盘：close() 释放输入框焦点（blur），
+  WebView 内核检测焦点离开自动隐藏 IME
 
 ### 工程
 

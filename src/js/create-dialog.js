@@ -42,6 +42,9 @@ App.CreateDialog = (function () {
       o.classList.remove('dialog-overlay-visible')
       o.setAttribute('aria-hidden', 'true')
     }
+    // 创建/取消后收起软键盘：释放输入框焦点（WebView 内核检测焦点离开自动隐藏 IME）
+    let input = _getEl(INPUT_ID)
+    if (input && document.activeElement === input) input.blur()
   }
 
   function isOpen() { return _open }

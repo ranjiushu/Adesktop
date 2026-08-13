@@ -161,6 +161,13 @@ async function main() {
   else fail('创建文件 toast 异常: "' + fileResult.toast + '"')
   if (fileResult.written === '报告.md') pass('文件名原样使用: "' + fileResult.written + '"（无自动后缀）')
   else fail('文件名被改写: "' + fileResult.written + '"')
+  // 创建后输入框应失焦（收起软键盘）
+  const blurAfterCreate = await page.evaluate(() => {
+    const a = document.activeElement
+    return !a || a.id !== 'create-name'
+  })
+  if (blurAfterCreate) pass('创建后输入框失焦（键盘收起）')
+  else fail('创建后输入框仍聚焦（键盘未收起）')
 
   // ── 3b. 空输入点「文件」→ 默认名「新建文件」（无 .txt） ──
   await tap(client, bar.addInfo.x, bar.addInfo.y, 60)

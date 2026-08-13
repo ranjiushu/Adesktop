@@ -68,6 +68,19 @@ check(S.add(s0, 'x').has('x') && !s0.has('x'), 'add 返回新集，原集不变'
 check(!S.remove(s1, 'a').has('a') && s1.has('a'), 'remove 返回新集，原集不变')
 check(S.clear().size === 0, 'clear → 空集')
 
+// ── unionRect：选中组外接矩形 ──
+const ub = { a: { x: 16, y: 16, w: 84, h: 76 }, b: { x: 316, y: 16, w: 84, h: 76 } }
+check(JSON.stringify(S.unionRect(ub, ['a', 'b'])) === JSON.stringify({ x: 16, y: 16, w: 384, h: 76 }),
+  'unionRect 覆盖两图标 + 中间空隙 → {16,16,384,76}')
+check(S.unionRect(ub, []) === null, 'unionRect 空集 → null')
+check(S.unionRect(ub, ['a']) === null || JSON.stringify(S.unionRect(ub, ['a'])) === JSON.stringify({ x: 16, y: 16, w: 84, h: 76 }),
+  'unionRect 单图标 → 该图标自身')
+
+// ── pointInRect ──
+check(S.pointInRect(200, 50, { x: 16, y: 16, w: 384, h: 76 }), '点在 union 空隙内 → true（能拿起组合）')
+check(!S.pointInRect(500, 50, { x: 16, y: 16, w: 384, h: 76 }), '点在 union 外 → false')
+check(S.pointInRect(16, 16, { x: 16, y: 16, w: 384, h: 76 }), '点在边界 → true')
+
 if (failures > 0) {
   console.error('  [FAIL] desktop-selection 纯函数测试 ' + failures + ' 项失败')
   process.exit(1)

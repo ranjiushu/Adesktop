@@ -55,6 +55,30 @@ App.DesktopSelection = (function () {
   }
   function clear() { return new Set() }
 
+  // 选中组外接矩形（union AABB）：覆盖组内所有图标 + 空隙，空集返回 null
+  function unionRect(bounds, names) {
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    names.forEach(function (n) {
+      const b = bounds[n]
+      if (!b) return
+      if (b.x < minX) minX = b.x
+      if (b.y < minY) minY = b.y
+      if (b.x + b.w > maxX) maxX = b.x + b.w
+      if (b.y + b.h > maxY) maxY = b.y + b.h
+    })
+    if (minX === Infinity) return null
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+  }
+
+  // 点是否在矩形内（含边界）
+  function pointInRect(px, py, rect) {
+    if (!rect) return false
+    return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h
+  }
+
   return {
     rectFromPoints: rectFromPoints,
     aabbIntersect: aabbIntersect,
@@ -64,6 +88,8 @@ App.DesktopSelection = (function () {
     add: add,
     remove: remove,
     toggle: toggle,
-    clear: clear
+    clear: clear,
+    unionRect: unionRect,
+    pointInRect: pointInRect
   }
 })()

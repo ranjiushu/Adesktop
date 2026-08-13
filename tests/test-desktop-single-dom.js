@@ -64,14 +64,17 @@ function tev(type, pts, changed) {
   return { type: type, touches: pts, changedTouches: changed || pts, preventDefault: function () {} }
 }
 
-const got = { tap: [], marqueeStart: [], marqueeLive: [], marqueeEnd: [], longpress: [], drag: [], drop: [] }
+let hitTypeMode = 'empty'
+const got = { tap: [], marqueeStart: [], marqueeLive: [], marqueeEnd: [], longpress: [], dragStart: [], drag: [], drop: [] }
 G.init({
   viewport: viewportEl, canvas: canvasEl, camera: C.create(),
+  onHitTest: function () { return hitTypeMode },
   onTap: function (w) { got.tap.push(w) },
   onMarqueeStart: function (w) { got.marqueeStart.push(w) },
   onMarqueeLive: function (a, b) { got.marqueeLive.push([a, b]) },
   onMarqueeEnd: function (a, b) { got.marqueeEnd.push([a, b]) },
   onLongPress: function (w) { got.longpress.push(w) },
+  onDragStart: function (w) { got.dragStart.push(w) },
   onDrag: function (w) { got.drag.push(w) },
   onDrop: function (w, moved) { got.drop.push({ w: w, moved: moved }) }
 })
@@ -116,6 +119,23 @@ G.init({
   check(got.drag.length === 1, '长按拿起后 move 触发 onDrag')
   viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, 280, 240)]))
   check(got.drop.length === 1 && got.drop[0].moved === true, '长按拖动后抬起 → onDrop moved=true')
+
+  // ── 已选中拖动直接拿起：hitType=selected，位移超阈值 → onDragStart（不必长按）──
+  const dragCountBefore = got.drag.length
+  const dropCountBefore = got.drop.length
+  hitTypeMode = 'selected'
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 200, 200)]))
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, 220, 200)]))
+  check(got.dragStart.length === 1, 'selected 拖动 → onDragStart 一次（直接拿起）')
+  if (got.dragStart.length) {
+    check(Math.abs(got.dragStart[0].x - 220) < 1e-9 && Math.abs(got.dragStart[0].y - 144) < 1e-9,
+      'drag-start 世界坐标 (220, 144)，实际: ' + JSON.stringify(got.dragStart[0]))
+  }
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, 240, 200)]))
+  check(got.drag.length === dragCountBefore + 1, 'drag-start 后 move → onDrag 增加一次')
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, 240, 200)]))
+  check(got.drop.length === dropCountBefore + 1 && got.drop[got.drop.length - 1].moved === true,
+    '拖动后抬起 → onDrop moved=true')
 
   if (failures > 0) {
     console.error('  [FAIL] desktop-single-dom 单指接线测试 ' + failures + ' 项失败')

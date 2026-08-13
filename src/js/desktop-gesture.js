@@ -48,25 +48,29 @@ App.DesktopGesture = (function () {
   const LONGPRESS_MS = 500     // ms，长按拿起触发时长
 
   function createSingle() {
-    return { phase: 'idle', startX: 0, startY: 0, startT: 0, lastX: 0, lastY: 0 }
+    return { phase: 'idle', hitType: 'empty', startX: 0, startY: 0, startT: 0, lastX: 0, lastY: 0 }
   }
 
   function _threshold(opts) {
     return (opts && typeof opts.tapThreshold === 'number') ? opts.tapThreshold : TAP_THRESHOLD
   }
 
-  // down：进入 pending，记录起点
-  function singleDown(x, y, t) {
-    return { phase: 'pending', startX: x, startY: y, startT: t, lastX: x, lastY: y }
+  // down：进入 pending，记录起点与命中类型（selected=已选中可直接拿起 / icon=未选中 / empty=空白）
+  function singleDown(x, y, t, hitType) {
+    return { phase: 'pending', hitType: hitType || 'empty', startX: x, startY: y, startT: t, lastX: x, lastY: y }
   }
 
   // move：按 phase 与位移分派（返回新状态 + 语义效果）
   function singleMove(sg, x, y, opts) {
     const th = _threshold(opts)
-    const next = { phase: sg.phase, startX: sg.startX, startY: sg.startY, startT: sg.startT, lastX: x, lastY: y }
+    const next = { phase: sg.phase, hitType: sg.hitType, startX: sg.startX, startY: sg.startY, startT: sg.startT, lastX: x, lastY: y }
     if (sg.phase === 'pending') {
       const d = distance({ x: sg.startX, y: sg.startY }, { x: x, y: y })
       if (d > th) {
+        // 已选中 → 直接拿起移动（不必长按）；否则 → 框选
+        if (sg.hitType === 'selected') {
+          return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y } }
+        }
         return { sg: Object.assign({}, next, { phase: 'marquee' }), effect: { type: 'marquee-start', x: sg.startX, y: sg.startY } }
       }
       return { sg: next, effect: { type: 'none' } }
@@ -180,6 +184,9 @@ App.DesktopGesture = (function () {
       case 'longpress':
         if (_cb.onLongPress) _cb.onLongPress(toWorld(effect.x, effect.y))
         break
+      case 'drag-start':
+        if (_cb.onDragStart) _cb.onDragStart(toWorld(effect.x, effect.y))
+        break
       case 'drag':
         if (_cb.onDrag) _cb.onDrag(toWorld(effect.x, effect.y))
         break
@@ -217,7 +224,11 @@ App.DesktopGesture = (function () {
     syncMode()
     if (_mode === 'single') {
       const c = firstContact()
-      _single = singleDown(c.x, c.y, c.t)
+      let hitType = 'empty'
+      if (_cb && typeof _cb.onHitTest === 'function') {
+        hitType = _cb.onHitTest(toWorld(c.x, c.y)) || 'empty'
+      }
+      _single = singleDown(c.x, c.y, c.t, hitType)
       startLongPressTimer()
     } else if (_mode === 'double') {
       cancelLongPressTimer()
@@ -289,11 +300,13 @@ App.DesktopGesture = (function () {
     _onUpdate = opts.onUpdate || null
     _opts = opts
     _cb = {
+      onHitTest: opts.onHitTest || null,
       onTap: opts.onTap || null,
       onMarqueeStart: opts.onMarqueeStart || null,
       onMarqueeLive: opts.onMarqueeLive || null,
       onMarqueeEnd: opts.onMarqueeEnd || null,
       onLongPress: opts.onLongPress || null,
+      onDragStart: opts.onDragStart || null,
       onDrag: opts.onDrag || null,
       onDrop: opts.onDrop || null
     }

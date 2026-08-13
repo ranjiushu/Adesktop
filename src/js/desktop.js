@@ -150,14 +150,23 @@ App.Desktop = (function () {
     }
   }
 
-  function handleLongPress(world) {
+  // 命中类型：selected=已选中（可直接拿起）/ icon=未选中图标 / empty=空白
+  function hitTest(world) {
     const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
-    if (!name) return
-    // 长按未选中 → 先单选再移；已选中 → 拿起整个选中组（Windows 组合拖动语义）
-    if (!selection.has(name)) {
-      selection = App.DesktopSelection.selectOnly(name)
-      applySelection()
+    if (name) {
+      return selection.has(name) ? 'selected' : 'icon'
     }
+    if (selection.size > 0) {
+      const rect = App.DesktopSelection.unionRect(bounds, Array.from(selection))
+      if (App.DesktopSelection.pointInRect(world.x, world.y, rect)) {
+        return 'selected'
+      }
+    }
+    return 'empty'
+  }
+
+  // 拿起整个选中组并开始拖（组内相对位置不变）
+  function startGroupDrag(world) {
     dragTargets = Array.from(selection)
     dragStartWorld = { x: world.x, y: world.y }
     dragStartPositions = {}
@@ -166,6 +175,26 @@ App.Desktop = (function () {
       setPickedUp(n, true)
     })
     if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+  }
+
+  function handleLongPress(world) {
+    // 1. 多选组：拿取判定覆盖整个组合区域（union AABB，含组内空隙，一整块）
+    if (selection.size > 1) {
+      const rect = App.DesktopSelection.unionRect(bounds, Array.from(selection))
+      if (App.DesktopSelection.pointInRect(world.x, world.y, rect)) {
+        startGroupDrag(world)
+        return
+      }
+    }
+    // 2. 单个图标命中：未选中则先单选，再拿
+    const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
+    if (name) {
+      if (!selection.has(name)) {
+        selection = App.DesktopSelection.selectOnly(name)
+        applySelection()
+      }
+      startGroupDrag(world)
+    }
   }
 
   // 拖动过程：无极跟随（不吸附），放置时再吸附 + 避让
@@ -183,6 +212,11 @@ App.Desktop = (function () {
         el.style.top = y + 'px'
       }
     })
+  }
+
+  // 已选中组上直接拿起（拖动即拿取，不必长按）
+  function handleDragStart(world) {
+    if (selection.size > 0) startGroupDrag(world)
   }
 
   function handleDrag(world) {
@@ -293,11 +327,13 @@ App.Desktop = (function () {
       canvas: document.getElementById('desktop-canvas'),
       camera: camera,
       onUpdate: function (c) { camera = c },
+      onHitTest: hitTest,
       onTap: handleTap,
       onMarqueeStart: handleMarqueeStart,
       onMarqueeLive: handleMarqueeLive,
       onMarqueeEnd: handleMarqueeEnd,
       onLongPress: handleLongPress,
+      onDragStart: handleDragStart,
       onDrag: handleDrag,
       onDrop: handleDrop
     })

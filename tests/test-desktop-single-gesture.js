@@ -99,6 +99,17 @@ sg = G.singleDown(0, 0, 0)
 r = G.singleMove(sg, 20, 0, { tapThreshold: 30 })
 check(r.sg.phase === 'pending', '自定义 tapThreshold=30，20px 仍 pending')
 
+// ── hitType 分流：selected 拖动 → 直接拿起；icon/empty 拖动 → 框选 ──
+sg = G.singleDown(100, 100, 0, 'selected')
+r = G.singleMove(sg, 110, 100)
+check(r.sg.phase === 'dragmove' && r.effect.type === 'drag-start', 'selected 拖动 → drag-start（直接拿起）')
+sg = G.singleDown(100, 100, 0, 'icon')
+r = G.singleMove(sg, 110, 100)
+check(r.sg.phase === 'marquee' && r.effect.type === 'marquee-start', 'icon 拖动 → marquee-start（框选）')
+sg = G.singleDown(100, 100, 0, 'empty')
+r = G.singleMove(sg, 110, 100)
+check(r.sg.phase === 'marquee' && r.effect.type === 'marquee-start', 'empty 拖动 → marquee-start（框选）')
+
 if (failures > 0) {
   console.error('  [FAIL] desktop-single-gesture 单指状态机测试 ' + failures + ' 项失败')
   process.exit(1)

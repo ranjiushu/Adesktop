@@ -20,3 +20,14 @@
 - CSS 源码泄漏为 body 文本（index.html 注释误匹配占位符）
 - FAB 与取景器工具栏重叠导致长按抬手误触「取消」
 - git log 管道符转义（%x7c）导致提交列表注入为空
+- 原生桥命名空间错位：切换根目录与震动在真机失效（bridge.js 误用 Android.*，改走 FileBridge 并补 vibrate 桥）
+- 系统返回键链路：不依赖 pushState 是否被 WebView 计入 canGoBack，改经 App.handleSystemBack 逐级消费（Drawer → 整页面板）
+- 构建注入 JSON 未转义 `</`：提交信息/文件名含 `</script>` 可闭合 script 块，统一转义
+- build-info 排序后详情索引错位（__origIdx 重渲染被覆盖）
+- 私有目录越界校验前缀误判（/root 命中 /root2）、read 无大小上限（10MB 护栏）
+
+### 工程
+
+- build-web.sh --strict 体积棘轮：超基线（dist/.size-baseline）130% 拦截膨胀
+- JS 变量声明统一 var → let（P1 铁律）
+- 构建信息面板无障碍：drawer/buildinfo 的 aria-hidden 随开关动态切换

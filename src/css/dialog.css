@@ -54,30 +54,17 @@
   border-color: var(--color-accent);
 }
 
-.dialog-options {
-  display: flex;
-  gap: var(--space-md);
-  margin: var(--space-md) 0;
-}
-.dialog-option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--font-size-md);
-  color: var(--color-text);
-  cursor: pointer;
-}
-.dialog-option input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--color-accent);
-}
-
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-sm);
   margin-top: var(--space-md);
+}
+/* 三按钮布局：取消（弱）+ 文件（主）+ 文件夹（次强调） */
+.dialog-actions-triple {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-sm);
 }
 .dialog-btn {
   min-width: 72px;
@@ -103,4 +90,13 @@
 }
 .dialog-btn-primary:active {
   background: #2f6fe0;
+}
+/* 文件夹：次强调（描边 + 浅底） */
+.dialog-btn-secondary {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.dialog-btn-secondary:active {
+  background: rgba(59, 130, 246, 0.16);
 }

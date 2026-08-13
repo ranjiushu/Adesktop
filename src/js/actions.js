@@ -41,7 +41,8 @@ App.Actions = (function () {
 
   function createFile(name) {
     App.FileAPI.list('').then(function (items) {
-      return App.FileAPI.write(_uniqueName(items, name || '新建文件.txt', false), '')
+      // 名称原样使用（不自动补后缀）；空输入用默认名「新建文件」
+      return App.FileAPI.write(_uniqueName(items, name || '新建文件', false), '')
     }).then(function () {
       App.toast.show('已创建文件')
       App.Desktop.refresh()

@@ -67,14 +67,16 @@ async function main() {
   const client = await page.createCDPSession()
 
   // 注入 FileBridge 内存桩：list 空目录，mkdir/write 成功（file-api 运行时检查 window.FileBridge）
+  // __calls 记录创建参数，用于断言「用户输入什么就创建什么」
   await page.evaluate(() => {
+    window.__calls = { write: [], mkdir: [] }
     window.FileBridge = {
       rootInfo: function (cb) {
         window.__fbResolve(cb, { ok: true, data: { rootName: 'mock', displayPath: '/mock', mode: 'mock' } })
       },
       list: function (p, cb) { window.__fbResolve(cb, { ok: true, data: [] }) },
-      mkdir: function (p, cb) { window.__fbResolve(cb, { ok: true, data: true }) },
-      write: function (p, c, cb) { window.__fbResolve(cb, { ok: true, data: true }) }
+      mkdir: function (p, cb) { window.__calls.mkdir.push(p); window.__fbResolve(cb, { ok: true, data: true }) },
+      write: function (p, c, cb) { window.__calls.write.push(p); window.__fbResolve(cb, { ok: true, data: true }) }
     }
   })
   await sleep(200)
@@ -120,57 +122,78 @@ async function main() {
   if (dlgOpen) pass('加号点击 → 对话框打开且输入框聚焦')
   else fail('加号点击未打开对话框')
 
-  // ── 3. 输入名称 + 选文件 + 确定 → 创建成功 ──
+  // ── 3. 输入名称「报告.md」+ 点「文件」→ 名称原样创建（不补后缀） ──
   await page.evaluate(() => {
-    const input = document.getElementById('create-name')
-    input.value = '报告.txt'
-    document.querySelector('input[name="create-type"][value="file"]').checked = true
+    document.getElementById('create-name').value = '报告.md'
   })
-  const okBtn = await page.evaluate(() => {
-    const b = document.getElementById('create-ok')
+  const fileBtn = await page.evaluate(() => {
+    const b = document.getElementById('create-file')
     const r = b.getBoundingClientRect()
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
   })
-  await tap(client, okBtn.x, okBtn.y, 60)
+  await tap(client, fileBtn.x, fileBtn.y, 60)
   await sleep(2000)  // 等 toast 轮播
   const fileResult = await page.evaluate(() => {
     const o = document.getElementById('create-dialog-overlay')
     const t = document.querySelector('.toast')
     return {
       closed: !o.classList.contains('dialog-overlay-visible'),
-      toast: t ? t.textContent : ''
+      toast: t ? t.textContent : '',
+      written: window.__calls.write[0] || null
     }
   })
-  if (fileResult.closed) pass('确定后对话框关闭')
-  else fail('确定后对话框未关闭')
+  if (fileResult.closed) pass('点「文件」后对话框关闭')
+  else fail('点「文件」后对话框未关闭')
   if (fileResult.toast === '已创建文件') pass('创建文件 toast: "已创建文件"')
   else fail('创建文件 toast 异常: "' + fileResult.toast + '"')
+  if (fileResult.written === '报告.md') pass('文件名原样使用: "' + fileResult.written + '"（无自动后缀）')
+  else fail('文件名被改写: "' + fileResult.written + '"')
 
-  // ── 3b. 再开对话框：选文件夹 + 确定 ──
+  // ── 3b. 空输入点「文件」→ 默认名「新建文件」（无 .txt） ──
   await tap(client, bar.addInfo.x, bar.addInfo.y, 60)
-  await page.evaluate(() => {
-    document.getElementById('create-name').value = '我的文件夹'
-    document.querySelector('input[name="create-type"][value="folder"]').checked = true
-  })
-  const okBtn2 = await page.evaluate(() => {
-    const b = document.getElementById('create-ok')
+  const fileBtn2 = await page.evaluate(() => {
+    const b = document.getElementById('create-file')
     const r = b.getBoundingClientRect()
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
   })
-  await tap(client, okBtn2.x, okBtn2.y, 60)
+  await tap(client, fileBtn2.x, fileBtn2.y, 60)
+  await sleep(2000)
+  const defaultResult = await page.evaluate(() => ({
+    closed: !document.getElementById('create-dialog-overlay').classList.contains('dialog-overlay-visible'),
+    written: window.__calls.write[1] || null
+  }))
+  if (defaultResult.closed) pass('空输入点「文件」对话框关闭')
+  else fail('空输入点「文件」未关闭对话框')
+  if (defaultResult.written === '新建文件') pass('空输入默认名 = "新建文件"（无自动 .txt）')
+  else fail('空输入默认名异常: "' + defaultResult.written + '"')
+
+  // ── 3c. 输入名称 + 点「文件夹」→ 按文件夹类型创建 ──
+  await tap(client, bar.addInfo.x, bar.addInfo.y, 60)
+  await page.evaluate(() => {
+    document.getElementById('create-name').value = '我的文件夹'
+  })
+  const folderBtn = await page.evaluate(() => {
+    const b = document.getElementById('create-folder')
+    const r = b.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+  })
+  await tap(client, folderBtn.x, folderBtn.y, 60)
   await sleep(2000)
   const folderResult = await page.evaluate(() => {
     const o = document.getElementById('create-dialog-overlay')
     const t = document.querySelector('.toast')
     return {
       closed: !o.classList.contains('dialog-overlay-visible'),
-      toast: t ? t.textContent : ''
+      toast: t ? t.textContent : '',
+      mkdir: window.__calls.mkdir[0] || null
     }
   })
-  if (folderResult.closed) pass('文件夹创建后对话框关闭')
-  else fail('文件夹创建后对话框未关闭')
+  if (folderResult.closed) pass('点「文件夹」后对话框关闭')
+  else fail('点「文件夹」后对话框未关闭')
   if (folderResult.toast === '已创建文件夹') pass('创建文件夹 toast: "已创建文件夹"')
   else fail('创建文件夹 toast 异常: "' + folderResult.toast + '"')
+  if (folderResult.mkdir === '我的文件夹') pass('文件夹名原样使用: "' + folderResult.mkdir + '"')
+  else fail('文件夹名被改写: "' + folderResult.mkdir + '"')
 
   // ── 4. 点遮罩空白 → 对话框关闭 ──
   await tap(client, bar.addInfo.x, bar.addInfo.y, 60)

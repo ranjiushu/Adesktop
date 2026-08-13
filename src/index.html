@@ -43,24 +43,15 @@
   </button>
 </nav>
 
-<!-- ===== 新建对话框（加号弹出）：输入名称 + 文件/文件夹单选 ===== -->
+<!-- ===== 新建对话框（加号弹出）：输入名称，点「文件/文件夹」按对应类型创建 ===== -->
 <div id="create-dialog-overlay" class="dialog-overlay" aria-hidden="true">
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="create-dialog-title">
     <h2 id="create-dialog-title" class="dialog-title">新建</h2>
     <input id="create-name" class="dialog-input" type="text" placeholder="名称" autocomplete="off" enterkeyhint="done" aria-label="名称">
-    <div class="dialog-options" role="radiogroup" aria-label="类型">
-      <label class="dialog-option">
-        <input type="radio" name="create-type" value="file" checked>
-        <span>文件</span>
-      </label>
-      <label class="dialog-option">
-        <input type="radio" name="create-type" value="folder">
-        <span>文件夹</span>
-      </label>
-    </div>
-    <div class="dialog-actions">
+    <div class="dialog-actions dialog-actions-triple">
       <button id="create-cancel" class="dialog-btn">取消</button>
-      <button id="create-ok" class="dialog-btn dialog-btn-primary">确定</button>
+      <button id="create-file" class="dialog-btn dialog-btn-primary">文件</button>
+      <button id="create-folder" class="dialog-btn dialog-btn-secondary">文件夹</button>
     </div>
   </div>
 </div>

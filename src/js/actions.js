@@ -30,9 +30,10 @@ App.Actions = (function () {
 
   function createFolder(name) {
     App.FileAPI.list('').then(function (items) {
-      return App.FileAPI.mkdir(_uniqueName(items, name || '新建文件夹', true))
-    }).then(function () {
-      App.toast.show('已创建文件夹')
+      let finalName = _uniqueName(items, name || '新建文件夹', true)
+      return App.FileAPI.mkdir(finalName).then(function () { return finalName })
+    }).then(function (finalName) {
+      App.toast.show('已创建文件夹: ' + finalName)
       App.Desktop.refresh()
     }).catch(function (err) {
       App.toast.show('创建失败: ' + err.message)
@@ -42,9 +43,11 @@ App.Actions = (function () {
   function createFile(name) {
     App.FileAPI.list('').then(function (items) {
       // 名称原样使用（不自动补后缀）；空输入用默认名「新建文件」
-      return App.FileAPI.write(_uniqueName(items, name || '新建文件', false), '')
-    }).then(function () {
-      App.toast.show('已创建文件')
+      let finalName = _uniqueName(items, name || '新建文件', false)
+      return App.FileAPI.write(finalName, '').then(function () { return finalName })
+    }).then(function (finalName) {
+      // toast 显示最终创建名（含重名序号），让用户确认名字无自动后缀
+      App.toast.show('已创建文件: ' + finalName)
       App.Desktop.refresh()
     }).catch(function (err) {
       App.toast.show('创建失败: ' + err.message)

@@ -1,14 +1,21 @@
 /* Morph FAB + Speed Dial（移植自 LexiCull，适配 Desktop tokens） */
+:root {
+  /* FAB 直径 = 屏幕宽度 14% */
+  --fab-diameter: 14vw;
+}
 .mode-switch-fab {
-  --fab-radius: 50%;
+  /* 圆角矩形（Material FAB 规范圆角 16px，58px 边长下视觉协调） */
+  --fab-radius: 16px;
   position: fixed;
-  /* 88px：高于取景器底部工具栏（bottom 12px + 高 ~40px），避免长按抬手
-     的合成 click 命中刚出现的工具栏按钮（曾实锤：立即触发「取消」退出） */
-  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-  right: 28px;
+  /* 中心锚点定位：FAB 中心距右 10vw、距底 7vh。
+     right/bottom 是元素边距，需换算：right = 10vw - 直径/2，bottom = 7vh - 直径/2。
+     中心距底 7vh 高于取景器底部工具栏（~52px 高），长按抬手坐标不落入工具栏，
+     避免合成 click 误触（历史坑：FAB 与工具栏重叠导致取景器立即退出）。 */
+  bottom: max(8px, calc(7vh - var(--fab-diameter) / 2 + env(safe-area-inset-bottom, 0px)));
+  right: calc(10vw - var(--fab-diameter) / 2);
   z-index: 701;
-  width: 36px;
-  height: 36px;
+  width: var(--fab-diameter);
+  height: var(--fab-diameter);
   border: 1px solid var(--color-border);
   border-radius: var(--fab-radius);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
@@ -23,6 +30,11 @@
   outline: none;
   transition: transform .5s ease, opacity .5s ease, background .2s, color .2s,
               border-radius .4s cubic-bezier(.2,.8,.2,1);
+}
+/* FAB 放大后图标等比协调（20px → 24px，约合 Material 43% 占比） */
+.mode-switch-fab svg {
+  width: 24px;
+  height: 24px;
 }
 .mode-switch-fab:active {
   color: var(--color-text);
@@ -58,11 +70,16 @@
   pointer-events: auto;
 }
 
-/* ===== Speed Dial 容器 ===== */
+/* ===== Speed Dial 容器（中心与 FAB 中心同心，子按钮从 FAB 正上方展开） =====
+   换算：FAB 中心 x = 视口宽 - 10vw，容器右缘 = FAB 中心 + 18(子按钮半宽)
+         FAB 中心 y = 视口高 - (7vh - 直径/2 + inset) - 直径/2，容器底缘 = FAB 中心 + 18
+   展开位移 -48px 起：第一个子按钮底边 = 48-18=30px > FAB 顶 29px，间隙 1px 贴合 */
 .fab-speed-dial {
   position: fixed;
-  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-  right: 28px;
+  bottom: max(8px, calc(7vh - 18px + env(safe-area-inset-bottom, 0px)));
+  right: calc(10vw - 18px);
+  width: 36px;
+  height: 36px;
   z-index: 1003;
   pointer-events: none;
 }

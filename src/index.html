@@ -23,6 +23,48 @@
   </section>
 </main>
 
+<!-- ===== 底部工具栏：5 个矢量图标按钮，中间加号弹新建对话框，其余 UI 占位 =====
+     底栏区域右滑可跟手呼出左侧 Drawer（见 drawer-swipe.js） -->
+<nav id="bottom-bar" class="bottom-bar" aria-label="底部工具栏">
+  <button class="bottom-bar-btn" aria-label="占位按钮 1">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+  </button>
+  <button class="bottom-bar-btn" aria-label="占位按钮 2">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+  </button>
+  <button id="bb-btn-add" class="bottom-bar-btn bottom-bar-add" aria-label="新建">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+  <button class="bottom-bar-btn" aria-label="占位按钮 4">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+  </button>
+  <button class="bottom-bar-btn" aria-label="占位按钮 5">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</nav>
+
+<!-- ===== 新建对话框（加号弹出）：输入名称 + 文件/文件夹单选 ===== -->
+<div id="create-dialog-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="create-dialog-title">
+    <h2 id="create-dialog-title" class="dialog-title">新建</h2>
+    <input id="create-name" class="dialog-input" type="text" placeholder="名称" autocomplete="off" enterkeyhint="done" aria-label="名称">
+    <div class="dialog-options" role="radiogroup" aria-label="类型">
+      <label class="dialog-option">
+        <input type="radio" name="create-type" value="file" checked>
+        <span>文件</span>
+      </label>
+      <label class="dialog-option">
+        <input type="radio" name="create-type" value="folder">
+        <span>文件夹</span>
+      </label>
+    </div>
+    <div class="dialog-actions">
+      <button id="create-cancel" class="dialog-btn">取消</button>
+      <button id="create-ok" class="dialog-btn dialog-btn-primary">确定</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 左侧 Drawer 工具栏（汉堡呼出） ===== -->
 <div id="drawer-overlay" class="drawer-overlay"></div>
 <nav id="drawer" class="drawer" aria-hidden="true">

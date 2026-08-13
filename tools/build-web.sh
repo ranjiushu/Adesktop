@@ -22,11 +22,13 @@ mkdir -p "$(dirname "$OUTPUT")"
 
 JS_ORDER=(
   namespace.js utils.js bridge.js toast.js file-api.js desktop.js actions.js
-  fab-speed-dial.js drawer.js build-info.js inspector.js ui.js main.js
+  fab-speed-dial.js drawer.js drawer-swipe.js build-info.js inspector.js ui.js
+  bottom-bar.js create-dialog.js main.js
 )
 
 CSS_ORDER=(
-  tokens.css shell.css desktop.css fab.css drawer.css buildinfo.css contribution.css toast.css
+  tokens.css shell.css desktop.css fab.css drawer.css bottom-bar.css dialog.css
+  buildinfo.css contribution.css toast.css
 )
 
 # ── 颜色 ──

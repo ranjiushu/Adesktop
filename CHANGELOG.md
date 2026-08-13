@@ -11,6 +11,11 @@
 ### 交互层
 
 - Morph FAB：短按展开 Speed Dial（新建文件夹/新建文件/刷新/切换根目录），长按激活取景器
+- Morph FAB 恢复初始形态（36px 圆形、距右 28px、20px 图标），Speed Dial 展开保留
+- 底部工具栏（屏高 1/8）：5 个矢量图标按钮，中间加号弹出新建对话框，其余 UI 占位
+- 新建对话框：输入名称 + 文件/文件夹单选，重名自动加序号（含扩展名拆分）
+- Drawer 手势（移植 LexiCull 手感）：底栏右划跟手拉出 + Drawer 上跟手关闭，
+  松手决策（滑出 30% 宽度或末段速度 > 0.3px/ms 的 fling 语义）
 - 元素取景器（移植自 LexiCull）：长按 FAB 800ms 激活，DOM 元素选取与属性查看
 - 顶栏汉堡 + Drawer 工具栏：根目录路径显示 + 文件系统操作
 - 提交与构建信息面板：构建统计、提交历史、贡献热力图、仓库规模、更新日志
@@ -28,6 +33,8 @@
 
 ### 工程
 
+- drawer-swipe 纯函数单测：segmentVelocity/windowVelocity/decideDrawerSettle（22 断言）
+- verify-bottom-bar E2E：底栏渲染/对话框创建/手势跟手拉出/跟手关闭/小幅弹回（16 项）
 - build-web.sh --strict 体积棘轮：超基线（dist/.size-baseline）130% 拦截膨胀
 - JS 变量声明统一 var → let（P1 铁律）
 - 构建信息面板无障碍：drawer/buildinfo 的 aria-hidden 随开关动态切换

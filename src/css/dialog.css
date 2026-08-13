@@ -1,0 +1,106 @@
+/* 新建对话框：加号弹出，输入名称 + 文件/文件夹单选。
+   层级 1300：高于 Drawer(1101) 与 buildinfo(1200)，低于 toast(2000)。 */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.dialog-overlay.dialog-overlay-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 320px;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  padding: var(--space-lg);
+  transform: scale(0.92);
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.dialog-overlay-visible .dialog {
+  transform: scale(1);
+}
+
+.dialog-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+}
+
+.dialog-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background: var(--color-bg);
+  outline: none;
+  -webkit-appearance: none;
+}
+.dialog-input:focus {
+  border-color: var(--color-accent);
+}
+
+.dialog-options {
+  display: flex;
+  gap: var(--space-md);
+  margin: var(--space-md) 0;
+}
+.dialog-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.dialog-option input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.dialog-btn {
+  min-width: 72px;
+  height: 40px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+.dialog-btn:active {
+  background: var(--color-bg);
+}
+.dialog-btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+.dialog-btn-primary:active {
+  background: #2f6fe0;
+}

@@ -25,6 +25,18 @@ App.boot = function boot() {
   if (App.Drawer && typeof App.Drawer.init === 'function') {
     App.Drawer.init()
   }
+  // Drawer 手势：底栏右划拉出 + Drawer 上跟手关闭
+  if (App.DrawerSwipe && typeof App.DrawerSwipe.init === 'function') {
+    App.DrawerSwipe.init()
+  }
+  // 新建对话框（底栏加号弹出）
+  if (App.CreateDialog && typeof App.CreateDialog.init === 'function') {
+    App.CreateDialog.init()
+  }
+  // 底部工具栏（加号 → 新建对话框，其余占位）
+  if (App.BottomBar && typeof App.BottomBar.init === 'function') {
+    App.BottomBar.init()
+  }
   // 提交与构建信息面板（Drawer 底部入口）
   if (App.BuildInfo && typeof App.BuildInfo.init === 'function') {
     App.BuildInfo.init()

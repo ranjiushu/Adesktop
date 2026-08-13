@@ -80,9 +80,9 @@ async function main() {
     })
     return map
   })
-  if (/^\d+$/.test(stats['构建次数'] || '')) pass('构建次数有值: ' + stats['构建次数'])
-  else fail('构建次数缺失: ' + stats['构建次数'])
-  if (/^\d+$/.test(stats['提交总数'] || '')) pass('提交总数有值: ' + stats['提交总数'])
+  if (/^\d+ 次$/.test(stats['建构次数'] || '')) pass('建构次数有值: ' + stats['建构次数'])
+  else fail('建构次数缺失: ' + stats['建构次数'])
+  if (/^\d+ 次$/.test(stats['提交总数'] || '')) pass('提交总数有值: ' + stats['提交总数'])
   else fail('提交总数缺失: ' + stats['提交总数'])
   if (stats['当前分支'] && stats['当前分支'] !== '--') pass('分支有值: ' + stats['当前分支'])
   else fail('分支缺失: ' + stats['当前分支'])

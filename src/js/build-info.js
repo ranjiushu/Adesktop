@@ -85,6 +85,7 @@ App.BuildInfo = (function () {
       order.sort(function (a, b) {
         if (key === 'name') return items[a].name.localeCompare(items[b].name)
         if (key === 'modified') return (items[b].modified || '').localeCompare(items[a].modified || '')
+        if (key === 'chars') return (items[b].chars || 0) - (items[a].chars || 0)
         return items[b].lines - items[a].lines
       })
     }
@@ -392,6 +393,7 @@ App.BuildInfo = (function () {
 
     // 数据解析（容忍缺失）
     let buildCount = '--', buildTime = '--', commitCount = '--', aheadMain = '--', branch = '--'
+    let firstTime = '--', spanDays = '--'
     let recentCommits = []
     _safe(function () {
       if (typeof BUILD_COUNT !== 'undefined') buildCount = BUILD_COUNT
@@ -400,6 +402,15 @@ App.BuildInfo = (function () {
       if (typeof GIT_AHEAD_MAIN !== 'undefined') aheadMain = GIT_AHEAD_MAIN
       if (typeof GIT_BRANCH !== 'undefined') branch = GIT_BRANCH
       if (typeof RECENT_COMMITS !== 'undefined' && Array.isArray(RECENT_COMMITS)) recentCommits = RECENT_COMMITS
+      if (typeof FIRST_BUILD_TIMESTAMP !== 'undefined') firstTime = formatBuildTime(FIRST_BUILD_TIMESTAMP)
+      // 跨度 = 首次构建 → 当前构建 的天数
+      if (typeof FIRST_BUILD_TIMESTAMP !== 'undefined' && typeof BUILD_TIMESTAMP !== 'undefined') {
+        let first = new Date(FIRST_BUILD_TIMESTAMP)
+        let last = new Date(BUILD_TIMESTAMP)
+        if (!isNaN(first.getTime()) && !isNaN(last.getTime())) {
+          spanDays = Math.max(1, Math.round((last.getTime() - first.getTime()) / 86400000)) + ''
+        }
+      }
     }, null)
 
     let contribGrid = _safe(function () {
@@ -415,13 +426,24 @@ App.BuildInfo = (function () {
       sections.push(wrapSection('贡献热力图', renderContributionGrid(contribGrid)))
     }
     sections.push(wrapSection('构建概览', renderKvCard([
-      { label: '构建次数', value: buildCount },
-      { label: '构建时间', value: buildTime },
-      { label: '提交总数', value: commitCount },
-      { label: '领先 main', value: aheadMain },
-      { label: '当前分支', value: branch }
+      { label: '首次构建', value: firstTime },
+      { label: '当前版本', value: buildTime },
+      { label: '建构次数', value: buildCount + ' 次' },
+      { label: '提交总数', value: commitCount + ' 次' },
+      { label: '领先 main', value: aheadMain + ' 个提交', valueStyle: 'font-weight:500;color:' + (parseInt(aheadMain, 10) >= 50 ? '#e0563f' : 'inherit') },
+      { label: '当前分支', value: branch, valueStyle: 'font-size:12px;font-weight:500;font-family:monospace' },
+      { label: '跨度', value: spanDays + ' 天' }
     ])))
     if (sourceStats) {
+      // 非源码分类统计：工具/脚本/测试/配置行数（非 doc）与 md 文档字数（chars 字段）
+      let nsOtherLines = 0
+      let nsDocChars = 0
+      for (let i = 0; i < nsStats.length; i++) {
+        if (nsStats[i].type === 'doc') nsDocChars += nsStats[i].chars || 0
+        else nsOtherLines += nsStats[i].lines
+      }
+      let srcTotalFiles = sourceStats.js.files + (sourceStats.css ? sourceStats.css.files : 0) + (sourceStats.html ? sourceStats.html.files : 0) + (sourceStats.java ? sourceStats.java.files : 0)
+      let grandTotalFiles = srcTotalFiles + nsStats.length
       let repoRows = [
         { label: 'JavaScript', value: sourceStats.js.files + ' 个文件 · ' + sourceStats.js.lines + ' 行', valueStyle: 'font-size:12px;font-weight:500' },
         { label: 'CSS', value: (sourceStats.css.files || 0) + ' 个文件 · ' + sourceStats.css.lines + ' 行', valueStyle: 'font-size:12px;font-weight:500' },
@@ -432,8 +454,10 @@ App.BuildInfo = (function () {
       }
       repoRows.push({ divider: true })
       repoRows.push(
-        { label: '源码文件', value: sourceStats.js.files + (sourceStats.css ? sourceStats.css.files : 0) + (sourceStats.html ? sourceStats.html.files : 0) + (sourceStats.java ? sourceStats.java.files : 0) + ' 个', valueStyle: 'font-size:12px;font-weight:500' },
-        { label: '源码行数', value: sourceStats.total + ' 行', valueStyle: 'font-size:12px;font-weight:500' }
+        { label: '文件总数', value: grandTotalFiles + ' 个', valueStyle: 'font-weight:600;color:var(--text-primary)', rowStyle: 'border:none' },
+        { label: '源码行数', value: sourceStats.total + ' 行', valueStyle: 'font-size:12px;font-weight:500' },
+        { label: '工具/脚本/测试/配置行数', value: nsOtherLines + ' 行', valueStyle: 'font-size:12px;font-weight:500' },
+        { label: 'md 文档字数', value: nsDocChars + ' 字', valueStyle: 'font-size:12px;font-weight:500' }
       )
       sections.push(wrapSection('仓库规模', renderKvCard(repoRows)))
     }
@@ -447,28 +471,29 @@ App.BuildInfo = (function () {
       }) + '</div>'))
     }
     if (nsStats.length > 0) {
+      // 工具/脚本/测试/配置在前、Markdown 文档在后（与 LexiCull 顺序一致）
+      sections.push(wrapSection('工具/脚本/测试/配置', '<div id="build-other-body">' + renderBarList(nsStats, {
+        slice: 'other', rowClass: 'ns-bar-row', globalRef: 'NON_SOURCE_STATS',
+        toggleId: 'other-bar-toggle', expandUnit: '个文件',
+        sortKeys: ['lines', 'name', 'modified'], sortLabels: ['行数', '名称', '最近修改'],
+        bodyId: 'build-other-body'
+      }) + '</div>', { secId: 'build-other-section' }))
       let hasDoc = nsStats.some(function (it) { return it.type === 'doc' })
       if (hasDoc) {
         sections.push(wrapSection('Markdown 文档', '<div id="build-doc-body">' + renderBarList(nsStats, {
           slice: 'doc', rowClass: 'doc-bar-row', globalRef: 'NON_SOURCE_STATS',
-          toggleId: 'doc-bar-toggle', expandUnit: '文件',
-          sortKeys: ['lines', 'name', 'modified'], sortLabels: ['行数', '名称', '修改时间'],
+          toggleId: 'doc-bar-toggle', expandUnit: '个文档',
+          sortKeys: ['lines', 'name', 'modified', 'chars'], sortLabels: ['行数', '名称', '最近修改', '字数'],
           bodyId: 'build-doc-body'
         }) + '</div>', { secId: 'build-doc-section' }))
       }
-      sections.push(wrapSection('工具/脚本/测试/配置', '<div id="build-other-body">' + renderBarList(nsStats, {
-        slice: 'other', rowClass: 'other-bar-row', globalRef: 'NON_SOURCE_STATS',
-        toggleId: 'other-bar-toggle', expandUnit: '文件',
-        sortKeys: ['lines', 'name', 'modified'], sortLabels: ['行数', '名称', '修改时间'],
-        bodyId: 'build-other-body'
-      }) + '</div>', { secId: 'build-other-section' }))
     }
     if (recentCommits.length > 0) {
       sections.push(wrapSection('提交动态', renderCommitList(recentCommits, 10), { secId: 'build-commit-section' }))
     }
     if (changelogHtml) {
       sections.push(wrapSection(
-        '更新日志 <span class="mcp-guide-arrow" id="build-guide-arrow">▼</span>',
+        '<span class="mcp-guide-arrow" id="build-guide-arrow">▶</span> 更新日志',
         '<div class="changelog-container" id="build-guide-content" style="display:none">' + changelogHtml + '</div>',
         { secCls: 'changelog-section', titleCls: 'mcp-guide-toggle', titleId: 'build-guide-toggle' }
       ))

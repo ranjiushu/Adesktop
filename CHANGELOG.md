@@ -46,6 +46,10 @@
   高于 Dialog 1300 / buildinfo 1200 / Drawer 1100），任意面板打开时 FAB 仍可见可点；
   移除取景器运行时注入的 z-index:1002!important 旧逻辑（该注入反把 FAB 压回 1002
   被 Dialog/buildinfo 盖住）
+- 提交与构建页对齐 LexiCull：构建概览补「首次构建/跨度」行并统一文案与单位
+  （建构次数/当前版本/领先main 红色阈值），仓库规模补「文件总数/工具/脚本/测试/
+  配置行数/md 文档字数」行；工具与 Markdown 区块顺序对齐；更新日志箭头改 ▶ 前缀；
+  doc 条形图支持字数排序；卡片改白底+行高 24px（对齐 LexiCull 质感）
 - SAF 创建文件自动追加 .txt：DocumentFile.createFile 固定传 text/plain，
   ExternalStorageProvider 按 MIME 补齐扩展名（无扩展名 → .txt、「哈哈哈.js」→
   「哈哈哈.js.txt」）；改为按扩展名映射 MIME（.js → application/javascript），

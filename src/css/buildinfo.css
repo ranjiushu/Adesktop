@@ -139,13 +139,15 @@
   text-transform: none;
 }
 
-/* 信息卡片（展示型） */
+/* 信息卡片（展示型）——白卡在灰底页面上突出（对齐 LexiCull 质感） */
 .sub-info-card {
-  background: var(--bg-page);
+  background: var(--color-surface);
   border: 1px solid var(--border-outer);
   border-radius: 14px;
   padding: 14px 16px;
   margin-bottom: 8px;
+  font-size: 16px;
+  line-height: 24px;
 }
 .sub-info-card-row {
   display: flex;

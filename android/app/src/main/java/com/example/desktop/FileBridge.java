@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.webkit.JavascriptInterface;
+import android.webkit.MimeTypeMap;
 import android.webkit.WebView;
 
 import androidx.documentfile.provider.DocumentFile;
@@ -24,6 +25,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -315,13 +317,26 @@ public class FileBridge {
         }
         String name = parts[parts.length - 1];
         DocumentFile target = cur.findFile(name);
-        if (target == null) target = cur.createFile("text/plain", name);
+        if (target == null) target = cur.createFile(mimeFor(name), name);
         if (target == null) throw new IOException("无法创建文件: " + name);
         java.io.OutputStream os = activity.getContentResolver().openOutputStream(target.getUri(), "wt");
         if (os == null) throw new IOException("无法写入: " + name);
         os.write(content.getBytes(StandardCharsets.UTF_8));
         os.flush();
         os.close();
+    }
+
+    // SAF 的 createFile 会按 MIME 推断并追加扩展名（如 text/plain → .txt），
+    // 文件名必须「输入什么就是什么」：按扩展名映射 MIME（匹配则不追加）；
+    // 无扩展名或未知扩展名传空 MIME（ExternalStorageProvider 对空 MIME 不追加扩展名）。
+    private String mimeFor(String name) {
+        int i = name.lastIndexOf('.');
+        if (i > 0 && i < name.length() - 1) {
+            String ext = name.substring(i + 1).toLowerCase(Locale.US);
+            String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
+            if (mime != null) return mime;
+        }
+        return "";
     }
 
     private void writePrivate(String path, String content) throws IOException {

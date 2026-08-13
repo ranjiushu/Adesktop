@@ -40,6 +40,10 @@
 - Drawer 开启震动移除（用户指定关闭开启/关闭震动反馈）
 - 新建对话框创建/取消后自动收起键盘：close() 释放输入框焦点（blur），
   WebView 内核检测焦点离开自动隐藏 IME
+- SAF 创建文件自动追加 .txt：DocumentFile.createFile 固定传 text/plain，
+  ExternalStorageProvider 按 MIME 补齐扩展名（无扩展名 → .txt、「哈哈哈.js」→
+  「哈哈哈.js.txt」）；改为按扩展名映射 MIME（.js → application/javascript），
+  无扩展名/未知扩展名传空 MIME（Provider 对空 MIME 不追加）
 
 ### 工程
 

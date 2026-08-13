@@ -53,6 +53,7 @@ App.FileAPI = (function () {
     mkdir: function (path) { return call('mkdir', [path]) },
     del: function (path) { return call('delete', [path]) },
     rename: function (oldPath, newPath) { return call('rename', [oldPath, newPath]) },
+    copy: function (srcPath, dstPath) { return call('copy', [srcPath, dstPath]) },
     hasBridge: function () { return !!window.FileBridge }
   }
 })()

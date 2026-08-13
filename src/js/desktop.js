@@ -68,6 +68,10 @@ App.Desktop = (function () {
       bounds[p.item.name] = { x: p.x, y: p.y, w: ICON_W, h: ICON_H }
       let card = el('div', 'desktop-icon' + (p.item.isDir ? ' is-dir' : ''))
       card.setAttribute('data-name', p.item.name)
+      // 剪切源半透明标记（Windows 式视觉反馈，文件仍真实存在）
+      if (App.Clipboard && App.Clipboard.isCut(p.item.name)) {
+        card.classList.add('clip-cut')
+      }
       let icon = el('div', 'desktop-icon-glyph', p.item.isDir ? '📁' : '📄')
       let name = el('div', 'desktop-icon-name', p.item.name)
       card.appendChild(icon)
@@ -101,6 +105,31 @@ App.Desktop = (function () {
   function clearSelection() {
     selection = new Set()
     applySelection()
+  }
+
+  // 当前选中名字列表（复制/剪切用）
+  function getSelectionNames() {
+    return Array.from(selection)
+  }
+
+  // 重命名后布局 key 迁移：positions/bounds 以名字为 key，
+  // 旧 key → 新 key，否则新名字刷新后回退自动排布丢位置。随后重绘。
+  function applyRename(oldName, newName) {
+    if (!oldName || !newName || oldName === newName) return
+    if (positions[oldName]) {
+      positions[newName] = positions[oldName]
+      delete positions[oldName]
+    }
+    if (bounds[oldName]) {
+      bounds[newName] = bounds[oldName]
+      delete bounds[oldName]
+    }
+    if (selection.has(oldName)) {
+      selection.delete(oldName)
+      selection.add(newName)
+    }
+    saveLayout()
+    refresh()
   }
 
   // ── 手势回调（世界坐标）──
@@ -347,6 +376,8 @@ App.Desktop = (function () {
     refresh: refresh,
     render: render,
     initGesture: initGesture,
-    clearSelection: clearSelection
+    clearSelection: clearSelection,
+    getSelectionNames: getSelectionNames,
+    applyRename: applyRename
   }
 })()

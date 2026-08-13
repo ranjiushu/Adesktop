@@ -44,8 +44,37 @@ App.fabSpeedDial = (function () {
         }
         collapse()
         return
-      case 'open':
+      case 'copy':
+      case 'cut':
+        // 复制/剪切：只写剪贴板（内存态），文件不动
+        if (App.Desktop && typeof App.Desktop.getSelectionNames === 'function') {
+          const names = App.Desktop.getSelectionNames()
+          if (action === 'copy') App.Actions.copySelection(names)
+          else App.Actions.cutSelection(names)
+        }
+        collapse()
+        return
+      case 'paste':
+        App.Actions.paste()
+        collapse()
+        return
       case 'rename':
+        // 重命名：单选才可用（多选提示）
+        if (App.Desktop && typeof App.Desktop.getSelectionNames === 'function') {
+          const names = App.Desktop.getSelectionNames()
+          if (names.length === 1) {
+            collapse()
+            if (App.RenameDialog && typeof App.RenameDialog.open === 'function') {
+              App.RenameDialog.open(names[0])
+            }
+            return
+          } else if (names.length > 1) {
+            if (App.toast) App.toast.show('重命名仅支持单选')
+          }
+        }
+        collapse()
+        return
+      case 'open':
       case 'delete':
       case 'properties':
         // 阶段 C 实现操作动作，阶段 B 占位
@@ -74,6 +103,12 @@ App.fabSpeedDial = (function () {
     if (bd) bd.classList.add('fab-backdrop-visible')
     sd.classList.add('fab-speed-dial-expanded')
     fab.classList.add('fab-speed-dial-active')
+    // 粘贴按钮显隐：仅预览态 + 剪贴板非空时显示
+    if (_mode === 'desktop') {
+      const pasteBtn = sd.querySelector('[data-action="paste"]')
+      const hasClip = App.Clipboard && typeof App.Clipboard.has === 'function' && App.Clipboard.has()
+      if (pasteBtn) pasteBtn.style.display = hasClip ? '' : 'none'
+    }
     App.bridge.vibrate()
   }
 

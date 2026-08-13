@@ -117,12 +117,14 @@
   pointer-events: auto;
 }
 
-/* 向上展开：第 1-5 个按钮 */
+/* 向上展开：第 1-7 个按钮 */
 .fab-speed-dial-expanded .fab-child-up:nth-child(1) { transform: translateY(-48px) scale(1); }
 .fab-speed-dial-expanded .fab-child-up:nth-child(2) { transform: translateY(-92px) scale(1); }
 .fab-speed-dial-expanded .fab-child-up:nth-child(3) { transform: translateY(-136px) scale(1); }
 .fab-speed-dial-expanded .fab-child-up:nth-child(4) { transform: translateY(-180px) scale(1); }
 .fab-speed-dial-expanded .fab-child-up:nth-child(5) { transform: translateY(-224px) scale(1); }
+.fab-speed-dial-expanded .fab-child-up:nth-child(6) { transform: translateY(-268px) scale(1); }
+.fab-speed-dial-expanded .fab-child-up:nth-child(7) { transform: translateY(-312px) scale(1); }
 
 /* ===== 子按钮标签 ===== */
 .fab-child-label {

@@ -33,6 +33,10 @@ App.boot = function boot() {
   if (App.CreateDialog && typeof App.CreateDialog.init === 'function') {
     App.CreateDialog.init()
   }
+  // 重命名对话框（选中态操作栏弹出）
+  if (App.RenameDialog && typeof App.RenameDialog.init === 'function') {
+    App.RenameDialog.init()
+  }
   // 底部工具栏（加号 → 新建对话框，其余占位）
   if (App.BottomBar && typeof App.BottomBar.init === 'function') {
     App.BottomBar.init()

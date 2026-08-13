@@ -21,10 +21,10 @@ OUTPUT="$SCRIPT_DIR/dist/desktop.bundle.html"
 mkdir -p "$(dirname "$OUTPUT")"
 
 JS_ORDER=(
-  namespace.js utils.js bridge.js toast.js file-api.js desktop-selection.js
+  namespace.js utils.js bridge.js toast.js file-api.js clipboard.js desktop-selection.js
   desktop-grid.js layout-store.js desktop-camera.js desktop-gesture.js desktop.js
   actions.js fab-speed-dial.js drawer.js drawer-swipe.js build-info.js inspector.js
-  ui.js bottom-bar.js create-dialog.js main.js
+  ui.js bottom-bar.js create-dialog.js rename-dialog.js main.js
 )
 
 CSS_ORDER=(

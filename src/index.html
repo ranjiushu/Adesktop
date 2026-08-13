@@ -61,6 +61,19 @@
   </div>
 </div>
 
+
+<!-- ===== 重命名对话框（选中态操作栏「重命名」弹出）：预填原名，确认后执行 ===== -->
+<div id="rename-dialog-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-dialog-title">
+    <h2 id="rename-dialog-title" class="dialog-title">重命名</h2>
+    <input id="rename-name" class="dialog-input" type="text" autocomplete="off" enterkeyhint="done" aria-label="新名称">
+    <div class="dialog-actions">
+      <button id="rename-cancel" class="dialog-btn">取消</button>
+      <button id="rename-confirm" class="dialog-btn dialog-btn-primary">确认</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 左侧 Drawer 工具栏（汉堡呼出） ===== -->
 <div id="drawer-overlay" class="drawer-overlay"></div>
 <nav id="drawer" class="drawer" aria-hidden="true">
@@ -137,12 +150,24 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
       <span class="fab-child-label">切换根目录</span>
     </button>
+    <button class="fab-child fab-child-up" data-action="paste">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span class="fab-child-label">粘贴</span>
+    </button>
   </div>
   <!-- 选中态操作栏按钮集（selection 非空时自动展开） -->
   <div class="fab-btn-set fab-set-selection">
     <button class="fab-child fab-child-up" data-action="open">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       <span class="fab-child-label">打开</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="copy">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span class="fab-child-label">复制</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="cut">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+      <span class="fab-child-label">剪切</span>
     </button>
     <button class="fab-child fab-child-up" data-action="rename">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>

@@ -433,4 +433,97 @@ public class FileBridge {
             }
         });
     }
+
+    /* 复制：文件/目录递归拷贝（粘贴的基础操作；剪切 = copy + delete）。
+     * srcPath/dstPath 均为相对根目录路径；目标已存在则覆盖（重名由前端规划防冲突）。 */
+    @JavascriptInterface
+    public void copy(String srcPath, String dstPath, String cbId) {
+        executor.execute(() -> {
+            try {
+                if (!isSafeRelPath(srcPath) || !isSafeRelPath(dstPath)) {
+                    throw new IOException("非法路径");
+                }
+                Object resolved = resolve(srcPath);
+                if (rootUri != null) {
+                    copySaf((DocumentFile) resolved, dstPath);
+                } else {
+                    copyPrivate((File) resolved, dstPath);
+                }
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /* SAF 递归拷贝：dstPath 逐级解析/创建目录，文件流拷贝 */
+    private void copySaf(DocumentFile src, String dstPath) throws IOException {
+        DocumentFile root = DocumentFile.fromTreeUri(activity, rootUri);
+        if (root == null) throw new IOException("根目录不可用");
+        String[] parts = dstPath.split("/");
+        DocumentFile cur = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            if (parts[i].isEmpty()) continue;
+            DocumentFile next = cur.findFile(parts[i]);
+            if (next == null) next = cur.createDirectory(parts[i]);
+            if (next == null || !next.isDirectory()) throw new IOException("无法进入目录: " + parts[i]);
+            cur = next;
+        }
+        String name = parts[parts.length - 1];
+        if (name.isEmpty()) throw new IOException("非法目标名: " + dstPath);
+        if (src.isDirectory()) {
+            DocumentFile dstDir = cur.findFile(name);
+            if (dstDir == null) dstDir = cur.createDirectory(name);
+            if (dstDir == null || !dstDir.isDirectory()) throw new IOException("无法创建目录: " + name);
+            DocumentFile[] children = src.listFiles();
+            if (children != null) {
+                for (DocumentFile c : children) {
+                    copySaf(c, dstPath + "/" + c.getName());
+                }
+            }
+        } else {
+            DocumentFile dst = cur.findFile(name);
+            if (dst == null) dst = cur.createFile(mimeFor(name), name);
+            if (dst == null) throw new IOException("无法创建文件: " + name);
+            java.io.InputStream is = activity.getContentResolver().openInputStream(src.getUri());
+            if (is == null) throw new IOException("无法读取源文件");
+            java.io.OutputStream os = activity.getContentResolver().openOutputStream(dst.getUri(), "wt");
+            if (os == null) {
+                is.close();
+                throw new IOException("无法写入: " + dstPath);
+            }
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) != -1) os.write(buf, 0, n);
+            os.flush();
+            os.close();
+            is.close();
+        }
+    }
+
+    /* 私有模式递归拷贝 */
+    private void copyPrivate(File src, String dstPath) throws IOException {
+        File dst = new File(privateRoot, dstPath);
+        if (!isUnderPrivateRoot(dst)) throw new IOException("非法路径: " + dstPath);
+        if (src.isDirectory()) {
+            if (!dst.mkdirs() && !dst.isDirectory()) throw new IOException("无法创建目录: " + dstPath);
+            File[] children = src.listFiles();
+            if (children != null) {
+                for (File c : children) {
+                    copyPrivate(c, dstPath + "/" + c.getName());
+                }
+            }
+        } else {
+            File parent = dst.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                throw new IOException("无法创建目录: " + parent);
+            }
+            try (FileInputStream fis = new FileInputStream(src);
+                 FileOutputStream fos = new FileOutputStream(dst)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = fis.read(buf)) != -1) fos.write(buf, 0, n);
+            }
+        }
+    }
 }

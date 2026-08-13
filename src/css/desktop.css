@@ -103,6 +103,15 @@
   box-shadow: inset 0 0 0 1px var(--color-accent);
 }
 
+/* 剪切源标记：半透明（Windows 式视觉反馈，文件仍真实存在，刷新不穿帮） */
+.desktop-icon.clip-cut {
+  opacity: 0.45;
+  border-style: dashed;
+}
+.desktop-icon.clip-cut .desktop-icon-name {
+  text-decoration: line-through;
+}
+
 /* 长按拿起态：放大 + 阴影（120ms 过渡，主屏隐喻） */
 .desktop-icon.picked-up {
   transform: scale(1.1);

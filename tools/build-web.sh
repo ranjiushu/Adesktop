@@ -21,7 +21,8 @@ OUTPUT="$SCRIPT_DIR/dist/desktop.bundle.html"
 mkdir -p "$(dirname "$OUTPUT")"
 
 JS_ORDER=(
-  namespace.js utils.js bridge.js toast.js file-api.js desktop.js actions.js
+  namespace.js utils.js bridge.js toast.js file-api.js desktop-camera.js
+  desktop-gesture.js desktop.js actions.js
   fab-speed-dial.js drawer.js drawer-swipe.js build-info.js inspector.js ui.js
   bottom-bar.js create-dialog.js main.js
 )

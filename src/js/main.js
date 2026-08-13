@@ -41,9 +41,10 @@ App.boot = function boot() {
   if (App.BuildInfo && typeof App.BuildInfo.init === 'function') {
     App.BuildInfo.init()
   }
-  // 桌面：以文件系统为数据源渲染
-  if (App.Desktop && typeof App.Desktop.refresh === 'function') {
-    App.Desktop.refresh()
+  // 桌面：启动无限画布手势（双指 pan/zoom）+ 以文件系统为数据源渲染
+  if (App.Desktop) {
+    if (typeof App.Desktop.initGesture === 'function') App.Desktop.initGesture()
+    if (typeof App.Desktop.refresh === 'function') App.Desktop.refresh()
   }
   return true
 }

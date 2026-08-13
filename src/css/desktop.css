@@ -1,12 +1,47 @@
-/* 桌面样式：图标网格（第一阶段：固定网格，后续支持自由摆放） */
-.desktop-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: var(--space-md);
-  padding: var(--space-md);
+/* 桌面样式：无限画布（viewport/canvas 两层 + 图标世界坐标绝对定位 + 背景点阵） */
+
+.app-content {
+  position: relative;   /* viewport 绝对定位的参考 */
+  padding: 0;           /* 覆盖 shell.css 的 padding，边距改由画布世界坐标控制 */
+  overflow: hidden;     /* 桌面区域裁剪 */
 }
 
+/* 视口：手势监听层，填满 app-content，裁剪溢出 */
+.desktop-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 画布：唯一动 transform 的层（合成层变换，GPU 加速，不触发布局） */
+.desktop-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* 图标层容器：绝对定位，承载世界坐标图标 */
+.desktop-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* 图标：绝对定位（left/top = 世界坐标，由 JS 设置），固定宽度 */
 .desktop-icon {
+  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -15,6 +50,7 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  width: 84px;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -46,5 +82,16 @@
 .desktop-empty {
   padding: var(--space-lg);
   text-align: center;
+  color: var(--color-text-secondary);
+}
+
+/* 状态浮层：不随画布变换 */
+.status-text {
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-md);
+  z-index: 5;
+  pointer-events: none;
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }

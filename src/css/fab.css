@@ -1,12 +1,11 @@
 /* Morph FAB + Speed Dial（移植自 LexiCull，适配 Desktop tokens）
-   位置/大小/形状为初始形态（36px 圆形、距底 88px 距右 28px），
-   底部工具栏引入后 FAB 悬浮于其上方（88px 高于取景器底部工具栏 ~52px）。 */
+   位置参照 LexiCull：距右 28px；距底 = 底栏（屏高 1/8）顶部 + 16px 间隙
+   （LexiCull 悬浮胶囊底栏顶 ≈ panel+84，FAB bottom = panel+100，间隙 16px）。
+   大小/形状为初始形态（36px 圆形）。 */
 .mode-switch-fab {
   --fab-radius: 50%;
   position: fixed;
-  /* 88px：高于取景器底部工具栏（bottom 12px + 高 ~40px），避免长按抬手
-     的合成 click 命中刚出现的工具栏按钮（曾实锤：立即触发「取消」退出） */
-  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(12.5vh + 16px);
   right: 28px;
   z-index: 701;
   width: 36px;
@@ -67,7 +66,7 @@
 /* ===== Speed Dial 容器（中心与 FAB 同心，子按钮从 FAB 正上方展开） ===== */
 .fab-speed-dial {
   position: fixed;
-  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(12.5vh + 16px);
   right: 28px;
   width: 36px;
   height: 36px;

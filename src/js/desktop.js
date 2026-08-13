@@ -55,6 +55,7 @@ App.Desktop = (function () {
     if (!gridEl) return
     gridEl.innerHTML = ''
     iconEls = {}
+    bounds = {}   // 清空重建，防止已删/不可见文件（如隐藏文件）的旧 bounds 残留导致命中测试选中幽灵项
 
     if (statusEl) {
       statusEl.textContent = '根目录: ' + state.rootName +
@@ -167,7 +168,10 @@ App.Desktop = (function () {
 
   // 拿起整个选中组并开始拖（组内相对位置不变）
   function startGroupDrag(world) {
-    dragTargets = Array.from(selection)
+    // 过滤掉 positions/bounds 缺失的幽灵项（文件已删/不可见），避免访问 undefined 中断拖动
+    dragTargets = Array.from(selection).filter(function (n) {
+      return positions[n] && bounds[n]
+    })
     dragStartWorld = { x: world.x, y: world.y }
     dragStartPositions = {}
     dragTargets.forEach(function (n) {

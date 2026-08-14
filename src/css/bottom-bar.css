@@ -1,12 +1,13 @@
-/* 底部工具栏：高度占屏幕 1/8，5 个矢量图标按钮（中间加号弹新建对话框，其余 UI 占位）
+/* 底部工具栏：高度占屏幕 1/10，5 个矢量图标按钮（中间加号弹新建对话框，
+   最右向上箭头 = 退回到上级目录，其余 UI 占位）。
    底栏区域右滑跟手呼出左侧 Drawer（drawer-swipe.js 监听 touch 事件）。 */
 .bottom-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  /* 屏高 1/8 = 12.5vh；底部安全区内衬（总高不变） */
-  height: 12.5vh;
+  /* 屏高 1/10 = 10vh；底部安全区内衬（总高不变），沉浸式下由 Java 注入 --safe-bottom */
+  height: 10vh;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   z-index: 600;
   background: var(--color-surface);

@@ -191,7 +191,12 @@ App.Desktop = (function () {
     }
   }
 
+  // 取消选中：同时关闭预览（Viewer 与文件选中态绑定——选中消失 = 预览关闭）
   function clearSelection() {
+    if (App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
+        App.InternalViewer.isOpen()) {
+      App.InternalViewer.close()
+    }
     selection = new Set()
     applySelection()
   }
@@ -239,15 +244,19 @@ App.Desktop = (function () {
       return fullPath(it.name) === full
     })[0]
     if (!item) return
-    clearSelection()
     if (item.isDir) {
+      clearSelection()
       enterFolder(full)
     } else if (App.FileOpener && typeof App.FileOpener.open === 'function') {
-      // 锚点：desktop 空间 = 文件世界坐标（Viewer 随画布平移）；
-      // folder 容器 = 无锚点（沉浸式占满内容区）。打开后立即按当前相机定位。
+      // 文件打开 = Viewer 预览，文件保持「选中态」（与文件相同的选中/未选中状态，
+      // Morph FAB 选中态操作栏提供关闭入口）。先选中再打开（FAB 状态刷新在打开后）。
+      selection = App.DesktopSelection.selectOnly(full)
+      applySelection()
+      // 锚点：desktop 空间 = 文件世界坐标（Viewer 为画布实体，随画布 transform 平移缩放）；
+      // folder 容器 = 无锚点（全屏占满内容区）
       const anchor = isFolderView() ? null : (positions[full] || null)
-      App.FileOpener.open({ name: item.name, path: full }, anchor)
-      syncViewerCamera()
+      App.FileOpener.open({ name: item.name, path: full }, anchor, camera)
+      applySelection()   // Viewer 已打开 → 刷新「关闭预览」按钮显隐
     } else if (App.toast) {
       App.toast.show('打开文件（查看器未就绪）')
     }
@@ -275,19 +284,11 @@ App.Desktop = (function () {
     } else {
       camera = rootCamera || App.DesktopCamera.create()
     }
-    syncViewerCamera()
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
       App.DesktopGesture.setCamera(camera)
     }
     if (App.ViewMenu && typeof App.ViewMenu.setEnabled === 'function') {
       App.ViewMenu.setEnabled(isFolderView())
-    }
-  }
-
-  // 查看器位置与相机同步：画布平移/缩放/飞行时 Viewer 随锚点移动（内部判 isOpen）
-  function syncViewerCamera() {
-    if (App.InternalViewer && typeof App.InternalViewer.syncCamera === 'function') {
-      App.InternalViewer.syncCamera(camera)
     }
   }
 
@@ -407,7 +408,6 @@ App.Desktop = (function () {
       if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
         App.DesktopGesture.setCamera(camera)
       }
-      syncViewerCamera()
       if (k >= 1) { _animRaf = null; return }
       _animRaf = _raf(frame)
     }
@@ -416,6 +416,12 @@ App.Desktop = (function () {
 
   // ── 手势回调（世界坐标）──
   function handleTap(world) {
+    // Viewer 画布实体表面点击：遮挡背后的文件（点不到），但不清空选中态
+    // （保持「与文件相同的选中状态」，FAB 关闭入口可用）
+    if (App.InternalViewer && typeof App.InternalViewer.hitTestWorld === 'function' &&
+        App.InternalViewer.hitTestWorld(world.x, world.y)) {
+      return
+    }
     const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
     const now = Date.now()
     const r = App.DoubleTap.hit(_tapState, name, now, DOUBLE_TAP_MS)
@@ -901,7 +907,6 @@ App.Desktop = (function () {
       },
       onUpdate: function (c) {
         camera = c
-        syncViewerCamera()
       },
       // 手势开始 → 打断进行中的 Home 平滑过渡（手势直控优先）
       onGestureStart: cancelCameraAnim,

@@ -13,10 +13,12 @@
   「用其他应用打开」兜底
 - **HTML 查看隔离 Java Bridge**：iframe srcdoc + sandbox（无 allow-same-origin → opaque
   origin），脚本跨源访问 window.FileBridge 抛 SecurityError，无头实测 BRIDGE_BLOCKED
-- **Desktop 空间 Overlay 模式**：Viewer 不属于网格（不参与布局/排序/框选/碰撞），
-  以文件世界坐标为锚点，画布平移/缩放/飞行时随锚点移动（syncCamera），
-  尺寸接近屏幕尺度不随世界缩放；打开瞬间锚点不可见则居中
-- **folder 容器沉浸式**：同一 Viewer，无锚点 → 占满内容区全屏查看
+- **Desktop 空间画布实体模式**：Viewer 是放置在画布上的世界坐标实体（不属于网格，
+  不参与布局/排序/框选/碰撞），随画布 transform 平移/缩放，无需相机同步；
+  桌面手指依旧有效（不拦截触摸，不创作独立交互模型），DOM 遮挡使其背后的文件点不到
+- **全屏预览**：Viewer 顶栏只有一个「全屏预览」按钮；folder 容器打开文件直接全屏占满内容区
+- **选中态绑定 + Morph FAB 关闭**：打开 Viewer = 文件保持选中（与文件相同选中/未选中状态）；
+  选中态操作栏新增「关闭预览」（仅 Viewer 打开时显示），取消选择 = 同时关闭预览
 - **Markdown mini 渲染器**（`markdown.js`，纯函数零依赖）：标题/列表/代码块/粗斜体/链接/引用，
   先整体转义再行内标记（防注入），javascript: 等危险协议链接拒绝
 - 返回键链路：查看器打开时返回键 = 关闭查看器（最优先），目录上下文保持

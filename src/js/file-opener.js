@@ -39,8 +39,9 @@ App.FileOpener = (function () {
   }
 
   // 打开：item = { name, path }（path 为完整相对路径），anchor = 桌面空间世界坐标或 null
+  // camera = 打开瞬间相机快照（canvas 实体锚点不可见时居中用）
   // 返回 true = 已分派（内部查看或外部打开）；false = 分派失败
-  function open(item, anchor) {
+  function open(item, anchor, camera) {
     if (!item || !item.path) return false
     const kind = kindFor(item.name || '')
     if (kind === 'external') {
@@ -62,8 +63,8 @@ App.FileOpener = (function () {
         path: item.path,
         name: item.name,
         kind: kind,
-        anchor: anchor || null,
-        immersive: !anchor,   // 无锚点（folder 容器）→ 沉浸式占满内容区
+        anchor: anchor || null,        // 非 null = 画布实体（桌面空间）；null = 全屏（folder 容器）
+        camera: camera || null,
         onFallback: function () {   // 内部预览失败 → 交外部应用
           App.FileAPI.openExternal(item.path).catch(function () {})
         }

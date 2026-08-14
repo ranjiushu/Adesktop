@@ -1,6 +1,8 @@
-/* 文件查看器（InternalViewer）样式：Overlay Layer + 浮动卡片 + 各类型内容排版 */
+/* 文件查看器（InternalViewer）样式：画布实体预览 + 全屏预览双形态 */
 
-/* Layer：位于 desktop-viewport 内、画布之上；默认穿透（不拦手势），打开后接管触摸 */
+/* Layer：位于 desktop-viewport 内、画布之上；默认穿透（不拦手势）。
+   fullscreen 态卡片在 layer 内，class 打开后接管触摸（内容滚动/媒体控制）；
+   canvas 态卡片在 desktop-canvas 内，不经过 layer，桌面手势照常。 */
 .viewer-layer {
   position: absolute;
   top: 0;
@@ -15,9 +17,8 @@
   pointer-events: auto;
 }
 
-/* 卡片：屏幕尺度浮动面板（锚点定位由 JS 计算，宽高接近视口，不随世界缩放） */
+/* 卡片：flex 纵向面板（canvas 态世界坐标定位 / fullscreen 态占满内容区） */
 .viewer-card {
-  position: absolute;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
@@ -27,7 +28,26 @@
   overflow: hidden;
 }
 
-/* 顶栏：文件名 + 关闭按钮 */
+/* 画布实体：世界坐标（left/top/width/height 由 JS 设置），随画布 transform 平移缩放，
+   位于 #desktop-canvas 内 grid 之后（DOM 顺序遮挡其背后的文件） */
+.viewer-card-canvas {
+  position: absolute;
+  z-index: 5;
+}
+
+/* 全屏态：占满内容区（layer 内 inset 0） */
+.viewer-card-fullscreen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+/* 顶栏：文件名 + 全屏预览按钮 */
 .viewer-header {
   display: flex;
   align-items: center;
@@ -49,7 +69,7 @@
   text-overflow: ellipsis;
 }
 
-.viewer-close {
+.viewer-fs-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -62,7 +82,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.viewer-close:active {
+.viewer-fs-btn:active {
   background: var(--hover-dim);
 }
 

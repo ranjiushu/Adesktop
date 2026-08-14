@@ -1,4 +1,4 @@
-// viewer.js 纯函数单元测试：卡片矩形（锚点跟随/不随缩放）+ JSON 树节点
+// viewer.js 纯函数单元测试：画布实体矩形（世界坐标）+ JSON 树节点
 // 用法: node test-viewer.js [项目路径]   （由 run-tests.sh 调用）
 'use strict'
 
@@ -27,31 +27,20 @@ vm.runInContext(source, sandbox, { filename: 'viewer.js' })
 const V = sandbox.App.InternalViewer
 const approx = function (a, b, tol) { return Math.abs(a - b) <= (tol || 0.001) }
 
-// ── calcCardRect：锚点世界坐标 → 屏幕坐标（视口 360×640） ──
-// 相机 (0,0,1)：锚点 (180,320) 居中
-let r = V.calcCardRect({ wx: 180, wy: 320 }, { x: 0, y: 0, zoom: 1 }, 360, 640)
-check(approx(r.w, 360 - 32), '卡片宽 = 视口宽 - 2×边距（接近屏幕尺度）')
-check(approx(r.h, 640 - 64), '卡片高 = 视口高 - 顶栏/底栏让位')
-check(approx(r.x, 180 - r.w / 2), 'x = 锚点屏幕位置 - 宽/2（锚定中心）')
-check(approx(r.y, 320 - r.h / 2), 'y = 锚点屏幕位置 - 高/2（锚定中心）')
+// ── worldRect：卡片中心对齐锚点世界坐标 ──
+let r = V.worldRect({ x: 180, y: 320 }, 380, 576)
+check(approx(r.x, 180 - 190) && approx(r.y, 320 - 288), 'worldRect 中心对齐锚点')
+check(approx(r.w, 380) && approx(r.h, 576), 'worldRect 保持给定尺寸')
 
-// ── 不随 zoom 缩放：zoom 变只改位置，尺寸不变 ──
-const r1 = V.calcCardRect({ wx: 180, wy: 320 }, { x: 0, y: 0, zoom: 1 }, 360, 640)
-const r2 = V.calcCardRect({ wx: 180, wy: 320 }, { x: 0, y: 0, zoom: 2 }, 360, 640)
-check(approx(r2.w, r1.w) && approx(r2.h, r1.h), 'zoom 变化不改变卡片尺寸')
-check(approx(r2.x, 180 * 2 - r2.w / 2), 'zoom 放大 2×：位置按 zoom 平移')
-
-// ── 画布平移跟随：相机平移 dx → 卡片平移 dx×zoom ──
-const r3 = V.calcCardRect({ wx: 180, wy: 320 }, { x: 50, y: 0, zoom: 1 }, 360, 640)
-check(approx(r3.x, r.x - 50), '相机右移 50 → 卡片左移 50（随文件移动）')
+// ── cardSize：接近屏幕尺度 ──
+let s = V.cardSize(412, 768)
+check(approx(s.w, 412 - 32) && approx(s.h, 768 - 96), 'cardSize = 视口 - 边距/让位（zoom=1 时接近屏幕）')
+s = V.cardSize(100, 100)
+check(s.w >= 200 && s.h >= 160, 'cardSize 下限钳制（MIN_W/MIN_H）')
 
 // ── visibleRatio：全可见 / 部分出界 ──
 check(approx(V.visibleRatio({ x: 0, y: 0, w: 100, h: 100 }, 360, 640), 1), '完全在视口内 → 1')
 check(approx(V.visibleRatio({ x: 332, y: 0, w: 100, h: 100 }, 360, 640), 0.28), '右缘出界 → 部分可见(0.28)')
-
-// ── immersiveRect ──
-const im = V.immersiveRect(360, 640)
-check(im.x === 0 && im.y === 0 && im.w === 360 && im.h === 640, '沉浸式 = 占满内容区')
 
 // ── jsonToNodes ──
 let n = V.jsonToNodes({ a: 1, b: 'x' }, '')

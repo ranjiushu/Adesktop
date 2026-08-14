@@ -39,8 +39,20 @@ App.fabSpeedDial = (function () {
         App.Actions.switchRoot()
         return
       case 'clear-selection':
+        // 取消选择 = 同时关闭预览（Viewer 与文件选中态绑定）
+        if (App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
+            App.InternalViewer.isOpen()) {
+          App.InternalViewer.close()
+        }
         if (App.Desktop && typeof App.Desktop.clearSelection === 'function') {
           App.Desktop.clearSelection()
+        }
+        collapse()
+        return
+      case 'close-preview':
+        // 关闭预览（Viewer 关闭；文件保持选中态，操作栏其他动作仍可用）
+        if (App.InternalViewer && typeof App.InternalViewer.close === 'function') {
+          App.InternalViewer.close()
         }
         collapse()
         return
@@ -155,6 +167,13 @@ App.fabSpeedDial = (function () {
       _expanded = true
       _mode = 'selection'
       sd.setAttribute('data-mode', 'selection')
+      // 「关闭预览」按钮仅 Viewer 打开时显示
+      const cp = sd.querySelector('[data-action="close-preview"]')
+      if (cp) {
+        const viewerOpen = App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
+          App.InternalViewer.isOpen()
+        cp.style.display = viewerOpen ? '' : 'none'
+      }
       if (bd) bd.classList.remove('fab-backdrop-visible')
       sd.classList.add('fab-speed-dial-expanded')
       fab.classList.add('fab-speed-dial-active')

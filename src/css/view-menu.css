@@ -1,0 +1,99 @@
+/* 顶栏排列/视图菜单：header 右上弹出，子文件夹（容器）可用，根目录（空间）置灰 */
+
+/* 遮罩：点击外部关闭 */
+.view-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  background: transparent;
+  display: none;
+}
+
+.view-menu-overlay-visible {
+  display: block;
+}
+
+/* 菜单本体：右上角下拉 */
+.view-menu {
+  position: fixed;
+  top: calc(var(--header-height) + env(safe-area-inset-top, 0px) + 4px);
+  right: var(--space-md);
+  z-index: 21;
+  min-width: 168px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: var(--space-xs) 0;
+  display: none;
+}
+
+.view-menu-open {
+  display: block;
+}
+
+.view-menu-section {
+  padding: var(--space-xs) 0;
+}
+
+.view-menu-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-xs) var(--space-md);
+}
+
+.view-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px var(--space-md);
+  border: none;
+  background: transparent;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.view-menu-item:active {
+  background: var(--hover-dim);
+}
+
+.view-menu-item[disabled] {
+  color: var(--color-text-secondary);
+  opacity: 0.5;
+}
+
+/* 当前项高亮 + 方向箭头/勾选标记（仅 active 显示） */
+.view-menu-item.active {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.view-menu-dir,
+.view-menu-check {
+  display: none;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.view-menu-item.active .view-menu-dir,
+.view-menu-item.active .view-menu-check {
+  display: inline;
+}
+
+.view-menu-sep {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-xs) 0;
+}
+
+.view-menu-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-xs) var(--space-md);
+}

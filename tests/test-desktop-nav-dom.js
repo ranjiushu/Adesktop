@@ -36,9 +36,17 @@ function makeIconEl() {
 
 // 收集 render 创建的元素（innerHTML='' 等价真实 DOM 清空）
 let createdIcons = []
+function makeClassList() {
+  return {
+    _set: {},
+    add: function (c) { this._set[c] = true },
+    remove: function (c) { delete this._set[c] },
+    contains: function (c) { return !!this._set[c] }
+  }
+}
 function makeGridEl() {
   const el = {
-    _html: '', children: [],
+    _html: '', children: [], classList: makeClassList(), style: {},
     get innerHTML() { return el._html },
     set innerHTML(v) { el._html = v; el.children = []; createdIcons = [] },
     appendChild: function (node) { createdIcons.push(node); el.children.push(node) }
@@ -49,10 +57,9 @@ function makeGridEl() {
 const gridEl = makeGridEl()
 const els = {
   'desktop-grid': gridEl,
-  'desktop-viewport': { clientWidth: 412, addEventListener: function () {}, getBoundingClientRect: function () { return { left: 0, top: 56, width: 412, height: 700 } } },
-  'desktop-canvas': { style: {}, addEventListener: function () {}, getBoundingClientRect: function () { return { left: 0, top: 56, width: 412, height: 700 } } },
-  'desktop-marquee': { style: {}, },
-  'status-text': { textContent: '' }
+  'desktop-viewport': { clientWidth: 412, clientHeight: 700, addEventListener: function () {}, getBoundingClientRect: function () { return { left: 0, top: 56, width: 412, height: 700 } } },
+  'desktop-canvas': { style: {}, classList: makeClassList(), addEventListener: function () {}, getBoundingClientRect: function () { return { left: 0, top: 56, width: 412, height: 700 } } },
+  'desktop-marquee': { style: {}, }
 }
 
 // FileAPI 假桥：list(path) 按目录返回
@@ -63,6 +70,9 @@ const fsTree = {
   ],
   'docs': [
     { name: 'b.txt', isDir: false, size: 1, mtime: 3 }
+  ],
+  'docs/sub': [
+    { name: 'c.txt', isDir: false, size: 1, mtime: 4 }
   ]
 }
 let listCalls = []
@@ -99,6 +109,29 @@ sandbox.App.LayoutStore = {
   load: function () { return null },
   save: function () { return true }
 }
+sandbox.App.ViewStore = {
+  load: function () { return { viewStyle: 'grid', sortBy: 'name', sortDir: 1 } },
+  save: function () { return true }
+}
+sandbox.App.FolderSort = {
+  sort: function (items) { return items.slice() },
+  defaultDir: function () { return 1 }
+}
+sandbox.App.FolderLayout = {
+  gridPositions: function (count) {
+    const a = []
+    for (let i = 0; i < count; i++) a.push({ x: 16 + (i % 4) * 100, y: 16 + Math.floor(i / 4) * 92 })
+    return a
+  },
+  listPositions: function (count) {
+    const a = []
+    for (let i = 0; i < count; i++) a.push({ x: 0, y: i * 56 })
+    return a
+  },
+  canvasSize: function (count, vw) { return { w: vw, h: 200 } },
+  iconWidth: function () { return 80 }
+}
+sandbox.App.ViewMenu = { setEnabled: function () {} }
 sandbox.App.fabSpeedDial = { setSelection: function () {} }
 sandbox.App.Drawer = { updatePath: function () {} }
 sandbox.App.BottomBar = { updateNavButtons: function () {} }
@@ -122,7 +155,7 @@ sandbox.App.DesktopSelection = {
   unionRect: function () { return null },
   pointInRect: function () { return false }
 }
-sandbox.App.DesktopGesture = { init: function () {} }
+sandbox.App.DesktopGesture = { init: function () {}, setCamera: function () {} }
 
 vm.createContext(sandbox)
 for (const f of ['namespace.js', 'desktop-nav.js', 'double-tap.js', 'desktop-selection.js', 'desktop-grid.js', 'layout-store.js', 'desktop-camera.js', 'desktop-gesture.js', 'clipboard.js', 'desktop.js']) {
@@ -166,6 +199,27 @@ const D = sandbox.App.Desktop
   // ── 越界防御 ──
   D.goForward()
   check(D.getCurPath() === 'docs', '栈尾越界前进保持当前（防御）')
+
+  // ── 上级目录（goUp）：docs → 根 ──
+  const upOk = D.goUp()
+  await D.refresh()
+  check(upOk === true && D.getCurPath() === '', 'goUp 从 docs 退回根')
+  check(D.canGoBack() === true, 'goUp 压栈导航：后退可回 docs')
+  check(D.canGoUp() === false, '根目录不可上（canGoUp=false）')
+
+  // ── goUp 到父文件夹（docs/sub → docs → 根）──
+  D.enterFolder('docs')
+  await D.refresh()
+  D.enterFolder('docs/sub')
+  await D.refresh()
+  check(D.getCurPath() === 'docs/sub', '进入 docs/sub')
+  const upOk2 = D.goUp()
+  await D.refresh()
+  check(upOk2 === true && D.getCurPath() === 'docs', 'goUp docs/sub → docs（父文件夹）')
+  check(D.canGoUp() === true, 'docs 仍可上（非根）')
+  D.goUp()
+  await D.refresh()
+  check(D.getCurPath() === '', 'goUp docs → 根')
 
   // ── 双击窗口接线：DoubleTap 在 handleTap 中被调用（命中测试桩验证流程） ──
   // 由于 handleTap 是内部函数，这里验证 App.DoubleTap 与 desktop 的依赖关系已建立

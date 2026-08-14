@@ -16,6 +16,9 @@
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <h1 id="app-title">Desktop</h1>
+    <button id="btn-view-menu" class="btn-view-menu" aria-label="排列与视图" aria-expanded="false">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+    </button>
   </header>
   <section class="app-content">
     <div id="desktop-viewport" class="desktop-viewport">
@@ -24,7 +27,6 @@
       </div>
       <div id="desktop-marquee" class="desktop-marquee"></div>
     </div>
-    <p id="status-text" class="status-text">初始化中...</p>
   </section>
 </main>
 
@@ -43,8 +45,8 @@
   <button class="bottom-bar-btn" aria-label="占位按钮 4">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
   </button>
-  <button class="bottom-bar-btn" aria-label="占位按钮 5">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  <button id="bb-btn-up" class="bottom-bar-btn" aria-label="上级目录" aria-disabled="true" disabled>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
   </button>
 </nav>
 
@@ -73,6 +75,25 @@
     </div>
   </div>
 </div>
+
+<!-- ===== 顶栏排列/视图菜单（子文件夹容器模式可用，根目录空间置灰） ===== -->
+<div id="view-menu-overlay" class="view-menu-overlay" aria-hidden="true"></div>
+<nav id="view-menu" class="view-menu" aria-hidden="true">
+  <div class="view-menu-section">
+    <div class="view-menu-label">排列方式</div>
+    <button class="view-menu-item" data-sort="name">按名称<i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="mtime">按修改日期<i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="type">按类型<i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="size">按大小<i class="view-menu-dir"></i></button>
+  </div>
+  <div class="view-menu-sep"></div>
+  <div class="view-menu-section">
+    <div class="view-menu-label">视图</div>
+    <button class="view-menu-item" data-view="grid">网格<i class="view-menu-check">✓</i></button>
+    <button class="view-menu-item" data-view="list">列表<i class="view-menu-check">✓</i></button>
+  </div>
+  <div class="view-menu-hint">打开文件夹后可用</div>
+</nav>
 
 <!-- ===== 左侧 Drawer 工具栏（汉堡呼出） ===== -->
 <div id="drawer-overlay" class="drawer-overlay"></div>

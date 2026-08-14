@@ -29,6 +29,10 @@ App.boot = function boot() {
   if (App.DrawerSwipe && typeof App.DrawerSwipe.init === 'function') {
     App.DrawerSwipe.init()
   }
+  // 顶栏排列/视图菜单（子文件夹容器模式可用，根目录置灰）
+  if (App.ViewMenu && typeof App.ViewMenu.init === 'function') {
+    App.ViewMenu.init()
+  }
   // 新建对话框（底栏加号弹出）
   if (App.CreateDialog && typeof App.CreateDialog.init === 'function') {
     App.CreateDialog.init()
@@ -66,6 +70,10 @@ App.onRootChanged = function onRootChanged() {
 App.handleSystemBack = function handleSystemBack() {
   if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()) {
     App.Drawer.close()
+    return true
+  }
+  if (App.ViewMenu && typeof App.ViewMenu.isOpen === 'function' && App.ViewMenu.isOpen()) {
+    App.ViewMenu.close()
     return true
   }
   if (App.BuildInfo && typeof App.BuildInfo.isOpen === 'function' && App.BuildInfo.isOpen()) {

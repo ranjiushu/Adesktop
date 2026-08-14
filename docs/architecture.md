@@ -38,6 +38,8 @@
 | `write(path, content)` | 写文本（原子：临时文件+rename） |
 | `mkdir(path)` / `delete(path)` | 目录/文件操作 |
 | `rename(old, new)` | 重命名/移动 |
+| `resolveUri(path)` | 文件 → WebView 可直接加载的 URI（content:// / file://），媒体流式访问用 |
+| `openExternal(path)` | 交外部应用打开（ACTION_VIEW + MIME + 读授权；无可用应用报错） |
 | `meta(path)` | 单文件元数据 |
 | `rootInfo(cb)` | 根目录信息 {rootName, mode: saf\|private} |
 | `requestRootAccess()` | 重新弹 SAF 目录选择器（FAB「切换根目录」） |

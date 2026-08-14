@@ -232,7 +232,7 @@ App.Desktop = (function () {
     refresh()
   }
 
-  // ── 打开：文件夹进入 / 文件打开（阶段 C 占位）──
+  // ── 打开：文件夹进入 / 文件打开（FileOpener 分派内部查看器或外部应用）──
   function openItem(full) {
     if (!full) return
     const item = state.items.filter(function (it) {
@@ -242,8 +242,14 @@ App.Desktop = (function () {
     clearSelection()
     if (item.isDir) {
       enterFolder(full)
+    } else if (App.FileOpener && typeof App.FileOpener.open === 'function') {
+      // 锚点：desktop 空间 = 文件世界坐标（Viewer 随画布平移）；
+      // folder 容器 = 无锚点（沉浸式占满内容区）。打开后立即按当前相机定位。
+      const anchor = isFolderView() ? null : (positions[full] || null)
+      App.FileOpener.open({ name: item.name, path: full }, anchor)
+      syncViewerCamera()
     } else if (App.toast) {
-      App.toast.show('打开文件（阶段 C 后续实现）')
+      App.toast.show('打开文件（查看器未就绪）')
     }
   }
 
@@ -260,16 +266,28 @@ App.Desktop = (function () {
   //   根 = 恢复根相机（无限画布）；folder = 重置 (0,0,1)（滚动到顶）
   function applyCameraForPath() {
     cancelCameraAnim()   // 目录切换即打断 Home 动画，避免动画覆盖新路径相机
+    // 目录切换 = 回到文件列表视图，关闭查看器（Viewer 属于当前目录上下文）
+    if (App.InternalViewer && typeof App.InternalViewer.close === 'function') {
+      App.InternalViewer.close()
+    }
     if (isFolderView()) {
       camera = App.DesktopCamera.create(0, 0, 1)
     } else {
       camera = rootCamera || App.DesktopCamera.create()
     }
+    syncViewerCamera()
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
       App.DesktopGesture.setCamera(camera)
     }
     if (App.ViewMenu && typeof App.ViewMenu.setEnabled === 'function') {
       App.ViewMenu.setEnabled(isFolderView())
+    }
+  }
+
+  // 查看器位置与相机同步：画布平移/缩放/飞行时 Viewer 随锚点移动（内部判 isOpen）
+  function syncViewerCamera() {
+    if (App.InternalViewer && typeof App.InternalViewer.syncCamera === 'function') {
+      App.InternalViewer.syncCamera(camera)
     }
   }
 
@@ -389,6 +407,7 @@ App.Desktop = (function () {
       if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
         App.DesktopGesture.setCamera(camera)
       }
+      syncViewerCamera()
       if (k >= 1) { _animRaf = null; return }
       _animRaf = _raf(frame)
     }
@@ -880,7 +899,10 @@ App.Desktop = (function () {
           { x: 0, y: c.y, zoom: 1 },
           viewportWidth(), state.canvasH, viewportWidth(), viewportHeight())
       },
-      onUpdate: function (c) { camera = c },
+      onUpdate: function (c) {
+        camera = c
+        syncViewerCamera()
+      },
       // 手势开始 → 打断进行中的 Home 平滑过渡（手势直控优先）
       onGestureStart: cancelCameraAnim,
       onHitTest: hitTest,

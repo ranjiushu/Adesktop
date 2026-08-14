@@ -6,6 +6,7 @@
 package com.example.desktop;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -525,5 +526,71 @@ public class FileBridge {
                 while ((n = fis.read(buf)) != -1) fos.write(buf, 0, n);
             }
         }
+    }
+
+    /* 文件 → WebView 可直接加载的 URI：SAF = content://，私有 = file://。
+     * 供前端 <img>/<video>/<audio>/iframe 流式访问媒体，避免大文件经 read 搬入 JS 内存。
+     * 仅限文件（目录拒绝）；路径校验与 resolve 一致。 */
+    @JavascriptInterface
+    public void resolveUri(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(path);
+                String uri;
+                if (resolved instanceof DocumentFile) {
+                    DocumentFile df = (DocumentFile) resolved;
+                    if (!df.isFile()) throw new IOException("非文件: " + path);
+                    uri = df.getUri().toString();
+                } else {
+                    File f = (File) resolved;
+                    if (!f.isFile()) throw new IOException("非文件: " + path);
+                    uri = Uri.fromFile(f).toString();
+                }
+                resolveOk(cbId, uri);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /* 交外部应用打开：ACTION_VIEW + 按扩展名推断 MIME + 读权限授权。
+     * 无可用应用时回调错误（前端 toast 提示）；必须 UI 线程 startActivity。 */
+    @JavascriptInterface
+    public void openExternal(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(path);
+                final Intent intent;
+                String name;
+                if (resolved instanceof DocumentFile) {
+                    DocumentFile df = (DocumentFile) resolved;
+                    if (!df.isFile()) throw new IOException("非文件: " + path);
+                    name = df.getName() == null ? "" : df.getName();
+                    intent = new Intent(Intent.ACTION_VIEW, df.getUri());
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } else {
+                    File f = (File) resolved;
+                    if (!f.isFile()) throw new IOException("非文件: " + path);
+                    name = f.getName();
+                    intent = new Intent(Intent.ACTION_VIEW, Uri.fromFile(f));
+                }
+                String mime = mimeFor(name);
+                if (mime != null && !mime.isEmpty()) {
+                    intent.setType(mime);
+                }
+                activity.runOnUiThread(() -> {
+                    try {
+                        activity.startActivity(intent);
+                        resolveOk(cbId, true);
+                    } catch (ActivityNotFoundException e) {
+                        resolveErr(cbId, "没有可打开该文件的应用");
+                    } catch (Exception e) {
+                        resolveErr(cbId, "无法打开: " + e.getMessage());
+                    }
+                });
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
     }
 }

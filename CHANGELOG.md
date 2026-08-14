@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 文件查看器（File Viewer）
+
+- **FileOpener 分派**（`file-opener.js`）：按扩展名选择 InternalViewer（内部查看）或
+  ExternalIntent（外部应用）；FileBridge 边界不变，只新增两个文件系统方法：
+  `resolveUri`（文件 → WebView 可直接加载的 URI，媒体流式访问，不搬入 JS 内存）+
+  `openExternal`（ACTION_VIEW 交外部应用，无可用应用报错提示）
+- **InternalViewer 通用组件**（`viewer.js` + `viewer.css`）：TXT 纯文本 / MD 基础渲染 /
+  JSON 可折叠树 / HTML 沙箱渲染 / SVG / 图片 / 视频 / 音频；内部预览失败提供
+  「用其他应用打开」兜底
+- **HTML 查看隔离 Java Bridge**：iframe srcdoc + sandbox（无 allow-same-origin → opaque
+  origin），脚本跨源访问 window.FileBridge 抛 SecurityError，无头实测 BRIDGE_BLOCKED
+- **Desktop 空间 Overlay 模式**：Viewer 不属于网格（不参与布局/排序/框选/碰撞），
+  以文件世界坐标为锚点，画布平移/缩放/飞行时随锚点移动（syncCamera），
+  尺寸接近屏幕尺度不随世界缩放；打开瞬间锚点不可见则居中
+- **folder 容器沉浸式**：同一 Viewer，无锚点 → 占满内容区全屏查看
+- **Markdown mini 渲染器**（`markdown.js`，纯函数零依赖）：标题/列表/代码块/粗斜体/链接/引用，
+  先整体转义再行内标记（防注入），javascript: 等危险协议链接拒绝
+- 返回键链路：查看器打开时返回键 = 关闭查看器（最优先），目录上下文保持
+
 ### 交互层
 
 - **Loading Feedback 系统**（独立组件 `App.Loading`，`loading.js` + `loading.css`）：

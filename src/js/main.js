@@ -69,10 +69,16 @@ App.onRootChanged = function onRootChanged() {
 }
 
 // 系统返回键（Android 壳 onKeyDown → evaluateJavascript 询问）：
-// 依次消费 Drawer → 整页面板 → 文件导航后退（子目录内逐级退出，Windows 式），
+// 依次消费 查看器 → Drawer → 整页面板 → 文件导航后退（子目录内逐级退出，Windows 式），
 // 均未消费返回 false（壳退出 App）。不依赖 pushState 是否被 WebView 计入 canGoBack。
 App.handleSystemBack = function handleSystemBack() {
-  if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()) {
+// 文件查看器优先：打开时返回键 = 关闭查看器（文件与画布状态恢复）
+if (App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
+    App.InternalViewer.isOpen()) {
+  App.InternalViewer.close()
+  return true
+}
+if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()) {
     App.Drawer.close()
     return true
   }

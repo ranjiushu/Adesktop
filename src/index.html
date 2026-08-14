@@ -26,6 +26,9 @@
         <div id="desktop-grid" class="desktop-grid"></div>
       </div>
       <div id="desktop-marquee" class="desktop-marquee"></div>
+      <!-- 文件查看器 Overlay Layer：位于画布之上，不属于网格/布局/框选/碰撞；
+           锚点模式随画布平移，immersive 模式占满内容区（见 viewer.js / viewer.css） -->
+      <div id="viewer-layer" class="viewer-layer" aria-hidden="true"></div>
     </div>
   </section>
 </main>

@@ -741,8 +741,8 @@ App.Desktop = (function () {
   function refresh() {
     const seq = ++_refreshSeq
     const path = state.curPath   // 快照：发起时的目标路径（list 用快照，不用动态 curPath）
-    if (App.Loading && typeof App.Loading.progress === 'function') {
-      App.Loading.progress('加载中', 0, 0)   // 不确定进度：total=0
+    if (App.Loading && typeof App.Loading.show === 'function') {
+      App.Loading.show({ title: '加载中' })   // 不确定进度：无 total → 条纹滑动
     }
     return App.FileAPI.rootInfo()
       .then(function (info) {
@@ -783,15 +783,15 @@ App.Desktop = (function () {
         if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
           App.BottomBar.updateNavButtons()
         }
-        // 目录加载完成：隐藏不确定进度条
-        if (App.Loading && typeof App.Loading.hideProgress === 'function') {
-          App.Loading.hideProgress()
+        // 目录加载完成：隐藏对话框
+        if (App.Loading && typeof App.Loading.hide === 'function') {
+          App.Loading.hide()
         }
       })
       .catch(function (err) {
         if (seq !== _refreshSeq) return
-        if (App.Loading && typeof App.Loading.hideProgress === 'function') {
-          App.Loading.hideProgress()
+        if (App.Loading && typeof App.Loading.hide === 'function') {
+          App.Loading.hide()
         }
         if (App.toast && typeof App.toast.show === 'function') {
           App.toast.show('读取失败: ' + err.message)

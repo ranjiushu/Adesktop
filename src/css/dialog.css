@@ -19,10 +19,11 @@
 }
 
 .dialog {
-  width: 100%;
-  max-width: 320px;
+  /* 统一弹窗宽：占屏幕 70%~80%（取 76vw），矩形卡片（小圆角） */
+  width: 76vw;
+  max-width: 420px;
   background: var(--color-surface);
-  border-radius: var(--radius-md);
+  border-radius: 4px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
   padding: var(--space-lg);
   transform: scale(0.92);

@@ -111,11 +111,12 @@ const sandbox = {
 sandbox.window = sandbox
 sandbox.App.bridge = { vibrate: function () {} }
 sandbox.App.toast = { show: function () {} }
+sandbox.App.Dialog = { open: function () {}, close: function () {} }
 sandbox.App.Loading = {
   showTag: function (text) { loadingCalls.tag.push(text) },
   hideTag: function () { loadingCalls.hideTag++ },
-  progress: function () {},
-  hideProgress: function () {}
+  show: function () {},
+  hide: function () {}
 }
 sandbox.App.Actions = {
   moveIntoFolder: function (entries, dirPath) { moveCalls.push({ entries: entries, dirPath: dirPath }) }

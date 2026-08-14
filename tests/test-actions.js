@@ -24,7 +24,7 @@ function check(cond, msg) {
 const calls = {
   list: [], mkdir: [], write: [], rename: [], copy: [], del: [],
   refresh: 0, clearSelection: 0, toasts: [], applyRename: 0,
-  progress: [], hideProgress: 0
+  show: [], hide: 0
 }
 let listResult = []       // FileAPI.list 返回
 let copyShouldReject = false
@@ -33,7 +33,7 @@ function resetCalls() {
   calls.list.length = 0; calls.mkdir.length = 0; calls.write.length = 0
   calls.rename.length = 0; calls.copy.length = 0; calls.del.length = 0
   calls.refresh = 0; calls.clearSelection = 0; calls.toasts.length = 0
-  calls.applyRename = 0; calls.progress.length = 0; calls.hideProgress = 0
+  calls.applyRename = 0; calls.show.length = 0; calls.hide = 0
 }
 
 const sandbox = {
@@ -70,8 +70,8 @@ sandbox.App.toast = {
   show: function (m) { calls.toasts.push(m) }
 }
 sandbox.App.Loading = {
-  progress: function (label, done, total) { calls.progress.push([label, done, total]) },
-  hideProgress: function () { calls.hideProgress++ }
+  show: function (opts) { calls.show.push(opts) },
+  hide: function () { calls.hide++ }
 }
 
 vm.runInContext(fs.readFileSync(path.join(SRC, 'actions.js'), 'utf8'), sandbox,
@@ -212,17 +212,37 @@ async function main() {
   }), 'paste copy 失败 → toast 含错误原因')
   check(calls.clearSelection === 1 && calls.refresh === 1, 'paste 失败也清选中 + refresh')
 
-  // ── 多文件进度：progress 推进 + 完成自动隐藏 ──
+  // ── 多文件进度：对话框双进度条推进 + 完成自动隐藏 ──
   resetCalls(); C.clear()
   C.set('copy', [{ path: 'a.txt', isDir: false }, { path: 'b.txt', isDir: false }])
   listResult = []
   A.paste()
   await tick()
-  check(calls.progress.length === 3, '多文件 paste → progress 3 次（0/2、1/2、2/2），实际 ' + calls.progress.length)
-  check(calls.progress[0][0] === '正在粘贴' && calls.progress[0][2] === 2,
-    'progress 起始 label=正在粘贴 total=2')
-  check(calls.progress[2][1] === 2, 'progress 末次 done=2（完成）')
-  check(calls.hideProgress === 1, '完成 → hideProgress 一次')
+  check(calls.show.length === 3, '多文件 paste → show 3 次（初始、1/2、2/2），实际 ' + calls.show.length)
+  check(calls.show[0].phaseTotal === 2 && calls.show[0].totalTotal === 2,
+    'copy 模式：单阶段双进度条（phase=total=2）')
+  check(calls.show[2].phaseDone === 2 && calls.show[2].totalDone === 2,
+    'copy 完成：phaseDone=2 totalDone=2')
+  check(calls.hide === 1, '完成 → hide 一次')
+
+  // ── 多文件移动（cut）：两阶段进度（复制 2/2 → 删除源 2/2）──
+  resetCalls(); C.clear()
+  C.set('cut', [{ path: 'a.txt', isDir: false }, { path: 'b.txt', isDir: false }])
+  listResult = []
+  A.paste()
+  await tick()
+  check(calls.show.length >= 5, 'cut 两阶段 → show ≥5 次（初始、复制1/2、复制2/2、删源1/2、删源2/2）')
+  const phaseLabels = calls.show.map(function (o) { return o.phaseLabel })
+  check(phaseLabels[1] === '复制' && phaseLabels[3] === '删除源',
+    '阶段标签切换：复制 → 删除源')
+  check(calls.show[2].phaseLabel === '复制' && calls.show[2].phaseDone === 2,
+    '复制阶段完成：phaseDone=2')
+  check(calls.show[4].phaseLabel === '删除源' && calls.show[4].phaseDone === 2,
+    '删除源阶段完成：phaseDone=2')
+  check(calls.show[4].totalDone === 4 && calls.show[4].totalTotal === 4,
+    '总进度 = 跨阶段整体 4/4')
+  check(calls.del.length === 2, 'cut 两阶段 → del 源 2 次')
+  check(calls.hide === 1, '移动完成 → hide 一次')
 
   // ── moveIntoFolder：移动语义（copy+del 源）+ 不清剪贴板 ──
   resetCalls(); C.clear()

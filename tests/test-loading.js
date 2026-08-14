@@ -1,5 +1,5 @@
-// loading.js 单元测试：进度条（progress/hideProgress）+ 实时标签（showTag/hideTag）
-// vm 加载真实 loading.js，DOM 桩记录 class/style/textContent 状态。
+// loading.js 单元测试：居中对话框（单/双进度条、不确定进度）+ 实时标签
+// vm 加载真实 loading.js + dialog.js（App.Dialog 显隐），DOM 桩记录 class 状态。
 // 用法: node test-loading.js [项目路径]   （由 run-tests.sh 调用）
 'use strict'
 
@@ -22,22 +22,6 @@ function check(cond, msg) {
 
 // ── DOM 桩：classList 记录 + style/textContent 可断言 ──
 function makeEl() {
-  return {
-    _classes: {},
-    style: {},
-    textContent: '',
-    _attrs: {},
-    classList: {
-      add: function (c) { this._p._classes[c] = true },
-      remove: function (c) { delete this._p._classes[c] },
-      contains: function (c) { return !!this._p._classes[c] }
-    },
-    setAttribute: function (k, v) { this._attrs[k] = v },
-    getAttribute: function (k) { return this._attrs[k] }
-  }
-}
-// classList 需要引用宿主（闭包改 this 指向），用工厂绑定
-function makeEl() {
   const el = { _classes: {}, style: {}, textContent: '', _attrs: {} }
   el.classList = {
     add: function (c) { el._classes[c] = true },
@@ -49,14 +33,28 @@ function makeEl() {
   return el
 }
 
-const progressEl = makeEl()
-const barEl = makeEl()
-const labelEl = makeEl()
+const dialogEl = makeEl()
+const titleEl = makeEl()
+const phaseEl = makeEl()
+const phaseLabelEl = makeEl()
+const phaseBarEl = makeEl()
+const phaseCountEl = makeEl()
+const totalEl = makeEl()
+const totalLabelEl = makeEl()
+const totalBarEl = makeEl()
+const totalCountEl = makeEl()
 const tagEl = makeEl()
 const els = {
-  'loading-progress': progressEl,
-  'loading-progress-bar': barEl,
-  'loading-progress-label': labelEl,
+  'loading-dialog': dialogEl,
+  'loading-dialog-title': titleEl,
+  'loading-phase': phaseEl,
+  'loading-phase-label': phaseLabelEl,
+  'loading-phase-bar': phaseBarEl,
+  'loading-phase-count': phaseCountEl,
+  'loading-total': totalEl,
+  'loading-total-label': totalLabelEl,
+  'loading-total-bar': totalBarEl,
+  'loading-total-count': totalCountEl,
   'drop-tag': tagEl
 }
 
@@ -66,56 +64,92 @@ const sandbox = {
   document: { getElementById: function (id) { return els[id] || null } }
 }
 vm.createContext(sandbox)
+// 先加载真实 dialog.js（App.Dialog 显隐基础），再加载 loading.js
+vm.runInContext(fs.readFileSync(path.join(SRC, 'dialog.js'), 'utf8'), sandbox,
+  { filename: 'dialog.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'loading.js'), 'utf8'), sandbox,
   { filename: 'loading.js' })
 
 const L = sandbox.App.Loading
 
-// ── 进度条：显示 + 文案 + 宽度 ──
-L.progress('正在移动', 0, 5)
-check(progressEl._classes['loading-visible'] === true, 'progress(0/5) → 显示进度条')
-check(labelEl.textContent === '正在移动 0/5', 'progress 文案「正在移动 0/5」（实际: ' + labelEl.textContent + '）')
-check(barEl.style.width === '0%', 'progress 0/5 → 宽度 0%')
+// ── 对话框：双进度条（移动 = 复制阶段 + 总进度）──
+L.show({
+  title: '正在移动',
+  phaseLabel: '复制', phaseDone: 0, phaseTotal: 5,
+  totalLabel: '总进度', totalDone: 0, totalTotal: 10
+})
+check(dialogEl._classes['dialog-overlay-visible'] === true, 'show 双进度 → 对话框可见')
+check(titleEl.textContent === '正在移动', '对话框标题「正在移动」')
+check(phaseEl._classes['loading-visible'] === true, '阶段进度条可见')
+check(phaseBarEl.style.width === '0%', '阶段 0/5 → 宽度 0%')
+check(phaseLabelEl.textContent === '复制 0/5', '阶段标签「复制 0/5」（实际: ' + phaseLabelEl.textContent + '）')
+check(phaseCountEl.textContent === '0/5', '阶段计数 0/5')
+check(totalEl._classes['loading-visible'] === true, '总进度条可见')
+check(totalBarEl.style.width === '0%' && totalCountEl.textContent === '0/10', '总进度 0/10')
 
-L.progress('正在移动', 2, 5)
-check(barEl.style.width === '40%', 'progress 2/5 → 宽度 40%')
-check(labelEl.textContent === '正在移动 2/5', 'progress 文案更新 2/5')
+// 阶段推进（复制 3/5）
+L.show({
+  title: '正在移动',
+  phaseLabel: '复制', phaseDone: 3, phaseTotal: 5,
+  totalLabel: '总进度', totalDone: 3, totalTotal: 10
+})
+check(phaseBarEl.style.width === '60%', '阶段 3/5 → 宽度 60%')
+check(phaseCountEl.textContent === '3/5', '阶段计数 3/5')
+check(totalBarEl.style.width === '30%', '总进度 3/10 → 宽度 30%')
+check(totalCountEl.textContent === '3/10', '总计数 3/10')
 
-// ── 进度条：完成自动隐藏 ──
-L.progress('正在移动', 5, 5)
-check(progressEl._classes['loading-visible'] !== true, 'progress(5/5) → 完成自动隐藏')
-check(barEl.style.width === '0%', '隐藏后宽度复位 0%')
-check(labelEl.textContent === '', '隐藏后文案清空')
+// 阶段切换（复制完成 → 删除源）
+L.show({
+  title: '正在移动',
+  phaseLabel: '删除源', phaseDone: 2, phaseTotal: 5,
+  totalLabel: '总进度', totalDone: 7, totalTotal: 10
+})
+check(phaseLabelEl.textContent === '删除源 2/5', '阶段切换「删除源 2/5」')
+check(totalBarEl.style.width === '70%', '总进度 7/10 → 70%')
 
-// ── hideProgress：显式隐藏（失败路径收尾）──
-L.progress('正在粘贴', 1, 5)
-L.hideProgress()
-check(progressEl._classes['loading-visible'] !== true, 'hideProgress → 隐藏')
-check(barEl.style.width === '0%' && labelEl.textContent === '', 'hideProgress 复位宽度与文案')
+// ── 对话框：单进度条（纯粘贴 copy，无删除源阶段）──
+L.show({
+  title: '正在粘贴',
+  phaseLabel: '复制', phaseDone: 1, phaseTotal: 3
+})
+check(dialogEl._classes['dialog-overlay-visible'] === true, 'show 单进度 → 对话框可见')
+check(phaseEl._classes['loading-visible'] === true, '单进度 → 阶段条可见')
+check(totalEl._classes['loading-visible'] !== true, '单进度 → 总进度条隐藏')
+check(phaseBarEl.style.width === '33%', '单进度 1/3 → 33%')
 
-// ── 实时标签：显示 ──
+// ── 对话框：不确定进度（目录切换/刷新，无总量）──
+L.show({ title: '加载中' })
+check(dialogEl._classes['dialog-overlay-visible'] === true, '不确定进度 → 对话框可见')
+check(phaseBarEl._classes['loading-indeterminate'] === true, '不确定进度 → 条纹动画 class')
+check(phaseBarEl.style.width === '100%', '不确定进度 → 宽度 100%（动画）')
+check(phaseLabelEl.textContent === '加载中', '不确定进度 → 阶段标签=标题')
+check(totalEl._classes['loading-visible'] !== true, '不确定进度 → 总进度条隐藏')
+
+// ── hide：复位 ──
+L.hide()
+check(dialogEl._classes['dialog-overlay-visible'] !== true, 'hide → 对话框隐藏')
+check(phaseBarEl._classes['loading-indeterminate'] !== true, 'hide → 清除条纹动画')
+check(phaseBarEl.style.width === '0%', 'hide → 阶段条宽度复位 0%')
+check(totalBarEl.style.width === '0%', 'hide → 总进度条宽度复位 0%')
+check(phaseCountEl.textContent === '' && totalCountEl.textContent === '', 'hide → 计数清空')
+
+// ── 实时标签（拖入文件夹提示，不进对话框）──
 L.showTag('文件将移入 报告 文件夹')
 check(tagEl._classes['loading-visible'] === true, 'showTag → 标签可见')
 check(tagEl.textContent === '文件将移入 报告 文件夹', 'showTag 文案（实际: ' + tagEl.textContent + '）')
-
-// ── 实时标签：更新（拖动中切换目标文件夹）──
 L.showTag('文件将移入 照片 文件夹')
 check(tagEl.textContent === '文件将移入 照片 文件夹', 'showTag 更新文案')
-
-// ── 实时标签：隐藏 ──
 L.hideTag()
 check(tagEl._classes['loading-visible'] !== true, 'hideTag → 隐藏')
 check(tagEl.textContent === '', 'hideTag 清空文案')
-
-// ── 空文本 showTag 等效 hide ──
 L.showTag('')
 check(tagEl._classes['loading-visible'] !== true, 'showTag("") → 等效隐藏')
 
 // ── DOM 缺失防御（不抛异常）──
 const savedGet = sandbox.document.getElementById
 sandbox.document.getElementById = function () { return null }
-L.progress('x', 1, 5)
-L.hideProgress()
+L.show({ title: 'x', phaseDone: 1, phaseTotal: 2 })
+L.hide()
 L.showTag('x')
 L.hideTag()
 sandbox.document.getElementById = savedGet

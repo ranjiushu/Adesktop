@@ -213,11 +213,27 @@
   </div>
 </div>
 
-<!-- ===== Loading Feedback：顶部进度条 + 实时标签（拖入文件夹提示） ===== -->
-<div id="loading-progress" class="loading-progress" aria-hidden="true">
-  <div id="loading-progress-bar"></div>
+<!-- ===== Loading Feedback：居中对话框（进度条）+ 实时标签（拖入文件夹提示） ===== -->
+<!-- 复用 dialog-overlay / dialog 结构（矩形 76vw），显隐经 App.Dialog 管理 -->
+<div id="loading-dialog" class="dialog-overlay loading-dialog" aria-hidden="true">
+  <div class="dialog loading-dialog-card">
+    <div id="loading-dialog-title" class="loading-dialog-title"></div>
+    <div id="loading-phase" class="loading-phase">
+      <div class="loading-row">
+        <span id="loading-phase-label" class="loading-row-label"></span>
+        <span id="loading-phase-count" class="loading-row-count"></span>
+      </div>
+      <div class="loading-track"><div id="loading-phase-bar" class="loading-bar"></div></div>
+    </div>
+    <div id="loading-total" class="loading-total">
+      <div class="loading-row">
+        <span id="loading-total-label" class="loading-row-label"></span>
+        <span id="loading-total-count" class="loading-row-count"></span>
+      </div>
+      <div class="loading-track"><div id="loading-total-bar" class="loading-bar"></div></div>
+    </div>
+  </div>
 </div>
-<div id="loading-progress-label" class="loading-progress-label" aria-hidden="true"></div>
 <div id="drop-tag" class="drop-tag" aria-hidden="true"></div>
 
 <script>

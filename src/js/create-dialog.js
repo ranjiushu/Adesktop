@@ -15,12 +15,7 @@ App.CreateDialog = (function () {
 
   function open() {
     if (_open) return
-    _open = true
-    let o = _getEl(OVERLAY_ID)
-    if (o) {
-      o.classList.add('dialog-overlay-visible')
-      o.setAttribute('aria-hidden', 'false')
-    }
+    _open = App.Dialog.open(OVERLAY_ID)
     let input = _getEl(INPUT_ID)
     if (input) {
       input.value = ''
@@ -37,11 +32,7 @@ App.CreateDialog = (function () {
   function close() {
     if (!_open) return
     _open = false
-    let o = _getEl(OVERLAY_ID)
-    if (o) {
-      o.classList.remove('dialog-overlay-visible')
-      o.setAttribute('aria-hidden', 'true')
-    }
+    App.Dialog.close(OVERLAY_ID)
     // 创建/取消后收起软键盘：释放输入框焦点（WebView 内核检测焦点离开自动隐藏 IME）
     let input = _getEl(INPUT_ID)
     if (input && document.activeElement === input) input.blur()

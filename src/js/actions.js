@@ -147,17 +147,29 @@ App.Actions = (function () {
   // 统一执行链：paste（当前目录）与 moveIntoFolder（指定文件夹）共用。
   // cb = {mode:'copy'|'cut', entries:[{path,isDir}]}；targetDir = 完整相对路径。
   // opts.keepClipboard = true 时（拖入文件夹）不清剪贴板（非用户剪贴板操作）。
-  // 多文件（total>1）时经 App.Loading 显示顶部进度条「正在移动/粘贴 n/N」。
+  // 分阶段进度：两阶段分离执行——先全部复制，再删除源（移动语义）。
+  //   - 阶段进度条：当前阶段内 done/total（复制 3/5 → 删除源 2/5）
+  //   - 总进度条：跨阶段整体 done/(total*阶段数)
+  // 两阶段分离的风险收益：复制阶段失败 → 源全部保留（可重试，不删源）；
+  // 删除阶段失败 → 目标已生成、源未删（重复，告警提示，不丢数据）。
   function _transfer(cb, targetDir, opts) {
     opts = opts || {}
     App.FileAPI.list(targetDir).then(function (items) {
       const plan = App.Clipboard.planPaste(cb, items, targetDir)
       if (!plan.length) return
-      const label = cb.mode === 'cut' ? '正在移动' : '正在粘贴'
-      if (App.Loading && typeof App.Loading.progress === 'function') {
-        App.Loading.progress(label, 0, plan.length)
+      const isMove = cb.mode === 'cut'
+      const title = isMove ? '正在移动' : '正在粘贴'
+      const totalSteps = plan.length * (isMove ? 2 : 1)
+      if (App.Loading && typeof App.Loading.show === 'function') {
+        App.Loading.show({
+          title: title,
+          phaseLabel: '复制',
+          phaseDone: 0, phaseTotal: plan.length,
+          totalLabel: '总进度',
+          totalDone: 0, totalTotal: totalSteps
+        })
       }
-      // 串行执行（写入路径失败必须告警，不吞错）
+      // 阶段 1：全部复制（失败 → 源不删，可重试）
       let chain = Promise.resolve()
       let copied = 0
       plan.forEach(function (job) {
@@ -165,38 +177,64 @@ App.Actions = (function () {
           return App.FileAPI.copy(job.src, job.dst)
         }).then(function () {
           copied++
-          if (App.Loading && typeof App.Loading.progress === 'function') {
-            App.Loading.progress(label, copied, plan.length)
-          }
-          // 剪切/移动模式：粘贴成功后删除源（移动语义）
-          if (cb.mode === 'cut') {
-            return App.FileAPI.del(job.src)
+          if (App.Loading && typeof App.Loading.show === 'function') {
+            App.Loading.show({
+              title: title,
+              phaseLabel: '复制',
+              phaseDone: copied, phaseTotal: plan.length,
+              totalLabel: '总进度',
+              totalDone: copied, totalTotal: totalSteps
+            })
           }
         })
       })
+      // 阶段 2（仅移动）：删除源
+      if (isMove) {
+        chain = chain.then(function () {
+          let deleted = 0
+          let delChain = Promise.resolve()
+          plan.forEach(function (job) {
+            delChain = delChain.then(function () {
+              return App.FileAPI.del(job.src)
+            }).then(function () {
+              deleted++
+              if (App.Loading && typeof App.Loading.show === 'function') {
+                App.Loading.show({
+                  title: title,
+                  phaseLabel: '删除源',
+                  phaseDone: deleted, phaseTotal: plan.length,
+                  totalLabel: '总进度',
+                  totalDone: plan.length + deleted, totalTotal: totalSteps
+                })
+              }
+            })
+          })
+          return delChain
+        })
+      }
       return chain.then(function () {
-        if (cb.mode === 'cut' && !opts.keepClipboard) App.Clipboard.clear()
-        if (App.Loading && typeof App.Loading.hideProgress === 'function') {
-          App.Loading.hideProgress()
+        if (isMove && !opts.keepClipboard) App.Clipboard.clear()
+        if (App.Loading && typeof App.Loading.hide === 'function') {
+          App.Loading.hide()
         }
-        App.toast.show((cb.mode === 'cut' ? '已移动 ' : '已粘贴 ') + copied + ' 项')
+        App.toast.show((isMove ? '已移动 ' : '已粘贴 ') + copied + ' 项')
         // Windows 原则：选中态脆弱——粘贴后源选中路径已失效（cut 源已删 / 目标已生成），
         // 清空选中 + 收起操作栏，避免「幽灵选中」残留
         App.Desktop.clearSelection()
         App.Desktop.refresh()
       }).catch(function (err) {
-        if (App.Loading && typeof App.Loading.hideProgress === 'function') {
-          App.Loading.hideProgress()
+        if (App.Loading && typeof App.Loading.hide === 'function') {
+          App.Loading.hide()
         }
-        App.toast.show('粘贴失败: ' + err.message + '（已成功 ' + copied + ' 项）')
+        App.toast.show((isMove ? '移动' : '粘贴') + '失败: ' + err.message + '（已成功 ' + copied + ' 项）')
         App.Desktop.clearSelection()
         App.Desktop.refresh()
       })
     }).catch(function (err) {
-      if (App.Loading && typeof App.Loading.hideProgress === 'function') {
-        App.Loading.hideProgress()
+      if (App.Loading && typeof App.Loading.hide === 'function') {
+        App.Loading.hide()
       }
-      App.toast.show('粘贴失败: ' + err.message)
+      App.toast.show((cb.mode === 'cut' ? '移动' : '粘贴') + '失败: ' + err.message)
     })
   }
 

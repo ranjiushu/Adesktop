@@ -1,6 +1,6 @@
 /* 重命名对话框：选中态操作栏「重命名」弹出。输入新名，确认后执行重命名。
  * 复用 create-dialog 的对话框样式（dialog.css）；预填原名 + 聚焦全选。
- * 依赖: namespace.js, utils.js, actions.js, toast.js
+ * 依赖: namespace.js, utils.js, actions.js, toast.js, dialog.js
  * 导出: App.RenameDialog
  * 触发: fab-speed-dial.js 路由 rename 动作
  */
@@ -18,11 +18,7 @@ App.RenameDialog = (function () {
     if (_open || !name) return
     _open = true
     _target = name
-    let o = _getEl(OVERLAY_ID)
-    if (o) {
-      o.classList.add('dialog-overlay-visible')
-      o.setAttribute('aria-hidden', 'false')
-    }
+    App.Dialog.open(OVERLAY_ID)
     let input = _getEl(INPUT_ID)
     if (input) {
       input.value = name
@@ -42,11 +38,7 @@ App.RenameDialog = (function () {
     if (!_open) return
     _open = false
     _target = null
-    let o = _getEl(OVERLAY_ID)
-    if (o) {
-      o.classList.remove('dialog-overlay-visible')
-      o.setAttribute('aria-hidden', 'true')
-    }
+    App.Dialog.close(OVERLAY_ID)
     let input = _getEl(INPUT_ID)
     if (input && document.activeElement === input) input.blur()
   }

@@ -41,6 +41,10 @@ App.boot = function boot() {
   if (App.RenameDialog && typeof App.RenameDialog.init === 'function') {
     App.RenameDialog.init()
   }
+  // IME 键盘适配（desktop:ime 事件 → 对话框上移）
+  if (App.ImeAdapter && typeof App.ImeAdapter.init === 'function') {
+    App.ImeAdapter.init()
+  }
   // 底部工具栏（加号 → 新建对话框，其余占位）
   if (App.BottomBar && typeof App.BottomBar.init === 'function') {
     App.BottomBar.init()

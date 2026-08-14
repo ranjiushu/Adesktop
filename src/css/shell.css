@@ -32,8 +32,8 @@ html, body {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   /* 顶部安全区（刘海屏/状态栏），沉浸式下由 Java 注入 --safe-top */
-  padding-top: env(safe-area-inset-top, 0px);
-  height: calc(var(--header-height) + env(safe-area-inset-top, 0px));
+  padding-top: var(--safe-top, 0px);
+  height: calc(var(--header-height) + var(--safe-top, 0px));
 }
 
 .app-header h1 {
@@ -68,5 +68,5 @@ html, body {
 
 /* 底部安全区：内容区让出底栏（屏高 1/10 = 10vh）+ 底栏安全区（--safe-bottom） */
 .app-shell {
-  padding-bottom: calc(10vh + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(10vh + var(--safe-bottom, 0px));
 }

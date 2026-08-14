@@ -7,7 +7,7 @@
 .mode-switch-fab {
   --fab-radius: 50%;
   position: fixed;
-  bottom: calc(12.5vh + 16px);
+  bottom: calc(12.5vh + 16px + var(--safe-bottom, 0px));
   right: 28px;
   z-index: 1500;
   width: 36px;

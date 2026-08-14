@@ -32,6 +32,14 @@
   transform: scale(1);
 }
 
+/* 键盘弹出（desktop:ime 事件 → .ime-open）：对话框整体上移到键盘上方。
+   数据源唯一：Java 侧 WindowInsets 注入的 --panel-bottom（键盘顶 + 10px）；
+   无键盘时保持 flex 居中，键盘弹/收由 insets 监听器在动画开始即注入终态。 */
+.dialog-overlay.ime-open {
+  align-items: flex-end;
+  padding-bottom: calc(var(--panel-bottom, 0px) + var(--space-lg));
+}
+
 .dialog-title {
   font-size: var(--font-size-lg);
   font-weight: 600;

@@ -14,6 +14,11 @@
 - 修复 API 30 以下设备启动闪退（VerifyError：直接引用 API 30 的
   WindowInsetsController，已统一改走 androidx 兼容类）
 
+### 构建与体积
+
+- release 开启 R8 裁剪 + shrinkResources：APK 1.49MB → 149KB（-89.7%）
+- build-local.sh 归档 release 产物（dev keystore 临时签名，发布前换正式）
+
 ## 0.2.0（2026-08-14）
 
 ### 交互层

@@ -64,6 +64,32 @@ n = V.jsonToNodes({ deep: { x: [1] } }, '')
 const deep = n.children[0]
 check(deep.key === 'deep' && deep.children[0].type === 'array', '嵌套层级递归')
 
+// ── 三模块映射：text / parsed / media ──
+check(V.moduleFor('text') === 'text', 'moduleFor: text → text')
+check(V.moduleFor('markdown') === 'parsed' && V.moduleFor('json') === 'parsed' && V.moduleFor('html') === 'parsed', 'moduleFor: md/json/html → parsed')
+check(V.moduleFor('image') === 'media' && V.moduleFor('video') === 'media' && V.moduleFor('audio') === 'media' && V.moduleFor('svg') === 'media', 'moduleFor: 图/视频/音频/svg → media')
+check(V.moduleFor('bogus') === null, 'moduleFor: 未知 → null')
+
+// ── Viewer 态卡片形状：portrait = 3:4 固定（text/parsed/audio）；auto = 原始比例（图/视频/svg）──
+check(V.cardIsPortrait('text') && V.cardIsPortrait('markdown') && V.cardIsPortrait('json') && V.cardIsPortrait('html') && V.cardIsPortrait('audio'), 'cardIsPortrait: 文本/解析/音频 → 3:4')
+check(!V.cardIsPortrait('image') && !V.cardIsPortrait('video') && !V.cardIsPortrait('svg'), 'cardIsPortrait: 图/视频/svg → 原始比例')
+
+// ── Viewer 态锚点：center = 视觉中心（text/parsed）；file = 文件位置（媒体）──
+check(V.anchorIsCenter('text') && V.anchorIsCenter('markdown') && V.anchorIsCenter('json') && V.anchorIsCenter('html'), 'anchorIsCenter: 文本/解析 → 视觉中心')
+check(!V.anchorIsCenter('image') && !V.anchorIsCenter('video') && !V.anchorIsCenter('audio') && !V.anchorIsCenter('svg'), 'anchorIsCenter: 媒体 → 文件位置')
+
+// ── cardSize34：3:4 竖版卡片（约束视口内，中心不变）──
+let s34 = V.cardSize34(412, 915)
+check(Math.abs(s34.w / s34.h - 3 / 4) < 0.01, 'cardSize34 保持 3:4 比例')
+check(s34.w <= 412 - 32 + 1 && s34.h <= 915 - 96 + 1, 'cardSize34 约束在视口内')
+s34 = V.cardSize34(100, 100)
+check(s34.w >= 200 && s34.h >= 160, 'cardSize34 下限钳制（MIN_W/MIN_H）')
+
+// ── visualCenter：相机视觉中心世界坐标 ──
+let vc = V.visualCenter({ x: 100, y: 50, zoom: 2 }, 412, 915)
+check(approx(vc.x, 100 + 412 / 4) && approx(vc.y, 50 + 915 / 4), 'visualCenter = 相机左上角 + 视口/(2·zoom)')
+check(V.visualCenter(null, 412, 915) === null, 'visualCenter 相机缺失 → null 降级')
+
 if (failures > 0) {
   console.error('  [FAIL] viewer 测试 ' + failures + ' 项失败')
   process.exit(1)

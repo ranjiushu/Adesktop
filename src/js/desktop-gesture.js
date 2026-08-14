@@ -67,7 +67,7 @@ App.DesktopGesture = (function () {
     if (sg.phase === 'pending') {
       const d = distance({ x: sg.startX, y: sg.startY }, { x: x, y: y })
       if (d > th) {
-        // 已选中 → 直接拿起移动（不必长按）；否则 → 框选
+        // 已选中 → 直接拿起移动（不必长按）；否则 → 框选（folder 容器同样框选，不引入滚动）
         if (sg.hitType === 'selected') {
           return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y } }
         }
@@ -154,6 +154,12 @@ App.DesktopGesture = (function () {
   function commit() {
     CAM.applyTo(_camera, _canvas)
     if (_onUpdate) _onUpdate(_camera)
+  }
+
+  // 相机钳制（folder 容器边界）：Desktop 提供 onClamp 回调，pan/zoom 每帧先钳制再应用，
+  // 保证 canvas transform 与 Desktop.camera 始终一致（防止内容拖出画布边界）
+  function _applyClamp(c) {
+    return (_cb && typeof _cb.onClamp === 'function') ? _cb.onClamp(c) : c
   }
 
   function syncMode() {
@@ -249,7 +255,7 @@ App.DesktopGesture = (function () {
       if (two.length < 2) return
       const curCentroid = centroid(_contacts)
       const curDist = distance(two[0], two[1])
-      _camera = panZoomStep(_camera, _prevCentroid, curCentroid, _prevDist, curDist)
+      _camera = _applyClamp(panZoomStep(_camera, _prevCentroid, curCentroid, _prevDist, curDist))
       _prevCentroid = curCentroid
       _prevDist = curDist
       commit()
@@ -292,6 +298,13 @@ App.DesktopGesture = (function () {
     syncMode()
   }
 
+  // 目录切换后同步相机（Desktop 改了 camera 引用，手势层必须拿到同一份；folder 边界同样钳制）
+  function setCamera(c) {
+    if (!c) return
+    _camera = _applyClamp(c)
+    commit()
+  }
+
   function init(opts) {
     opts = opts || {}
     _viewport = opts.viewport || document.getElementById('desktop-viewport')
@@ -308,7 +321,8 @@ App.DesktopGesture = (function () {
       onLongPress: opts.onLongPress || null,
       onDragStart: opts.onDragStart || null,
       onDrag: opts.onDrag || null,
-      onDrop: opts.onDrop || null
+      onDrop: opts.onDrop || null,
+      onClamp: opts.onClamp || null
     }
     _contacts = new Map()
     _mode = 'idle'
@@ -328,6 +342,7 @@ App.DesktopGesture = (function () {
 
   return {
     init: init,
+    setCamera: setCamera,
     distance: distance,
     centroid: centroid,
     modeAfter: modeAfter,

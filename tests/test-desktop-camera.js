@@ -93,6 +93,28 @@ check(pinchBad.x === 5 && pinchBad.y === 6 && pinchBad.zoom === 1, 'pinchBy prev
 const t = C.transform(C.create(10, 20, 2))
 check(approx(t.tx, -20) && approx(t.ty, -40) && t.zoom === 2, 'transform {10,20,2} → tx=-20,ty=-40')
 
+// ── clampToBounds（folder 容器有限画布）──
+// 世界 416x600，视口 400x500，zoom=1：可动范围 x∈[0,16] y∈[0,100]
+let cb = C.clampToBounds(C.create(8, 50, 1), 416, 600, 400, 500)
+check(cb.x === 8 && cb.y === 50, 'clampToBounds 范围内不动')
+cb = C.clampToBounds(C.create(-5, 50, 1), 416, 600, 400, 500)
+check(cb.x === 0, 'clampToBounds x 负 → 0')
+cb = C.clampToBounds(C.create(30, 50, 1), 416, 600, 400, 500)
+check(cb.x === 16, 'clampToBounds x 越右界 → 16（416-400）')
+cb = C.clampToBounds(C.create(8, -3, 1), 416, 600, 400, 500)
+check(cb.y === 0, 'clampToBounds y 负 → 0')
+cb = C.clampToBounds(C.create(8, 500, 1), 416, 600, 400, 500)
+check(cb.y === 100, 'clampToBounds y 越下界 → 100（600-500）')
+// 世界小于视口：可动范围 0，相机钉在原点（不出现负坐标空区）
+cb = C.clampToBounds(C.create(20, 30, 1), 300, 400, 400, 500)
+check(cb.x === 0 && cb.y === 0, 'clampToBounds 世界小于视口 → 钉在 (0,0)')
+// zoom=2 时世界可视范围减半：x∈[0, 416-200]=[0,216]
+cb = C.clampToBounds(C.create(300, 0, 2), 416, 600, 400, 500)
+check(cb.x === 216, 'clampToBounds zoom=2 越界 → 216（416-400/2）')
+// 保持 zoom 不变
+cb = C.clampToBounds(C.create(0, 0, 1.5), 416, 600, 400, 500)
+check(cb.zoom === 1.5, 'clampToBounds 不改变 zoom')
+
 if (failures > 0) {
   console.error('  [FAIL] desktop-camera 纯函数测试 ' + failures + ' 项失败')
   process.exit(1)

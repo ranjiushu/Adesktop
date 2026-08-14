@@ -59,6 +59,24 @@ App.DesktopCamera = (function () {
     return { x: c.x + ax * k, y: c.y + ay * k, zoom: zoom }
   }
 
+  // 有限画布钳制：相机视口不能越出世界边界 [0,0]-[worldW, worldH]。
+  // 世界小于视口时 max=0（相机固定原点，不出现负坐标空区）。
+  // folder 容器模式用：zoom 由调用方锁定，这里只钳位置。
+  function clampToBounds(camera, worldW, worldH, viewportW, viewportH) {
+    const c = camera || create()
+    const ww = num(worldW, 0)
+    const wh = num(worldH, 0)
+    const vw = num(viewportW, 0)
+    const vh = num(viewportH, 0)
+    const maxX = Math.max(0, ww - vw / c.zoom)
+    const maxY = Math.max(0, wh - vh / c.zoom)
+    return {
+      x: Math.min(Math.max(c.x, 0), maxX),
+      y: Math.min(Math.max(c.y, 0), maxY),
+      zoom: c.zoom
+    }
+  }
+
   // canvas transform 参数（配合 transform-origin: 0 0）
   function transform(camera) {
     const c = camera || create()
@@ -81,6 +99,7 @@ App.DesktopCamera = (function () {
     worldToScreen: worldToScreen,
     panBy: panBy,
     pinchBy: pinchBy,
+    clampToBounds: clampToBounds,
     transform: transform,
     applyTo: applyTo
   }

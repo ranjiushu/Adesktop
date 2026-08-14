@@ -71,6 +71,25 @@ const anchorAfter = C.screenToWorld(100, 100, zoomOnly)
 check(approx(anchorBefore.x, anchorAfter.x) && approx(anchorBefore.y, anchorAfter.y),
   'panZoomStep 缩放锚点世界坐标不动')
 
+// ── 单指 pending 分派（沿用 Desktop 语义：selected → 拿起 / icon+empty → 框选）──
+const plainOpts = { tapThreshold: 6 }
+let sg = G.singleDown(100, 100, 0, 'selected')
+let r2 = G.singleMove(sg, 130, 100, plainOpts)
+check(r2.sg.phase === 'dragmove' && r2.effect.type === 'drag-start',
+  '已选中拖动 → drag-start（直接拿起）')
+sg = G.singleDown(100, 100, 0, 'icon')
+r2 = G.singleMove(sg, 130, 100, plainOpts)
+check(r2.sg.phase === 'marquee' && r2.effect.type === 'marquee-start',
+  '未选中图标拖动 → marquee（框选）')
+sg = G.singleDown(100, 100, 0, 'empty')
+r2 = G.singleMove(sg, 130, 100, plainOpts)
+check(r2.sg.phase === 'marquee' && r2.effect.type === 'marquee-start',
+  '空白处拖动 → marquee（框选，folder 容器同样框选不滚动）')
+// 位移未超阈值 up → tap
+sg = G.singleDown(10, 10, 0, 'empty')
+const upTap = G.singleUp(sg, 12, 12, plainOpts)
+check(upTap.effect.type === 'tap', '小位移 up → tap（单击不受影响）')
+
 if (failures > 0) {
   console.error('  [FAIL] desktop-gesture 纯函数测试 ' + failures + ' 项失败')
   process.exit(1)

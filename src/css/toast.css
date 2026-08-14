@@ -1,8 +1,9 @@
 /* 轻量吐司：底部悬浮，短队列轮播 */
 .toast {
   position: fixed;
-  /* 底栏（屏高 1/8）+ 16px 间距，避免被底部工具栏遮挡；安全区由 Java 注入 --safe-bottom */
-  bottom: calc(12.5vh + 16px + var(--safe-bottom, 0px));
+  /* 底栏（屏高 1/10 = 10vh）+ 16px 间距，避免被底部工具栏遮挡。
+     底栏总高即 10vh（安全区内衬已含在底栏 padding 内），不重复叠加 --safe-bottom。 */
+  bottom: calc(10vh + 16px);
   left: 50%;
   transform: translateX(-50%) translateY(8px);
   z-index: 2000;

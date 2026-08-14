@@ -66,7 +66,10 @@ html, body {
   color: var(--color-text-secondary);
 }
 
-/* 底部安全区：内容区让出底栏（屏高 1/10 = 10vh）+ 底栏安全区（--safe-bottom） */
+/* 底部安全区：内容区让出底栏（屏高 1/10 = 10vh）。
+   底栏自身高度即 10vh（border-box，安全区内衬已含在其 padding 内，「总高不变」），
+   这里只让出底栏总高，不再重复叠加 --safe-bottom——否则底栏缩短后视口与底栏之间
+   会留下一块与安全区等高的空白（沉浸式设备 24px 级可见缝隙）。 */
 .app-shell {
-  padding-bottom: calc(10vh + var(--safe-bottom, 0px));
+  padding-bottom: 10vh;
 }

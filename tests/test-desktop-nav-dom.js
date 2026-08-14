@@ -30,7 +30,10 @@ function makeIconEl() {
       remove: function (c) { delete this._set[c] },
       contains: function (c) { return !!this._set[c] }
     },
-    style: {}, appendChild: function () {}, setAttribute: function () {}
+    style: {}, appendChild: function () {},
+    _attrs: {},
+    setAttribute: function (k, v) { this._attrs[k] = v },
+    getAttribute: function (k) { return this._attrs[k] }
   }
 }
 
@@ -108,6 +111,11 @@ sandbox.App.FileAPI = {
 sandbox.App.LayoutStore = {
   load: function () { return null },
   save: function () { return true }
+}
+sandbox.App.HomeStore = {
+  load: function () { return null },
+  saveHome: function () { return true },
+  saveFallback: function () { return true }
 }
 sandbox.App.ViewStore = {
   load: function () { return { viewStyle: 'grid', sortBy: 'name', sortDir: 1 } },
@@ -226,6 +234,19 @@ const D = sandbox.App.Desktop
   check(typeof sandbox.App.DoubleTap.hit === 'function', 'App.DoubleTap 已加载')
   check(typeof D.openItem === 'function' && typeof D.enterFolder === 'function', 'openItem/enterFolder 已导出')
   check(typeof D.goBack === 'function' && typeof D.goForward === 'function', 'goBack/goForward 已导出')
+
+  // ── 回归：Home 快照存在时，图标位置仍从 LayoutStore 恢复（曾把 icons 恢复误放进 if(!cam)） ──
+  sandbox.App.HomeStore.load = function () { return { home: { x: 5, y: 6, zoom: 2 } } }
+  sandbox.App.LayoutStore.load = function () {
+    return { version: 1, icons: { 'a.txt': { x: 500, y: 300 } }, camera: { x: 0, y: 0, zoom: 1 } }
+  }
+  createdIcons = []
+  D.initGesture()
+  await D.refresh()
+  const aIcon = createdIcons.filter(function (n) { return n.getAttribute('data-name') === 'a.txt' })[0]
+  check(!!aIcon, '有 Home 快照时根目录仍渲染 a.txt')
+  check(aIcon && aIcon.style.left === '500px' && aIcon.style.top === '300px',
+    '有 Home 快照时图标位置仍恢复（a.txt @ 500,300，实际 ' + (aIcon && aIcon.style.left) + ',' + (aIcon && aIcon.style.top) + '）')
 
   if (failures > 0) {
     console.error('  [FAIL] desktop-nav-dom 测试 ' + failures + ' 项失败')

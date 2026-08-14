@@ -228,6 +228,11 @@ App.DesktopGesture = (function () {
       _contacts.set(t.identifier, toLocal(t))
     }
     syncMode()
+    // 任何真实手势开始（单指/双指）都先通知上层：打断进行中的相机动画，
+    // 手势直控优先（如 Home 平滑过渡中途用户开始拖动/捏合，立即接管）
+    if (_mode !== 'idle' && _cb && typeof _cb.onGestureStart === 'function') {
+      _cb.onGestureStart()
+    }
     if (_mode === 'single') {
       const c = firstContact()
       let hitType = 'empty'
@@ -313,6 +318,7 @@ App.DesktopGesture = (function () {
     _onUpdate = opts.onUpdate || null
     _opts = opts
     _cb = {
+      onGestureStart: opts.onGestureStart || null,
       onHitTest: opts.onHitTest || null,
       onTap: opts.onTap || null,
       onMarqueeStart: opts.onMarqueeStart || null,

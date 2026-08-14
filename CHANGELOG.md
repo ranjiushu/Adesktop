@@ -4,13 +4,20 @@
 
 ### 交互层
 
-- Home 位置快照（底栏右 1 按钮）：长按记录当前桌面相机为快照，点按回到快照状态；
-  无快照时回默认视角（Drawer「设为默认视角」可设置），均未设置时回出厂视角 (0,0,1)
-- Home 仅桌面空间可用（子文件夹容器内禁用）；已记录快照时 Home 图标强调色提示
-- 修复：重新进入 Desktop 后启动相机未落在 Home 快照——启动相机优先级改为
-  Home 快照 > 默认视角 > 上次布局视角 > 出厂 (0,0,1)，根目录相机基准 = 启动视角
-- utils 新增 bindPressSplit：按钮长短按分流（长按 500ms / 提前抬起 = 短按），
-  Home 长按记录快照、点按回到快照即基于此
+- Home 位置快照（底栏右 1 按钮，utils 新增 bindPressSplit 长短按分流）：长按记录当前
+  桌面相机为快照，点按回到快照状态；无快照时回默认视角（Drawer「设为默认视角」可设置），
+  均未设置时回出厂视角 (0,0,1)。Home 仅桌面空间可用（子文件夹容器内禁用）；已记录快照时
+  Home 图标强调色提示。重启启动相机优先级：Home 快照 > 默认视角 > 上次布局视角 > 出厂，
+  根目录相机基准 = 启动视角。修复：设置快照后重启图标位置丢失回默认——initLayout 中
+  图标恢复误入「无快照」分支，改为无条件恢复（Home 快照只决定相机，不决定图标位置）；
+  test-desktop-nav-dom 补 HomeStore stub + 防回归断言，verify-home 补拖动持久化 E2E
+- Home 复位平滑飞行动画（van Wijk & Nuij 飞行曲线，Leaflet flyTo 同款数学）：单一连续
+  cosh/tanh 路径（先 zoom-out 后 zoom-in），无分段（不断续）、无骤停（不震）、数学上
+  屏幕内图标全程不出界（全量扫描 0px）；lerpCentered 锚定屏幕中心世界点 + 接收真实
+  时间比例 k（内部统一缓动），zoom 不变退化为 lerp；easeInOutCubic 起步/收尾斜率 0
+  （无弹射）；动画中手势/目录切换即打断（onGestureStart 回调），手势直控优先。
+  演进说明：曾用缓出曲线（起步弹射）、三段式（段切换断续）均被单一飞行曲线取代。
+  test-desktop-camera 补防出界复现案例 + 飞行均匀性断言，verify-home 补 zoom 变化 E2E
 - 沉浸式状态栏/导航栏（参考 LexiCull 方案）：edge-to-edge 内容延伸，状态栏/导航栏
   透明，安全区经 WindowInsets 注入 CSS 变量（safe-top / safe-bottom / panel-bottom）
 - 系统栏图标明暗由壳层统一控制（浅色主题 → 深色图标），手势临时栏

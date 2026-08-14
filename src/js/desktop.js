@@ -14,6 +14,21 @@ App.Desktop = (function () {
   const ICON_W = 84
   const ICON_H = 76
   const DOUBLE_TAP_MS = 300   // 双击窗口（interaction.md §7）
+  const HOME_ANIM_MS = 400    // Home 平滑过渡时长（easeInOutCubic 缓入缓出）
+
+  // RAF 驱动（无 RAF 环境兜底 setTimeout ~16ms）
+  function _raf(cb) {
+    if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(cb)
+    return setTimeout(function () { cb() }, 16)
+  }
+  function _caf(id) {
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id)
+    else clearTimeout(id)
+  }
+  function _now() {
+    return (typeof performance === 'object' && typeof performance.now === 'function')
+      ? performance.now() : Date.now()
+  }
 
   let state = {
     rootName: '…',
@@ -244,6 +259,7 @@ App.Desktop = (function () {
   // 目录切换后的相机与手势策略：
   //   根 = 恢复根相机（无限画布）；folder = 重置 (0,0,1)（滚动到顶）
   function applyCameraForPath() {
+    cancelCameraAnim()   // 目录切换即打断 Home 动画，避免动画覆盖新路径相机
     if (isFolderView()) {
       camera = App.DesktopCamera.create(0, 0, 1)
     } else {
@@ -335,10 +351,45 @@ App.Desktop = (function () {
     } else if (data && data.fallback) {
       target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom)
     }
-    camera = target
-    if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
-      App.DesktopGesture.setCamera(camera)
+    animateCameraTo(target)
+  }
+
+  // ── 相机平滑过渡（Home 复位用，可被手势/目录切换打断）──
+  let _animRaf = null
+
+  function cancelCameraAnim() {
+    if (_animRaf !== null) {
+      _caf(_animRaf)
+      _animRaf = null
     }
+  }
+
+  // 从当前相机平滑飞行到 target（van Wijk & Nuij，Leaflet flyTo 同款）；动画中再次调用会从当前位置重新起播。
+  // 手势开始（onGestureStart）与目录切换（applyCameraForPath）都会打断，
+  // 保证「动画永不与手势抢相机」——用户一碰就归手势直控。
+  // lerpCentered 契约：收真实时间比例 k（内部统一缓动，调用方不得预缓动）——
+  // 曾因预缓动传入导致段边界错位（真机「震感」）。zoom 变化走单一连续飞行曲线
+  // （无分段断续）；zoom 不变退化为与 lerp 一致（纯平移动画不受影响）。
+  function animateCameraTo(target, durationMs) {
+    cancelCameraAnim()
+    const from = { x: camera.x, y: camera.y, zoom: camera.zoom }
+    const dur = (durationMs && durationMs > 0) ? durationMs : HOME_ANIM_MS
+    const vw = viewportWidth()
+    const vh = viewportHeight()
+    const t0 = _now()
+    function frame() {
+      const k = Math.min(1, (_now() - t0) / dur)
+      // lerpCentered 收真实时间比例 k（内部统一缓动 + 按 k 分段）——
+      // 不得预缓动传入，否则段边界错位致平移段被压缩（真机「震感」）
+      const c = App.DesktopCamera.lerpCentered(from, target, k, vw, vh)
+      camera = c
+      if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
+        App.DesktopGesture.setCamera(camera)
+      }
+      if (k >= 1) { _animRaf = null; return }
+      _animRaf = _raf(frame)
+    }
+    _animRaf = _raf(frame)
   }
 
   // ── 手势回调（世界坐标）──
@@ -588,9 +639,17 @@ App.Desktop = (function () {
   }
 
   // 加载布局（位置 + 相机视角）+ 视图偏好，无数据/损坏回退默认
-  // 启动相机优先级：Home 快照 > 默认视角 > 上次布局视角 > 出厂 (0,0,1)。
-  // Home = Camera 的默认起点（空间锚点）：设置过快照后，每次进入桌面空间都落在快照位
+  // 图标位置恢复无条件执行（与相机优先级无关）：自由摆放位置来自 LayoutStore，
+  // Home 快照只决定启动相机，绝不决定图标位置——否则设置快照后重启会丢摆放
   function initLayout() {
+    const saved = App.LayoutStore.load()
+    if (saved && saved.icons) {
+      Object.keys(saved.icons).forEach(function (key) {
+        positions[key] = saved.icons[key]
+      })
+    }
+    // 启动相机：Home 快照 > 默认视角 > 上次布局视角 > 出厂 (0,0,1)。
+    // Home = Camera 的默认起点（空间锚点）：设置过快照后，每次进入桌面空间都落在快照位
     let cam = null
     if (App.HomeStore) {
       const home = App.HomeStore.load()
@@ -600,16 +659,8 @@ App.Desktop = (function () {
         cam = App.DesktopCamera.create(home.fallback.x, home.fallback.y, home.fallback.zoom)
       }
     }
-    if (!cam) {
-      const saved = App.LayoutStore.load()
-      if (saved && saved.icons) {
-        Object.keys(saved.icons).forEach(function (key) {
-          positions[key] = saved.icons[key]
-        })
-      }
-      if (saved && saved.camera) {
-        cam = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
-      }
+    if (!cam && saved && saved.camera) {
+      cam = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
     }
     camera = cam || App.DesktopCamera.create()
     const prefs = App.ViewStore.load()
@@ -669,6 +720,8 @@ App.Desktop = (function () {
           viewportWidth(), state.canvasH, viewportWidth(), viewportHeight())
       },
       onUpdate: function (c) { camera = c },
+      // 手势开始 → 打断进行中的 Home 平滑过渡（手势直控优先）
+      onGestureStart: cancelCameraAnim,
       onHitTest: hitTest,
       onTap: handleTap,
       onMarqueeStart: handleMarqueeStart,

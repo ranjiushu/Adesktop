@@ -120,7 +120,12 @@ async function main() {
         window.__fbResolve(cb, { ok: true, data: { rootName: 'mock', displayPath: '/mock', mode: 'mock' } })
       },
       list: function (p, cb) {
-        const items = p ? [] : [{ name: 'docs', isDir: true, size: 0, mtime: 0 }]
+        const items = p ? [] : [
+          { name: 'docs', isDir: true, size: 0, mtime: 0 },
+          { name: 'a.txt', isDir: false, size: 10, mtime: 0 },
+          { name: 'b.txt', isDir: false, size: 20, mtime: 0 },
+          { name: 'c.txt', isDir: false, size: 30, mtime: 0 }
+        ]
         window.__fbResolve(cb, { ok: true, data: items })
       }
     }
@@ -192,7 +197,7 @@ async function main() {
   if (toast1.indexOf('已记录 Home 视角') >= 0) pass('长按 toast: ' + toast1)
   else fail('长按 toast 断言', toast1)
 
-  // ── 4. 再次平移偏离 → 点按 Home → 相机回到快照 ──
+  // ── 4. 再次平移偏离 → 点按 Home → 相机平滑过渡到快照（中间态 + 终态） ──
   const tSnap = parseTransform(await canvasTransform(page))
   await pan(client, vp.x, vp.y + 200, 80, 0)
   const tAway = parseTransform(await canvasTransform(page))
@@ -200,11 +205,96 @@ async function main() {
   else fail('再次平移偏离断言', JSON.stringify(tAway))
 
   await sleep(1500)  // 等 toast1 过期，避免干扰后续 toast 断言
-  await tap(client, homeRect.x, homeRect.y, 60)   // 短按 = 回 Home
+  // 点按 Home（手动序列：tap() 内置 300ms 等待会错过 400ms 动画中段）
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: homeRect.x, y: homeRect.y }] })
+  await sleep(60)
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await sleep(100)                                // 动画中段采样（k≈0.25，easeInOutCubic 已推进 ~6%，仍严格介于两端）
+  const tMid = parseTransform(await canvasTransform(page))
+  // 中间态：位于偏离态与快照态之间（非瞬切），且尚未到达终点
+  const between = tMid && (tMid.tx - tSnap.tx) * (tMid.tx - tAway.tx) < 0 &&
+    Math.abs(tMid.tx - tSnap.tx) > 1 && Math.abs(tMid.tx - tAway.tx) > 1
+  if (between) pass('动画中间态：tx=' + tMid.tx.toFixed(1) + ' 介于偏离 ' + tAway.tx.toFixed(1) + ' 与快照 ' + tSnap.tx.toFixed(1) + ' 之间')
+  else fail('动画中间态断言', 'away=' + JSON.stringify(tAway) + ' mid=' + JSON.stringify(tMid) + ' snap=' + JSON.stringify(tSnap))
+  await sleep(500)                                // 等动画（400ms）结束
   const tBack = parseTransform(await canvasTransform(page))
   const okBack = tBack && Math.abs(tBack.tx - tSnap.tx) < 1 && Math.abs(tBack.ty - tSnap.ty) < 1 && Math.abs(tBack.s - tSnap.s) < 0.01
-  if (okBack) pass('点按 Home → 相机回到快照（tx=' + tBack.tx.toFixed(1) + ', zoom=' + tBack.s.toFixed(2) + '）')
+  if (okBack) pass('点按 Home → 动画结束后回到快照（tx=' + tBack.tx.toFixed(1) + ', zoom=' + tBack.s.toFixed(2) + '）')
   else fail('回到快照断言', 'snap=' + JSON.stringify(tSnap) + ' back=' + JSON.stringify(tBack))
+
+  // ── 4b. 动画中手势打断：tap Home 后立即双指平移 → 相机跟随手指，不被动画拉回 ──
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: homeRect.x, y: homeRect.y }] })
+  await sleep(60)
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await sleep(100)                                // 动画进行中
+  await pan(client, vp.x, vp.y + 200, 60, 0)      // 手势接管 → 应打断动画
+  const tInterrupt = parseTransform(await canvasTransform(page))
+  await sleep(600)                                // 若动画未被取消，此处会被拉回 Home 目标
+  const tAfter = parseTransform(await canvasTransform(page))
+  const okInterrupt = tInterrupt && tAfter && Math.abs(tAfter.tx - tInterrupt.tx) < 1
+  if (okInterrupt) pass('动画中手势打断：相机停在手势位置（tx=' + tAfter.tx.toFixed(1) + '），无回拉')
+  else fail('手势打断断言', 'interrupt=' + JSON.stringify(tInterrupt) + ' after=' + JSON.stringify(tAfter))
+
+  // ── 4c. zoom 变化回 Home：缩小场景动画全程图标不出界（防「甩出屏幕再拉回」）──
+  // 背景：同进度插值（zoom 与屏幕中心点共用同一缓动）时图标屏幕位置 = (P-W)·z 中途
+  // 出现极值，边缘图标被推出视口再拉回（单测扫描复现出界 120px）。三段式修复后
+  // 全程不出界。本场景：捏合放大偏离（zoom 2.5）→ 点按 Home（快照 zoom 1.60）→
+  // 动画 400ms 内逐帧采样所有图标矩形，断言中心点始终在 viewport 内。
+  await pan(client, vp.x, vp.y + 200, 160, 0)      // 大幅平移偏离
+  await pinchIn(client, vp.x, vp.y + 200)          // 捏合放大（zoom 2.5）
+  await sleep(400)
+  const tZoomed = parseTransform(await canvasTransform(page))
+  // 动画前基线：记录各图标中心点（起点）
+  const basePos = await page.evaluate(() => {
+    const vp = document.getElementById('desktop-viewport').getBoundingClientRect()
+    const out = {}
+    document.querySelectorAll('.desktop-icon').forEach(function (el) {
+      const r = el.getBoundingClientRect()
+      out[el.getAttribute('data-name')] = { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    })
+    return { vp: { l: vp.left, t: vp.top, r: vp.right, b: vp.bottom }, icons: out }
+  })
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: homeRect.x, y: homeRect.y }] })
+  await sleep(60)
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  const zoomAnim = await page.evaluate(async (base) => {
+    const vp = base.vp
+    const inVP = (x, y) => x >= vp.l && x <= vp.r && y >= vp.t && y <= vp.b
+    // 起点在视口内的图标（动画中应始终不出界；起点已出界的图标不参与断言）
+    const tracked = Object.keys(base.icons).filter(function (n) {
+      return inVP(base.icons[n].x, base.icons[n].y)
+    })
+    const worst = { d: 0, name: '', x: 0, y: 0 }
+    const t0 = performance.now()
+    while (performance.now() - t0 < 500) {          // 覆盖 400ms 动画全程
+      document.querySelectorAll('.desktop-icon').forEach(function (el) {
+        const n = el.getAttribute('data-name')
+        if (tracked.indexOf(n) < 0) return
+        const r = el.getBoundingClientRect()
+        const cx = r.left + r.width / 2
+        const cy = r.top + r.height / 2
+        const d = Math.max(0, vp.l - cx, cx - vp.r, vp.t - cy, cy - vp.b)
+        if (d > worst.d) {
+          worst.d = d
+          worst.name = n
+          worst.x = Math.round(cx)
+          worst.y = Math.round(cy)
+        }
+      })
+      await new Promise(r => setTimeout(r, 16))
+    }
+    return worst
+  }, basePos)
+  if (tZoomed && tZoomed.s > snap.home.zoom + 0.1) {
+    if (zoomAnim.d === 0) {
+      pass('zoom 变化回 Home 动画中图标不出界（zoom ' + tZoomed.s.toFixed(2) + ' → 快照 ' + snap.home.zoom.toFixed(2) + '）')
+    } else {
+      fail('zoom 变化图标出界', zoomAnim.name + ' 中心 (' + zoomAnim.x + ',' + zoomAnim.y + ') 越界 ' + zoomAnim.d.toFixed(0) + 'px')
+    }
+  } else {
+    fail('zoom 变化场景构造断言', 'tZoomed=' + JSON.stringify(tZoomed) + ' snap=' + snap.home.zoom)
+  }
+  await sleep(700)                                 // 等动画结束，避免影响后续场景
 
   // ── 5. Drawer「设为默认视角」→ fallback 写入且 home 保留 ──
   await sleep(1500)  // 等上一个 toast 过期
@@ -266,6 +356,40 @@ async function main() {
     Math.abs(tAfterReload3.tx) < 1 && Math.abs(tAfterReload3.ty) < 1 && Math.abs(tAfterReload3.s - 1) < 0.01
   if (okReloadDefault) pass('无快照/默认视角重新进入 → 启动出厂 (0,0,1)')
   else fail('重新进入出厂断言', JSON.stringify(tAfterReload3))
+
+  // ── 5c. 图标位置持久化：拖动 docs → reload → 位置保持（曾因 HomeStore 快照分支丢恢复） ──
+  const docsIcon = await rect('[data-name="docs"]')
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: docsIcon.x, y: docsIcon.y }] })
+  await sleep(600)   // 长按拿起（500ms 触发）
+  for (let i = 1; i <= 10; i++) {
+    await sleep(16)
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: docsIcon.x + 42 * i / 10, y: docsIcon.y + 90 * i / 10 }]
+    })
+  }
+  await sleep(16)
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await sleep(300)
+  const layoutAfter = await page.evaluate(() => {
+    try { return JSON.parse(localStorage.getItem('desktop.layout.v1')) } catch (e) { return null }
+  })
+  const docsPos = layoutAfter && layoutAfter.icons && layoutAfter.icons.docs
+  if (docsPos && (docsPos.x !== 16 || docsPos.y !== 16)) pass('拖动后布局已持久化（docs @ ' + docsPos.x + ',' + docsPos.y + '）')
+  else fail('拖动持久化断言', JSON.stringify(docsPos))
+
+  await page.reload({ waitUntil: 'networkidle0' })
+  await sleep(1200)
+  const docsAfterReload = await page.evaluate(() => {
+    const el = document.querySelector('[data-name="docs"]')
+    return el ? { left: el.style.left, top: el.style.top } : null
+  })
+  if (docsPos && docsAfterReload &&
+      parseInt(docsAfterReload.left) === docsPos.x && parseInt(docsAfterReload.top) === docsPos.y) {
+    pass('重新进入 → docs 图标位置保持（' + docsAfterReload.left + ',' + docsAfterReload.top + '）')
+  } else {
+    fail('图标位置保持断言', 'expect=' + JSON.stringify(docsPos) + ' got=' + JSON.stringify(docsAfterReload))
+  }
 
   // ── 6. 零 pageerror ──
   if (pageErrors.length === 0) pass('全程零 pageerror')

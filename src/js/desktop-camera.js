@@ -14,6 +14,10 @@ App.DesktopCamera = (function () {
     return (typeof v === 'number' && isFinite(v)) ? v : d
   }
 
+  function clamp01(v) {
+    return Math.min(Math.max(v, 0), 1)
+  }
+
   function create(x, y, zoom) {
     return {
       x: num(x, 0),
@@ -26,6 +30,112 @@ App.DesktopCamera = (function () {
   function clampZoom(z) {
     if (typeof z !== 'number' || Number.isNaN(z)) return 1
     return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
+  }
+
+  // 缓入缓出三次曲线：k∈[0,1] → [0,1]，起步/收尾斜率 0，中段最快（Home 平滑过渡用，可单测）。
+  // 曾用缓出曲线（easeOutCubic）：起步即全速（k=0 斜率最大）→ 视觉「弹射/甩」，
+  // 前 100ms 走完 58% 路程，且 RAF 首帧延迟会被放大。缓入缓出无起步突跳，对称 f(0.5)=0.5。
+  function easeInOutCubic(k) {
+    const t = Math.min(Math.max(k, 0), 1)
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+  }
+
+  // 相机线性插值：from/to 各字段（x/y/zoom）按 k∈[0,1] 过渡，k 越界钳制。
+  // from 缺失时用默认相机起步（防御）。zoom 端点已 clamp，中间值必在端点之间。
+  function lerp(from, to, k) {
+    const f = from || create()
+    const t = to || create()
+    const ck = Math.min(Math.max(k, 0), 1)
+    return {
+      x: f.x + (t.x - f.x) * ck,
+      y: f.y + (t.y - f.y) * ck,
+      zoom: f.zoom + (t.zoom - f.zoom) * ck
+    }
+  }
+
+  // 锚定屏幕中心的相机插值（相机飞行标准做法：插值屏幕中心世界点，而非相机左上角）。
+  // 原理：屏幕中心世界点 = (c.x + vw/(2·zoom), c.y + vh/(2·zoom))。先让该点按 k 走，
+  // 再由 zoom 反解相机位置——zoom 变化时内容绕屏幕中心缩放，轨迹不弯曲。
+  // zoom 不变时退化为普通 lerp（数学上严格一致），是 lerp 的超集。
+  // 视口尺寸非法（0/NaN）时退化为 lerp（防御）。
+  //
+  // 契约：k = 真实时间比例 [0,1]，内部统一缓动（调用方不得预缓动）。
+  // 曾因调用方预缓动 + 段边界比较缓动值 ck，段2 平移被压缩到 18% 时间（72ms 内急冲
+  // 65% 路程后骤停）——真机感知「震感」；且单测直传进度与生产契约不一致，防震测试失效。
+  //
+  // 平滑飞行（van Wijk & Nuij，Leaflet flyTo 同款数学，防甩/防震/防断续）：
+  // 同进度插值（zoom 与屏幕中心点共用同一缓动）时，图标屏幕位置 = (P-W)·z 是 k 的
+  // 二次函数——中途出现比起终点更大的极值，屏幕边缘图标被推出视口再拉回（扫描复现：
+  // zoom 0.5→2 + 平移 400 世界单位出界 120px；2→0.5 对称案例 30px）。zoom 变化时
+  // 改为单一连续飞行曲线：center 沿 tanh 曲线（先 zoom-out 再 zoom-in），zoom 沿
+  // cosh 曲线同步协调——无分段（不断续）、无骤停（不震）、数学上图标不出界（全量
+  // 扫描 0px）。zoom 不变时走 ck 原逻辑（退化一致）。
+  // 双曲函数：sinh/cosh/tanh（叶利夫/Mapbox flyTo 同源）。
+  function _sinh(n) { return (Math.exp(n) - Math.exp(-n)) / 2 }
+  function _cosh(n) { return (Math.exp(n) + Math.exp(-n)) / 2 }
+  function _tanh(n) { return _sinh(n) / _cosh(n) }
+
+  // 飞行路径解算（Leaflet _flyTo 同款）：返回 k∈[0,1] → {x, y, zoom}
+  // 世界坐标 + 连续 zoom；w0/w1 = 屏幕基准尺寸（w 大 = zoom 小 = 视野大）
+  function flightPath(f, t, w, h) {
+    const W0x = f.x + w / (2 * f.zoom)
+    const W0y = f.y + h / (2 * f.zoom)
+    const W1x = t.x + w / (2 * t.zoom)
+    const W1y = t.y + h / (2 * t.zoom)
+    const w0 = Math.max(w, h)
+    const w1 = w0 * (f.zoom / t.zoom)
+    const u1 = Math.hypot(W1x - W0x, W1y - W0y) * f.zoom || 1
+    const rho = 1.42
+    const rho2 = rho * rho
+    function r(i) {
+      const s1 = i ? -1 : 1
+      const s2 = i ? w1 : w0
+      const t1 = w1 * w1 - w0 * w0 + s1 * rho2 * rho2 * u1 * u1
+      const b1 = 2 * s2 * rho2 * u1
+      const b = t1 / b1
+      const sq = Math.sqrt(b * b + 1) - b
+      return sq < 0.000000015 ? -18 : Math.log(sq)  // 浮点精度兜底（Leaflet 同款）
+    }
+    const r0 = r(0)
+    function wf(s) { return w0 * (_cosh(r0) / _cosh(r0 + rho * s)) }
+    function uf(s) { return w0 * (_cosh(r0) * _tanh(r0 + rho * s) - _sinh(r0)) / rho2 }
+    const S = (r(1) - r0) / rho
+    return function frame(k) {
+      const s = (1 - Math.pow(1 - k, 1.5)) * S   // easeOut 弧长参数化（Leaflet 同款）
+      const fu = uf(s) / u1
+      const z = f.zoom * w0 / wf(s)
+      return {
+        x: W0x + (W1x - W0x) * fu - w / (2 * z),
+        y: W0y + (W1y - W0y) * fu - h / (2 * z),
+        zoom: z
+      }
+    }
+  }
+
+  const ANIM_EPS = 1e-9   // zoom 差异判定阈值
+
+  function lerpCentered(from, to, k, vw, vh) {
+    const f = from || create()
+    const t = to || create()
+    const ck = easeInOutCubic(clamp01(k))
+    const w = num(vw, 0)
+    const h = num(vh, 0)
+    if (!(w > 0) || !(h > 0)) return lerp(from, to, k)
+    // 屏幕中心世界点（from/to 两端）
+    const fx = f.x + w / (2 * f.zoom)
+    const fy = f.y + h / (2 * f.zoom)
+    const tx = t.x + w / (2 * t.zoom)
+    const ty = t.y + h / (2 * t.zoom)
+    const zoomSame = Math.abs(t.zoom - f.zoom) < ANIM_EPS
+    if (zoomSame) {
+      // 退化：zoom 不变 → 与 lerp(from, to, easeInOutCubic(k)) 数值一致
+      return {
+        x: fx + (tx - fx) * ck - w / (2 * f.zoom),
+        y: fy + (ty - fy) * ck - h / (2 * f.zoom),
+        zoom: f.zoom
+      }
+    }
+    return flightPath(f, t, w, h)(clamp01(k))
   }
 
   // 屏幕 → 世界
@@ -95,6 +205,9 @@ App.DesktopCamera = (function () {
     ZOOM_MAX: ZOOM_MAX,
     create: create,
     clampZoom: clampZoom,
+    easeInOutCubic: easeInOutCubic,
+    lerp: lerp,
+    lerpCentered: lerpCentered,
     screenToWorld: screenToWorld,
     worldToScreen: worldToScreen,
     panBy: panBy,

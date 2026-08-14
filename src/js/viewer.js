@@ -1,17 +1,18 @@
-/* InternalViewer：通用文件查看器组件（画布实体 + 全屏新页面双形态）。
+/* InternalViewer：通用文件查看器组件（画布实体 + 全屏相册式双形态）。
  *   1. canvas 预览态（anchor 非 null，Desktop 空间）：Viewer 是放置在画布上的
  *      世界坐标实体——随画布 transform 平移/缩放，具备实体的基本性质：
- *      点击 = 选中（与文件选中态绑定）、长按/拖动 = 移动实体位置；
- *      桌面手势照常作用于画布，DOM 遮挡使其背后的文件点不到。
- *   2. fullscreen 全屏态（anchor null folder 容器 / FAB「全屏预览」）：
- *      Viewer 进入 #viewer-fs-page 独立新页面（fixed 全屏），退出（返回键 /
- *      页头返回按钮）回到原页面状态——桌面空间回画布实体，folder 容器关闭。
- * 顶栏：canvas 态只显示「全屏预览」按钮；全屏态显示返回按钮 + 文件名。
- * 关闭功能由 Morph FAB 选中态操作栏（全屏预览 / 关闭预览）与系统返回键完成。
+ *      点击 = 选中实体（选中态脆弱/临时：点击外部即取消，Viewer 保持打开）、
+ *      长按/拖动 = 移动实体位置；桌面手势照常作用于画布，DOM 遮挡背后的文件。
+ *      媒体类（图片/视频/SVG）打开后按固有宽高比自适应实体尺寸（非固定比例）。
+ *   2. fullscreen 全屏态（folder 容器 / FAB「全屏预览」）：进入 #viewer-fs-page
+ *      独立新页面，相册式体验——媒体黑底 contain 居中，文档浅色阅读排版；
+ *      返回键 / 页头返回按钮退出，回到原页面状态（桌面空间回画布实体）。
+ * 顶栏只有文件名 + 全屏态返回按钮；全屏入口在 Morph FAB（Viewer 选中时）。
+ * 关闭功能由 Morph FAB 与系统返回键完成。
  * 类型：text/markdown/json/html/svg/image/video/audio；媒体走 URI 流式。
  * HTML 安全：iframe srcdoc + sandbox="allow-scripts"（隔离 Java 桥）。
  * 依赖: namespace.js, file-api.js, markdown.js
- * 导出: App.InternalViewer（worldRect/cardSize/visibleRatio/jsonToNodes/shiftRect 纯函数可单测）
+ * 导出: App.InternalViewer（纯函数可单测）
  */
 'use strict'
 
@@ -23,23 +24,34 @@ App.InternalViewer = (function () {
   const MIN_VISIBLE = 0.3
 
   // ── 纯函数 ──
-  // 世界矩形（卡片中心对齐锚点世界坐标；anchor = {x, y}，与 Desktop positions 一致）
   function worldRect(anchor, w, h) {
     return { x: anchor.x - w / 2, y: anchor.y - h / 2, w: w, h: h }
   }
-  // 世界尺寸（zoom=1 时接近屏幕）
   function cardSize(vw, vh) {
     return { w: Math.max(MIN_W, vw - VIEWPORT_EDGE * 2), h: Math.max(MIN_H, vh - TOP_GAP) }
   }
-  // 矩形与视口交集面积占比（0~1）
   function visibleRatio(rect, vw, vh) {
     const ix = Math.max(0, Math.min(rect.x + rect.w, vw) - Math.max(rect.x, 0))
     const iy = Math.max(0, Math.min(rect.y + rect.h, vh) - Math.max(rect.y, 0))
     return (ix * iy) / (rect.w * rect.h)
   }
-  // 矩形平移（拖动用）
   function shiftRect(rect, dx, dy) {
     return { x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h }
+  }
+  // 按固有宽高比计算实体矩形（约束在视口内，保持中心点不变；输入固有尺寸无效时返回 null）
+  function fitAspectRect(rect, natW, natH, vw, vh) {
+    if (!(natW > 0) || !(natH > 0) || !rect) return null
+    const maxW = Math.max(MIN_W, vw - VIEWPORT_EDGE * 2)
+    const maxH = Math.max(MIN_H, vh - TOP_GAP)
+    const scale = Math.min(1, maxW / natW, maxH / natH)
+    const w = Math.max(MIN_W, Math.round(natW * scale))
+    const h = Math.max(MIN_H, Math.round(natH * scale))
+    return {
+      x: rect.x + (rect.w - w) / 2,
+      y: rect.y + (rect.h - h) / 2,
+      w: w,
+      h: h
+    }
   }
   // JSON → 树节点
   function jsonToNodes(value, key) {
@@ -67,25 +79,25 @@ App.InternalViewer = (function () {
     return { key: k, type: t, value: value, children: [], preview: String(value) }
   }
 
+  // 媒体类 kind（自适应比例）
+  const MEDIA_KINDS = { image: true, video: true, audio: true, svg: true }
+
   // ── DOM 状态 ──
-  let _layer = null        // #viewer-layer（fullscreen 触摸拦截宿主；folder 全屏）
-  let _fsPage = null       // #viewer-fs-page（全屏新页面宿主）
-  let _canvas = null       // #desktop-canvas（画布实体宿主）
+  let _layer = null
+  let _fsPage = null
+  let _canvas = null
   let _card = null
   let _title = null
   let _body = null
   let _backBtn = null
-  let _fsBtn = null
-  let _drag = null         // { startWorld, startRect } 拖动状态
-  let _state = { open: false, mode: null, fsFrom: null, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null, canvasRect: null }
+  let _drag = null
+  let _state = { open: false, mode: null, fsFrom: null, selected: false, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null, canvasRect: null }
 
   function ensureInit() {
     if (_card) return
     _layer = document.getElementById('viewer-layer')
     _fsPage = document.getElementById('viewer-fs-page')
     _canvas = document.getElementById('desktop-canvas')
-    // 触摸拦截：layer 与 fs-page 均 capture 阶段阻断冒泡到桌面手势层
-    // （canvas 态实体不经过二者 → 桌面手指依旧有效）
     ;[_layer, _fsPage].forEach(function (host) {
       if (!host) return
       ;['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (type) {
@@ -100,24 +112,17 @@ App.InternalViewer = (function () {
       '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>' +
       '</button>' +
       '<span class="viewer-title"></span>' +
-      '<button class="viewer-fs-btn" aria-label="全屏预览">' +
-      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>' +
-      '</button>' +
       '</header>' +
       '<div class="viewer-body"></div>'
     _title = _card.querySelector('.viewer-title')
     _body = _card.querySelector('.viewer-body')
     _backBtn = _card.querySelector('.viewer-back-btn')
-    _fsBtn = _card.querySelector('.viewer-fs-btn')
-    _fsBtn.addEventListener('click', toFullscreen)
     _backBtn.addEventListener('click', function () {
-      // 页面返回按钮：退出全屏 + 清理历史栈（popstate 触发 exitFullscreen 幂等）
       exitFullscreen()
       try {
         if (history.state && history.state._viewerFs) history.back()
       } catch (e) { /* 忽略 */ }
     })
-    // 内容区链接点击：不跳转（避免 file:// 页面被顶掉），toast 提示
     _body.addEventListener('click', function (e) {
       const a = e.target && e.target.closest ? e.target.closest('a') : null
       if (a) {
@@ -127,7 +132,6 @@ App.InternalViewer = (function () {
         }
       }
     })
-    // 全屏返回键：popstate（系统返回键 → webView.goBack → popstate；file:// 存疑时走 handleSystemBack 兜底）
     window.addEventListener('popstate', function () {
       if (_state.open && _state.mode === 'fullscreen') exitFullscreen()
     })
@@ -135,6 +139,16 @@ App.InternalViewer = (function () {
 
   function isOpen() { return !!_state.open }
   function getMode() { return _state.mode }
+  function isSelected() { return _state.selected }
+
+  // 选中态（脆弱/临时）：Viewer 实体点击选中，点击外部取消（Viewer 保持打开）
+  function setSelected(on) {
+    _state.selected = !!on
+    if (_card) {
+      if (on) _card.classList.add('viewer-card-selected')
+      else _card.classList.remove('viewer-card-selected')
+    }
+  }
 
   function setLoading() {
     _body.innerHTML = '<div class="viewer-loading">加载中…</div>'
@@ -150,7 +164,6 @@ App.InternalViewer = (function () {
     if (btn) btn.addEventListener('click', function () { _state.onFallback() })
   }
 
-  // 全屏时隐藏 FAB（简洁新页面；退出恢复）
   function setFabHidden(hidden) {
     const fab = document.getElementById('mode-switch-fab')
     if (!fab) return
@@ -171,17 +184,14 @@ App.InternalViewer = (function () {
         rect = worldRect({ x: cw, y: ch }, size.w, size.h)
       }
       applyCanvasRect(rect)
-      _card.classList.add('viewer-card-selected')   // 选中视觉（与文件选中态绑定）
-      _fsBtn.style.display = ''
       _backBtn.style.display = 'none'
       if (_canvas) _canvas.appendChild(_card)
+      setSelected(true)   // 打开默认选中（FAB 预览操作入口）
     } else {
-      // folder 全屏：进入新页面
       enterFullscreenPage()
     }
   }
 
-  // 画布实体矩形应用（世界坐标）
   function applyCanvasRect(rect) {
     _state.rect = rect
     _state.canvasRect = { x: rect.x, y: rect.y, w: rect.w, h: rect.h }
@@ -191,33 +201,50 @@ App.InternalViewer = (function () {
     _card.style.height = rect.h + 'px'
   }
 
-  // ── 全屏新页面 ──
+  // 媒体自适应：按固有宽高比调整实体尺寸（中心点不变）
+  function fitCanvasToMedia() {
+    if (_state.mode !== 'canvas') return
+    const media = _body.querySelector('img, video')
+    if (!media) return
+    const onReady = function () {
+      if (_state.mode !== 'canvas') return
+      const natW = media.naturalWidth || media.videoWidth || 0
+      const natH = media.naturalHeight || media.videoHeight || 0
+      if (!(natW > 0) || !(natH > 0)) return
+      const rect = fitAspectRect(_state.rect, natW, natH, _layer.clientWidth, _layer.clientHeight)
+      if (rect) applyCanvasRect(rect)
+    }
+    if (media.tagName === 'VIDEO') {
+      media.addEventListener('loadedmetadata', onReady)
+    } else {
+      media.addEventListener('load', onReady)
+    }
+  }
+
+  // ── 全屏相册式新页面 ──
   function enterFullscreenPage() {
     _state.mode = 'fullscreen'
     _state.rect = { x: 0, y: 0, w: _layer.clientWidth, h: _layer.clientHeight }
     if (_card.parentNode) _card.parentNode.removeChild(_card)
-    // 清掉画布实体 inline 定位（fixed 全屏由 CSS 控制）
     _card.style.left = ''
     _card.style.top = ''
     _card.style.width = ''
     _card.style.height = ''
     _card.className = 'viewer-card viewer-card-fullscreen'
-    _card.classList.remove('viewer-card-selected')
-    _fsBtn.style.display = 'none'
+    setSelected(false)
     _backBtn.style.display = ''
     if (_fsPage) {
+      // 相册式：媒体黑底 contain 居中；文档浅色阅读
+      _fsPage.classList.remove('viewer-fs-media', 'viewer-fs-doc')
+      _fsPage.classList.add(MEDIA_KINDS[_state.kind] ? 'viewer-fs-media' : 'viewer-fs-doc')
       _fsPage.appendChild(_card)
       _fsPage.classList.add('viewer-fs-page-open')
       _fsPage.setAttribute('aria-hidden', 'false')
     }
     setFabHidden(true)
-    // 系统返回键：pushState 使 webView.canGoBack() 可回退（buildinfo 同款模式）
-    try { history.pushState({ _viewerFs: true }, '') } catch (e) { /* 降级：handleSystemBack 兜底 */ }
+    try { history.pushState({ _viewerFs: true }, '') } catch (e) { /* 降级 */ }
   }
 
-  // 退出全屏：桌面空间 → 回画布实体；folder → 关闭。
-  // 不主动调 history.back()：系统返回键路径（canGoBack→popstate / handleSystemBack）
-  // 与页面返回按钮（backBtn 显式 back）已覆盖；避免 file:// 下 back 触发整页导航。
   function exitFullscreen() {
     if (!_state.open || _state.mode !== 'fullscreen') return
     const from = _state.fsFrom
@@ -228,26 +255,26 @@ App.InternalViewer = (function () {
     if (_card.parentNode) _card.parentNode.removeChild(_card)
     setFabHidden(false)
     if (from === 'canvas') {
-      // 回到画布实体（保留内容与位置）
       _state.mode = 'canvas'
-      _card.className = 'viewer-card viewer-card-canvas viewer-card-selected'
-      _fsBtn.style.display = ''
+      _card.className = 'viewer-card viewer-card-canvas'
       _backBtn.style.display = 'none'
       if (_canvas) _canvas.appendChild(_card)
       applyCanvasRect(_state.canvasRect || _state.rect)
+      setSelected(_state.selected)   // 恢复选中视觉（退出全屏回预览）
     } else {
       close()
     }
   }
 
-  // 顶栏「全屏预览」（canvas 态）
+  // 顶栏「全屏预览」入口已收纳至 Morph FAB；此 API 供 FAB 调用
   function toFullscreen() {
-    if (!_state.open || _state.mode !== 'canvas' || !_fsPage) return
+    if (!_state.open || _state.mode !== 'canvas' || !_fsPage) return false
     _state.fsFrom = 'canvas'
     enterFullscreenPage()
+    return true
   }
 
-  // ── 画布实体拖动（实体基本性质：长按/拖动 = 移动实体位置） ──
+  // ── 画布实体拖动 ──
   function beginDrag(world) {
     if (!_state.open || _state.mode !== 'canvas' || !_state.rect) return false
     _drag = {
@@ -280,14 +307,13 @@ App.InternalViewer = (function () {
 
   function isDragging() { return !!_drag }
 
-  // 画布实体命中测试：世界坐标点是否落在 Viewer 矩形内（宿主 tap 选中 / 反选判定）
   function hitTestWorld(wx, wy) {
     if (!_state.open || _state.mode !== 'canvas' || !_state.rect) return false
     const r = _state.rect
     return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h
   }
 
-  // ── 渲染（与形态无关；切全屏时内容保留）──
+  // ── 渲染 ──
   function renderContent() {
     setLoading()
     const p = _state.path
@@ -344,6 +370,7 @@ App.InternalViewer = (function () {
           img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(content)
           img.addEventListener('error', function () { showError('SVG 渲染失败') })
           _body.appendChild(img)
+          fitCanvasToMedia()
         }).catch(function (err) { showError(err && err.message || '读取失败') })
         break
       case 'image':
@@ -374,6 +401,7 @@ App.InternalViewer = (function () {
         showError('无法加载媒体（当前内核可能不支持该格式）')
       })
       _body.appendChild(el)
+      fitCanvasToMedia()
     }).catch(function (err) {
       showError(err && err.message || '无法解析文件 URI')
     })
@@ -440,7 +468,7 @@ App.InternalViewer = (function () {
     }
     setFabHidden(false)
     _drag = null
-    _state = { open: false, mode: null, fsFrom: null, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null, canvasRect: null }
+    _state = { open: false, mode: null, fsFrom: null, selected: false, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null, canvasRect: null }
   }
 
   function open(opts) {
@@ -452,7 +480,8 @@ App.InternalViewer = (function () {
     _state = {
       open: false,
       mode: hasAnchor ? 'canvas' : 'fullscreen',
-      fsFrom: hasAnchor ? null : 'folder',   // folder 容器打开 = 直接全屏，退出 = 关闭
+      fsFrom: hasAnchor ? null : 'folder',
+      selected: false,
       path: opts.path || '',
       name: opts.name || '',
       kind: opts.kind || 'text',
@@ -460,7 +489,8 @@ App.InternalViewer = (function () {
       camera: opts.camera || null,
       onFallback: typeof opts.onFallback === 'function' ? opts.onFallback : null,
       uri: null,
-      rect: null
+      rect: null,
+      canvasRect: null
     }
     if (!_state.path) return false
     _title.textContent = _state.name
@@ -476,6 +506,8 @@ App.InternalViewer = (function () {
     close: close,
     isOpen: isOpen,
     getMode: getMode,
+    isSelected: isSelected,
+    setSelected: setSelected,
     toFullscreen: toFullscreen,
     exitFullscreen: exitFullscreen,
     beginDrag: beginDrag,
@@ -488,6 +520,7 @@ App.InternalViewer = (function () {
     cardSize: cardSize,
     visibleRatio: visibleRatio,
     shiftRect: shiftRect,
+    fitAspectRect: fitAspectRect,
     jsonToNodes: jsonToNodes
   }
 })()

@@ -96,8 +96,13 @@ App.Actions = (function () {
   // 重名预检：list 目标目录（oldPath 父目录，防跨目录调用检查错位置），
   // 存在同名项即拒绝——SAF renameTo 同名失败、私有模式 File.renameTo 同名行为
   // 平台相关（可能静默覆盖），两模式行为必须一致：先查后改。
+  // 锁定文件（正在预览）拒绝重命名。
   function rename(oldPath, newPath) {
     if (!oldPath || !newPath || oldPath === newPath) return
+    if (_isLocked(oldPath)) {
+      App.toast.show('文件正在预览（锁定），不可重命名')
+      return
+    }
     const newName = newPath.indexOf('/') >= 0
       ? newPath.slice(newPath.lastIndexOf('/') + 1) : newPath
     const targetDir = oldPath.indexOf('/') >= 0
@@ -125,6 +130,10 @@ App.Actions = (function () {
   // entries: [{path, isDir}]（完整路径 + 源类型，供跨目录粘贴）
   function copySelection(entries) {
     if (!entries || !entries.length) return
+    if (_lockedEntry(entries)) {
+      App.toast.show('文件正在预览（锁定），不可复制')
+      return
+    }
     if (App.Clipboard.set('copy', entries)) {
       App.toast.show('已复制 ' + entries.length + ' 项')
     } else {
@@ -135,12 +144,34 @@ App.Actions = (function () {
   // ── 阶段 C：剪切（只写剪贴板 + 视觉标记，文件不动；粘贴时才 copy+delete）──
   function cutSelection(entries) {
     if (!entries || !entries.length) return
+    if (_lockedEntry(entries)) {
+      App.toast.show('文件正在预览（锁定），不可剪切')
+      return
+    }
     if (App.Clipboard.set('cut', entries)) {
       App.toast.show('已剪切 ' + entries.length + ' 项')
       App.Desktop.refresh()   // render 时对剪切源加半透明标记
     } else {
       App.toast.show('剪切失败')
     }
+  }
+
+  // 锁定检查：entries 中任一完整路径 = 锁定文件（含锁定目录内文件）→ 拒绝
+  function _lockedEntry(entries) {
+    const locked = App.Desktop && typeof App.Desktop.getLockedPath === 'function'
+      ? App.Desktop.getLockedPath() : null
+    if (!locked) return false
+    for (let i = 0; i < entries.length; i++) {
+      const p = entries[i].path
+      if (p === locked) return true
+      if (entries[i].isDir && locked.indexOf(p + '/') === 0) return true
+    }
+    return false
+  }
+  function _isLocked(path) {
+    const locked = App.Desktop && typeof App.Desktop.getLockedPath === 'function'
+      ? App.Desktop.getLockedPath() : null
+    return !!locked && locked === path
   }
 
   // ── 阶段 C：粘贴（目标名自动加序号；cut 模式 copy+delete 源）──

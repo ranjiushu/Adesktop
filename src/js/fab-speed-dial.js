@@ -39,25 +39,22 @@ App.fabSpeedDial = (function () {
         App.Actions.switchRoot()
         return
       case 'clear-selection':
-        // 取消选择 = 同时关闭预览（Viewer 与文件选中态绑定）
-        if (App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
-            App.InternalViewer.isOpen()) {
-          App.InternalViewer.close()
-        }
         if (App.Desktop && typeof App.Desktop.clearSelection === 'function') {
           App.Desktop.clearSelection()
         }
         collapse()
         return
       case 'close-preview':
-        // 关闭预览（Viewer 关闭；文件保持选中态，操作栏其他动作仍可用）
-        if (App.InternalViewer && typeof App.InternalViewer.close === 'function') {
+        // 关闭预览：关闭 Viewer + 解除文件锁定（唯一出口之一，Desktop 统一管理）
+        if (App.Desktop && typeof App.Desktop.closeViewer === 'function') {
+          App.Desktop.closeViewer()
+        } else if (App.InternalViewer && typeof App.InternalViewer.close === 'function') {
           App.InternalViewer.close()
         }
         collapse()
         return
       case 'fullscreen-preview':
-        // 全屏预览（画布实体 → 独立新页面；返回/退出回到原页面状态）
+        // 全屏预览（相册式独立新页面；返回/退出回到原页面状态）
         if (App.InternalViewer && typeof App.InternalViewer.toFullscreen === 'function') {
           App.InternalViewer.toFullscreen()
         }
@@ -164,7 +161,7 @@ App.fabSpeedDial = (function () {
 
   // 选中态驱动：非空 → 自动展开 selection 按钮集；空 → 收起
   // 选中态操作栏是「非模态」的：不加全屏遮罩，桌面保持可交互（长按拖拽/框选/点空白清空）
-  // Viewer 打开时只显示 全屏预览 + 关闭预览（预览焦点模式）；关闭后显示文件操作。
+  // Viewer 实体选中时只显示 全屏预览 + 关闭预览（预览焦点模式）；文件选中时显示文件操作。
   function setSelection(hasSelection) {
     _selectionActive = !!hasSelection
     let fab = _getEl(FAB_ID)
@@ -175,15 +172,15 @@ App.fabSpeedDial = (function () {
       _expanded = true
       _mode = 'selection'
       sd.setAttribute('data-mode', 'selection')
-      const viewerOpen = App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
-        App.InternalViewer.isOpen()
-      _setBtnVisible(sd, 'open', !viewerOpen)
-      _setBtnVisible(sd, 'fullscreen-preview', viewerOpen)
-      _setBtnVisible(sd, 'close-preview', viewerOpen)
-      _setBtnVisible(sd, 'copy', !viewerOpen)
-      _setBtnVisible(sd, 'cut', !viewerOpen)
-      _setBtnVisible(sd, 'rename', !viewerOpen)
-      _setBtnVisible(sd, 'clear-selection', !viewerOpen)
+      const viewerSel = App.InternalViewer && typeof App.InternalViewer.isSelected === 'function' &&
+        App.InternalViewer.isSelected()
+      _setBtnVisible(sd, 'open', !viewerSel)
+      _setBtnVisible(sd, 'fullscreen-preview', viewerSel)
+      _setBtnVisible(sd, 'close-preview', viewerSel)
+      _setBtnVisible(sd, 'copy', !viewerSel)
+      _setBtnVisible(sd, 'cut', !viewerSel)
+      _setBtnVisible(sd, 'rename', !viewerSel)
+      _setBtnVisible(sd, 'clear-selection', !viewerSel)
       if (bd) bd.classList.remove('fab-backdrop-visible')
       sd.classList.add('fab-speed-dial-expanded')
       fab.classList.add('fab-speed-dial-active')

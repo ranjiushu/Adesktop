@@ -82,16 +82,18 @@ async function main() {
       inCanvas: card.parentNode === canvas,
       left: parseFloat(card.style.left), top: parseFloat(card.style.top),
       w: parseFloat(card.style.width), h: parseFloat(card.style.height),
-      selected: document.querySelector('.desktop-icon.selected') !== null,
-      selName: document.querySelector('.desktop-icon.selected') && document.querySelector('.desktop-icon.selected').getAttribute('data-name'),
-      fsBtnVisible: getComputedStyle(document.querySelector('.viewer-fs-btn')).display !== 'none',
+      locked: App.Desktop.getLockedPath() === 'readme.md',
+      lockIcon: document.querySelector('.desktop-icon-locked') !== null,
+      viewerSelected: App.InternalViewer.isSelected(),
+      fsBtnGone: !document.querySelector('.viewer-fs-btn'),
       h1: md.querySelector('h1') && md.querySelector('h1').textContent
     }
   })
   check(r.inCanvas, '卡片宿主 = #desktop-canvas（画布实体）')
-  check(r.selected && r.selName === 'readme.md', '打开后文件保持选中态（选中/未选中与文件相同）')
+  check(r.locked && r.lockIcon, '打开后文件锁定（Windows 式：禁文件操作）')
+  check(r.viewerSelected, 'Viewer 实体选中（FAB 预览操作入口）')
   check(r.w > 300 && r.h > 500, '世界尺寸接近屏幕尺度（' + r.w.toFixed(0) + '×' + r.h.toFixed(0) + '）')
-  check(r.fsBtnVisible, '顶栏显示「全屏预览」按钮')
+  check(r.fsBtnGone, '全屏按钮已收纳进 Morph FAB（顶栏无按钮）')
   check(r.h1 === '标题', 'Markdown 渲染')
 
   console.log('═══ 2. 画布平移/缩放 → 实体跟随（canvas transform）═══')
@@ -128,14 +130,12 @@ async function main() {
     App.InternalViewer.hitTestWorld(200, 400)
   })
   const tapCheck = await page.evaluate(function () {
-    // 模拟 handleTap 语义：世界坐标 (200,400) 应命中 Viewer 实体（锚点 180,320 中心附近）
+    // 世界坐标 (200,400) 应命中 Viewer 实体（锚点 180,320 中心附近）
     const hit = App.InternalViewer.hitTestWorld(200, 400)
-    const selBefore = document.querySelectorAll('.desktop-icon.selected').length
-    // 桌面手势的 tap 语义由 handleTap 处理；这里验证 hitTestWorld 判定 + 选中保持
-    return { hit: hit, sel: selBefore }
+    return { hit: hit, selected: App.InternalViewer.isSelected() }
   })
   check(tapCheck.hit, '世界点 (200,400) 命中 Viewer 实体矩形')
-  check(tapCheck.sel === 1, '文件保持选中（Viewer 表面点击不清空）')
+  check(tapCheck.selected, 'Viewer 实体保持选中（点击不清空）')
 
   console.log('═══ 4. 全屏预览 ═══')
   await page.evaluate(function () {
@@ -150,12 +150,11 @@ async function main() {
       inPage: card.parentNode === page,
       pageOpen: page.classList.contains('viewer-fs-page-open'),
       full: Math.abs(cb.width - window.innerWidth) < 1 && Math.abs(cb.height - window.innerHeight) < 1,
-      fsBtnHidden: getComputedStyle(document.querySelector('.viewer-fs-btn')).display === 'none',
       mode: App.InternalViewer.getMode()
     }
   })
   check(fs.inPage && fs.pageOpen && fs.full, '全屏：独立新页面 fixed 覆盖全视口')
-  check(fs.mode === 'fullscreen' && fs.fsBtnHidden, '全屏态：模式切换 + 顶栏按钮隐藏')
+  check(fs.mode === 'fullscreen', '全屏态：模式切换')
 
   console.log('═══ 5. 关闭：FAB「关闭预览」═══')
   // 模拟点击选中态操作栏的 close-preview 按钮
@@ -166,10 +165,12 @@ async function main() {
     return {
       open: App.InternalViewer.isOpen(),
       layerOpen: layer.classList.contains('viewer-layer-open'),
-      cardGone: !document.querySelector('.viewer-card')
+      cardGone: !document.querySelector('.viewer-card'),
+      unlocked: App.Desktop.getLockedPath() === null
     }
   })
-  check(!closed.open && !closed.layerOpen && closed.cardGone, 'FAB 关闭预览：Viewer 关闭 + layer 还原')
+  check(!closed.open && !closed.layerOpen && closed.cardGone && closed.unlocked,
+    'FAB 关闭预览：Viewer 关闭 + layer 还原 + 解除锁定')
 
   console.log('═══ 6. 返回键关闭 ═══')
   await page.evaluate(function () {

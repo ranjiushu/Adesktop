@@ -48,14 +48,14 @@ async function main() {
       full: Math.abs(cb.width - window.innerWidth) < 1 && Math.abs(cb.height - window.innerHeight) < 1,
       inPage: card.parentNode === page,
       mode: App.InternalViewer.getMode(),
-      selected: document.querySelectorAll('.desktop-icon.selected').length,
+      locked: App.Desktop.getLockedPath() === 'docs/guide.md',
       md: !!document.querySelector('.viewer-md h1'),
       fabHidden: document.getElementById('mode-switch-fab').classList.contains('fab-hidden')
     }
   })
   check(r.full && r.inPage, 'folder 打开 → 全屏新页面（fixed 覆盖全视口）')
   check(r.mode === 'fullscreen' && r.fabHidden, 'folder 全屏模式 + FAB 隐藏（简洁新页面）')
-  check(r.selected === 1 && r.md, '文件保持选中 + 内容渲染')
+  check(r.locked && r.md, '文件锁定 + 内容渲染')
 
   console.log('═══ 退出全屏 = 关闭 + 目录保持 ═══')
   const back = await page.evaluate(function () {

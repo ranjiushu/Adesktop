@@ -38,6 +38,15 @@ check(approx(s.w, 412 - 32) && approx(s.h, 768 - 96), 'cardSize = 视口 - 边�
 s = V.cardSize(100, 100)
 check(s.w >= 200 && s.h >= 160, 'cardSize 下限钳制（MIN_W/MIN_H）')
 
+// ── fitAspectRect：媒体自适应比例（中心点不变） ──
+let ar = V.fitAspectRect({ x: 10, y: 20, w: 380, h: 672 }, 1920, 1080, 412, 768)
+check(Math.abs(ar.w / ar.h - 1920 / 1080) < 0.01, '16:9 视频 → 实体宽高比 16:9')
+check(ar.w <= 412 - 32 + 1 && ar.h <= 768 - 96 + 1, '自适应尺寸约束在视口内')
+check(Math.abs((ar.x + ar.w / 2) - (10 + 380 / 2)) < 1, '自适应后中心点不变')
+ar = V.fitAspectRect({ x: 10, y: 20, w: 380, h: 672 }, 1000, 2000, 412, 768)
+check(Math.abs(ar.w / ar.h - 0.5) < 0.01, '竖图 1:2 → 实体保持竖比例')
+check(V.fitAspectRect({ x: 0, y: 0, w: 100, h: 100 }, 0, 0, 412, 768) === null, '固有尺寸无效（0×0）→ null 降级')
+
 // ── visibleRatio：全可见 / 部分出界 ──
 check(approx(V.visibleRatio({ x: 0, y: 0, w: 100, h: 100 }, 360, 640), 1), '完全在视口内 → 1')
 check(approx(V.visibleRatio({ x: 332, y: 0, w: 100, h: 100 }, 360, 640), 0.28), '右缘出界 → 部分可见(0.28)')

@@ -51,6 +51,11 @@ App.Desktop = (function () {
   let dragTargets = []        // 移动的图标 fullPath 列表（组移动）
   let dragStartWorld = null   // 手指起始世界坐标
   let dragStartPositions = {} // fullPath → 起始世界坐标（保持组内相对位置）
+  // 文件锁定（Windows 式）：被 Viewer 打开的文件禁止复制/剪切/移动/删除/重命名，
+  // 只允许拖动摆放（桌面空间布局）；关闭 Viewer 即解除
+  let _lockedPath = null
+  // Viewer 实体选中态（脆弱/临时）：点击 Viewer = 选中，点击外部 = 取消（Viewer 保持打开）
+  let _viewerSelected = false
 
   // 双击窗口状态
   let _tapState = null            // App.DoubleTap 状态
@@ -178,28 +183,54 @@ App.Desktop = (function () {
       bounds[key].w = node.offsetWidth || ICON_W
       bounds[key].h = node.offsetHeight || ICON_H
     })
+    // 渲染后恢复锁定视觉（网格重建会丢失 class）
+    updateLockedVisual()
   }
 
   // ── 选中态同步：图标 class + FAB 操作栏路由 ──
+  // FAB 展开条件 = 文件选中 或 Viewer 实体选中（二者其一，互斥出现）
   function applySelection() {
     Object.keys(iconEls).forEach(function (key) {
       if (selection.has(key)) iconEls[key].classList.add('selected')
       else iconEls[key].classList.remove('selected')
     })
+    syncFab()
+  }
+
+  function syncFab() {
     if (App.fabSpeedDial && typeof App.fabSpeedDial.setSelection === 'function') {
-      App.fabSpeedDial.setSelection(selection.size > 0)
+      App.fabSpeedDial.setSelection(selection.size > 0 || _viewerSelected)
     }
   }
 
-  // 取消选中：同时关闭预览（Viewer 与文件选中态绑定——选中消失 = 预览关闭）
+  // 取消文件选中（Viewer 保持打开、文件保持锁定——选中与查看解绑）
   function clearSelection() {
-    if (App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
-        App.InternalViewer.isOpen()) {
-      App.InternalViewer.close()
-    }
     selection = new Set()
     applySelection()
   }
+
+  // 关闭 Viewer + 解除文件锁定 + 取消 Viewer 选中（唯一出口：FAB 关闭预览 / 返回键 / 目录切换）
+  function closeViewer() {
+    if (App.InternalViewer && typeof App.InternalViewer.close === 'function') {
+      App.InternalViewer.close()
+    }
+    _lockedPath = null
+    _viewerSelected = false
+    updateLockedVisual()
+    syncFab()
+  }
+
+  // 锁定视觉：被 Viewer 打开的文件图标加锁标记
+  function updateLockedVisual() {
+    Object.keys(iconEls).forEach(function (key) {
+      const node = iconEls[key]
+      if (!node) return
+      if (_lockedPath === key) node.classList.add('desktop-icon-locked')
+      else node.classList.remove('desktop-icon-locked')
+    })
+  }
+
+  function getLockedPath() { return _lockedPath }
 
   // 当前选中完整路径列表（复制/剪切/重命名用）
   function getSelectionNames() {
@@ -248,15 +279,17 @@ App.Desktop = (function () {
       clearSelection()
       enterFolder(full)
     } else if (App.FileOpener && typeof App.FileOpener.open === 'function') {
-      // 文件打开 = Viewer 预览，文件保持「选中态」（与文件相同的选中/未选中状态，
-      // Morph FAB 选中态操作栏提供关闭入口）。先选中再打开（FAB 状态刷新在打开后）。
-      selection = App.DesktopSelection.selectOnly(full)
-      applySelection()
+      // Windows 式锁定：文件被 Viewer 打开 = 锁定（禁复制/剪切/移动/删除/重命名，
+      // 拖动摆放仍可）；文件不进入选中集——Viewer 实体自身有独立选中态（脆弱/临时）。
+      _lockedPath = full
+      selection = new Set()
+      _viewerSelected = true    // Viewer 实体默认选中（Morph FAB 预览操作入口）
       // 锚点：desktop 空间 = 文件世界坐标（Viewer 为画布实体，随画布 transform 平移缩放）；
-      // folder 容器 = 无锚点（全屏占满内容区）
+      // folder 容器 = 无锚点（全屏新页面）
       const anchor = isFolderView() ? null : (positions[full] || null)
       App.FileOpener.open({ name: item.name, path: full }, anchor, camera)
-      applySelection()   // Viewer 已打开 → 刷新「关闭预览」按钮显隐
+      syncFab()
+      updateLockedVisual()
     } else if (App.toast) {
       App.toast.show('打开文件（查看器未就绪）')
     }
@@ -275,10 +308,8 @@ App.Desktop = (function () {
   //   根 = 恢复根相机（无限画布）；folder = 重置 (0,0,1)（滚动到顶）
   function applyCameraForPath() {
     cancelCameraAnim()   // 目录切换即打断 Home 动画，避免动画覆盖新路径相机
-    // 目录切换 = 回到文件列表视图，关闭查看器（Viewer 属于当前目录上下文）
-    if (App.InternalViewer && typeof App.InternalViewer.close === 'function') {
-      App.InternalViewer.close()
-    }
+    // 目录切换 = 回到文件列表视图，关闭查看器并解除文件锁定
+    closeViewer()
     if (isFolderView()) {
       camera = App.DesktopCamera.create(0, 0, 1)
     } else {
@@ -416,11 +447,21 @@ App.Desktop = (function () {
 
   // ── 手势回调（世界坐标）──
   function handleTap(world) {
-    // Viewer 画布实体表面点击：遮挡背后的文件（点不到），但不清空选中态
-    // （保持「与文件相同的选中状态」，FAB 关闭入口可用）
+    // Viewer 画布实体：点击 = 选中实体（脆弱/临时：点外部取消，Viewer 保持打开）
     if (App.InternalViewer && typeof App.InternalViewer.hitTestWorld === 'function' &&
         App.InternalViewer.hitTestWorld(world.x, world.y)) {
+      if (!_viewerSelected) {
+        _viewerSelected = true
+        App.InternalViewer.setSelected(true)
+        syncFab()
+      }
       return
+    }
+    // 点击 Viewer 外部：取消 Viewer 选中（Viewer 保持打开、文件保持锁定）
+    if (_viewerSelected) {
+      _viewerSelected = false
+      App.InternalViewer.setSelected(false)
+      syncFab()
     }
     const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
     const now = Date.now()
@@ -649,12 +690,26 @@ App.Desktop = (function () {
       return
     }
     if (!dragTargets.length) return
+    // Windows 式锁定：被 Viewer 打开的文件禁止移动（拖入文件夹），但拖动摆放（改布局位置）仍可
+    function lockedMoveBlocked() {
+      return _lockedPath && dragTargets.indexOf(_lockedPath) >= 0
+    }
     // folder 容器：移入文件夹语义——命中文件夹 → moveIntoFolder；
     // 未命中 → 还原起始位（folder 位置自动排布，不吸附不落盘）
     if (isFolderView()) {
       if (moved) {
         const hit = folderHitAt(world)
         if (hit) {
+          if (lockedMoveBlocked()) {
+            dragTargets.forEach(function (n) { setPickedUp(n, false) })
+            dragTargets = []
+            dragStartWorld = null
+            dragStartPositions = {}
+            if (App.toast && typeof App.toast.show === 'function') {
+              App.toast.show('文件正在预览（锁定），不可移动')
+            }
+            return
+          }
           if (App.Loading && typeof App.Loading.hideTag === 'function') {
             App.Loading.hideTag()
           }
@@ -695,6 +750,17 @@ App.Desktop = (function () {
     if (moved && !isFolderView()) {
       const hit = folderHitAt(world)
       if (hit) {
+        // 锁定文件（正在预览）禁止移动
+        if (_lockedPath && dragTargets.indexOf(_lockedPath) >= 0) {
+          dragTargets.forEach(function (n) { setPickedUp(n, false) })
+          dragTargets = []
+          dragStartWorld = null
+          dragStartPositions = {}
+          if (App.toast && typeof App.toast.show === 'function') {
+            App.toast.show('文件正在预览（锁定），不可移动')
+          }
+          return
+        }
         // 清标签 + 执行移动（copy+del 源，目标名自动加序号）
         if (App.Loading && typeof App.Loading.hideTag === 'function') {
           App.Loading.hideTag()
@@ -976,6 +1042,8 @@ App.Desktop = (function () {
     canGoForward: canGoForward,
     canGoUp: canGoUp,
     getCurPath: getCurPath,
+    getLockedPath: getLockedPath,
+    closeViewer: closeViewer,
     viewMode: viewMode,
     isFolderView: isFolderView,
     applyViewPrefs: applyViewPrefs,

@@ -46,11 +46,11 @@ App.fabSpeedDial = (function () {
         return
       case 'copy':
       case 'cut':
-        // 复制/剪切：只写剪贴板（内存态），文件不动
-        if (App.Desktop && typeof App.Desktop.getSelectionNames === 'function') {
-          const names = App.Desktop.getSelectionNames()
-          if (action === 'copy') App.Actions.copySelection(names)
-          else App.Actions.cutSelection(names)
+        // 复制/剪切：只写剪贴板（内存态），文件不动；需 {path,isDir} 供跨目录粘贴
+        if (App.Desktop && typeof App.Desktop.getSelectionEntries === 'function') {
+          const entries = App.Desktop.getSelectionEntries()
+          if (action === 'copy') App.Actions.copySelection(entries)
+          else App.Actions.cutSelection(entries)
         }
         collapse()
         return
@@ -75,6 +75,22 @@ App.fabSpeedDial = (function () {
         collapse()
         return
       case 'open':
+        // 打开：文件夹 → 进入；文件 → 打开（单选才可用）
+        if (App.Desktop && typeof App.Desktop.getSelectionNames === 'function') {
+          const names = App.Desktop.getSelectionNames()
+          if (names.length === 1) {
+            collapse()
+            if (typeof App.Desktop.openItem === 'function') {
+              App.Desktop.openItem(names[0])
+            }
+            return
+          }
+          if (names.length > 1) {
+            if (App.toast) App.toast.show('打开仅支持单选')
+          }
+        }
+        collapse()
+        return
       case 'delete':
       case 'properties':
         // 阶段 C 实现操作动作，阶段 B 占位

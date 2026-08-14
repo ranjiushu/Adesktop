@@ -10,7 +10,7 @@ App.RenameDialog = (function () {
   let OVERLAY_ID = 'rename-dialog-overlay'
   let INPUT_ID = 'rename-name'
   let _open = false
-  let _target = null   // 当前待重命名的名字
+  let _target = null   // 当前待重命名的完整路径
 
   function _getEl(id) { return document.getElementById(id) }
 
@@ -63,7 +63,13 @@ App.RenameDialog = (function () {
       App.toast.show('名称未变化')
       return
     }
-    App.Actions.rename(target, newName)
+    // 拼完整新路径：保留旧路径所在目录（重命名不跨目录）
+    let newPath = newName
+    if (target.indexOf('/') >= 0) {
+      const i = target.lastIndexOf('/')
+      newPath = target.slice(0, i + 1) + newName
+    }
+    App.Actions.rename(target, newPath)
   }
 
   function init() {

@@ -7,6 +7,7 @@
 #       3) 复制 min 产物 → android/app/src/main/assets/index.html
 #       4) ./gradlew assembleRelease（R8 裁剪 + debug keystore 签名）
 #       5) 归档 APK 到 /workspace/AAA 安装包/（tools/collect-apk.sh，滚动保留最新 10 个 + R8 mapping）
+#       6) COS bundle 周期备份（tools/cos-bundle-check.sh，每累计 25 个提交上传一次，幂等）
 #
 # 构建顺序不可变：build-web.sh → minify-bundle.js → Gradle（P0 铁律）
 # 依赖: QEMU user-mode + x86_64 sysroot + Android SDK（见 LexiCull probe-build.sh）
@@ -95,8 +96,12 @@ cd "$SCRIPT_DIR"
 ./gradlew assembleRelease --no-daemon
 
 # ── 步骤 5: 归档 APK（滚动保留最新 10 个 + R8 mapping） ──
-info "步骤 5/5: 归档 APK"
+info "步骤 5/6: 归档 APK"
 bash "$SCRIPT_DIR/../tools/collect-apk.sh"
+
+# ── 步骤 6: COS bundle 周期备份（每累计 25 个提交上传一次，幂等） ──
+info "步骤 6/6: COS bundle 周期备份（每 25 个提交）"
+bash "$SCRIPT_DIR/../tools/cos-bundle-check.sh"
 
 echo ""
 echo "══════════════════════════════"

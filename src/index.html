@@ -30,8 +30,9 @@
   </section>
 </main>
 
-<!-- ===== 底部工具栏：5 个矢量图标按钮，中间加号弹新建对话框，其余 UI 占位 =====
-     底栏区域右滑可跟手呼出左侧 Drawer（见 drawer-swipe.js） -->
+<!-- ===== 底部工具栏：5 个矢量图标按钮，中间加号弹新建对话框 =====
+     左1 后退 / 左2 前进 / 中间加号 新建 / 右1 Home（点按回空间锚点视角，长按记录位置快照）
+     / 右2 上级目录。底栏区域右滑可跟手呼出左侧 Drawer（见 drawer-swipe.js） -->
 <nav id="bottom-bar" class="bottom-bar" aria-label="底部工具栏">
   <button id="bb-btn-back" class="bottom-bar-btn" aria-label="后退" aria-disabled="true" disabled>
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
@@ -42,8 +43,8 @@
   <button id="bb-btn-add" class="bottom-bar-btn bottom-bar-add" aria-label="新建">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
-  <button class="bottom-bar-btn" aria-label="占位按钮 4">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+  <button id="bb-btn-home" class="bottom-bar-btn" aria-label="Home" aria-disabled="true" disabled>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
   </button>
   <button id="bb-btn-up" class="bottom-bar-btn" aria-label="上级目录" aria-disabled="true" disabled>
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
@@ -120,6 +121,9 @@
       </button>
       <button class="drawer-item" data-action="refresh">
         <span class="drawer-item-icon">🔄</span><span>刷新</span>
+      </button>
+      <button class="drawer-item" data-action="set-default-view">
+        <span class="drawer-item-icon">📷</span><span>设为默认视角</span>
       </button>
       <button class="drawer-item" data-action="switch-root">
         <span class="drawer-item-icon">🗂️</span><span>切换根目录</span>

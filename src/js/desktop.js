@@ -292,6 +292,55 @@ App.Desktop = (function () {
   function canGoUp() { return isFolderView() }
   function getCurPath() { return state.curPath }
 
+  // ── Home：空间锚点（位置快照 + 默认视角）──
+  // 长按底栏 Home = 记录当前相机为快照；点按 Home = 回快照（无则默认视角，再无则出厂 (0,0,1)）。
+  // 默认视角 = 用户经 Drawer「设为默认视角」设置的兜底视角。仅桌面空间（根目录）有意义。
+  function captureHome() {
+    if (isFolderView()) return false
+    const cam = { x: camera.x, y: camera.y, zoom: camera.zoom }
+    if (!App.HomeStore.saveHome(cam)) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('Home 视角保存失败')
+      return false
+    }
+    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已记录 Home 视角')
+    if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
+      App.BottomBar.updateHomeState()
+    }
+    return true
+  }
+
+  // 设为默认视角（Drawer 操作项）：Home 无快照时的兜底视角
+  function captureDefaultView() {
+    if (isFolderView()) return false
+    const cam = { x: camera.x, y: camera.y, zoom: camera.zoom }
+    if (!App.HomeStore.saveFallback(cam)) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('默认视角保存失败')
+      return false
+    }
+    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已设置默认视角（无快照时 Home 回此视角）')
+    return true
+  }
+
+  // 回到 Home：快照优先，其次默认视角，最后出厂 (0,0,1)。
+  // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera——
+  // 从文件夹返回仍恢复进文件夹前的视角，Home 只负责「现在」的空间锚点。
+  function goHome() {
+    if (isFolderView()) return
+    let target = App.DesktopCamera.create()
+    const data = App.HomeStore.load()
+    if (data && data.home) {
+      target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom)
+    } else if (data && data.fallback) {
+      target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom)
+    }
+    camera = target
+    if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
+      App.DesktopGesture.setCamera(camera)
+    }
+  }
+
   // ── 手势回调（世界坐标）──
   function handleTap(world) {
     const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
@@ -539,18 +588,30 @@ App.Desktop = (function () {
   }
 
   // 加载布局（位置 + 相机视角）+ 视图偏好，无数据/损坏回退默认
+  // 启动相机优先级：Home 快照 > 默认视角 > 上次布局视角 > 出厂 (0,0,1)。
+  // Home = Camera 的默认起点（空间锚点）：设置过快照后，每次进入桌面空间都落在快照位
   function initLayout() {
-    const saved = App.LayoutStore.load()
-    if (saved && saved.icons) {
-      Object.keys(saved.icons).forEach(function (key) {
-        positions[key] = saved.icons[key]
-      })
+    let cam = null
+    if (App.HomeStore) {
+      const home = App.HomeStore.load()
+      if (home && home.home) {
+        cam = App.DesktopCamera.create(home.home.x, home.home.y, home.home.zoom)
+      } else if (home && home.fallback) {
+        cam = App.DesktopCamera.create(home.fallback.x, home.fallback.y, home.fallback.zoom)
+      }
     }
-    if (saved && saved.camera) {
-      camera = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
-    } else {
-      camera = App.DesktopCamera.create()
+    if (!cam) {
+      const saved = App.LayoutStore.load()
+      if (saved && saved.icons) {
+        Object.keys(saved.icons).forEach(function (key) {
+          positions[key] = saved.icons[key]
+        })
+      }
+      if (saved && saved.camera) {
+        cam = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
+      }
     }
+    camera = cam || App.DesktopCamera.create()
     const prefs = App.ViewStore.load()
     state.viewStyle = prefs.viewStyle
     state.sortBy = prefs.sortBy
@@ -592,6 +653,9 @@ App.Desktop = (function () {
   function initGesture() {
     nav = App.DesktopNav.create()
     initLayout()
+    // 根目录相机基准 = 启动视角（Home 快照 > 默认视角 > 上次布局 > 出厂），
+    // 否则 applyCameraForPath 根目录分支 rootCamera=null 会强制回出厂
+    rootCamera = camera
     App.DesktopGesture.init({
       viewport: document.getElementById('desktop-viewport'),
       canvas: document.getElementById('desktop-canvas'),
@@ -639,6 +703,9 @@ App.Desktop = (function () {
     viewMode: viewMode,
     isFolderView: isFolderView,
     applyViewPrefs: applyViewPrefs,
-    getViewPrefs: getViewPrefs
+    getViewPrefs: getViewPrefs,
+    captureHome: captureHome,
+    captureDefaultView: captureDefaultView,
+    goHome: goHome
   }
 })()

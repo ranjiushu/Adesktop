@@ -75,6 +75,16 @@ App.Actions = (function () {
     App.toast.show('已刷新')
   }
 
+  // 设为默认摄像机视角（Drawer「设为默认视角」）：Home 无快照时的兜底视角。
+  // 仅桌面空间有效（子文件夹容器相机是滚动态，Desktop.captureDefaultView 内部拒绝）
+  function setDefaultView() {
+    if (App.Desktop && typeof App.Desktop.captureDefaultView === 'function') {
+      App.Desktop.captureDefaultView()
+    } else {
+      App.toast.show('默认视角设置失败')
+    }
+  }
+
   function switchRoot() {
     if (!App.bridge.requestRootAccess()) {
       App.toast.show('当前环境不支持切换根目录')
@@ -162,6 +172,7 @@ App.Actions = (function () {
     createFolder: createFolder,
     createFile: createFile,
     refresh: refresh,
+    setDefaultView: setDefaultView,
     switchRoot: switchRoot,
     rename: rename,
     copySelection: copySelection,

@@ -44,7 +44,7 @@ cd /workspace/Desktop && git status && git log --oneline -3
 |------|------|
 | `bash tools/build-web.sh` | src/ → dist/desktop.bundle.html（--strict 体积棘轮生效） |
 | `node tools/minify-bundle.js` | 压缩 → dist/desktop.bundle.min.html |
-| `bash android/build-local.sh` | 全量构建 + 归档 APK 到 /workspace/AAA 安装包/ |
+| `bash android/build-local.sh` | 全量构建 + 归档 APK 到 /workspace/AAA 安装包/（滚动保留最新 10 个 + R8 mapping） |
 | `bash tools/verify.sh` | 提交前门禁（build --strict + minify + 测试） |
 | `bash tests/run-tests.sh` | 测试套件（自动发现 test-*.js / test-*.sh） |
 

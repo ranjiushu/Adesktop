@@ -18,6 +18,8 @@
 
 - release 开启 R8 裁剪 + shrinkResources：APK 1.49MB → 149KB（-89.7%）
 - build-local.sh 归档 release 产物（dev keystore 临时签名，发布前换正式）
+- 安装包归档滚动保留最新 10 个（tools/collect-apk.sh）：按时间戳命名 + 自动清理旧包，
+  手动放入目录的文件不受影响；release 构建同步归档 R8 mapping 到 mapping/ 子目录
 
 ## 0.2.0（2026-08-14）
 

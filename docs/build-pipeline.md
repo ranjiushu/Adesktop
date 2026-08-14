@@ -7,8 +7,15 @@
 ```
 1. bash tools/build-web.sh        src/ → dist/desktop.bundle.html
 2. node tools/minify-bundle.js    → dist/desktop.bundle.min.html
-3. bash android/build-local.sh    复制 min 产物 → assets/index.html → gradlew assembleDebug → 归档 APK
+3. bash android/build-local.sh    复制 min 产物 → assets/index.html → gradlew assembleRelease（R8 混淆）→ 归档 APK
 ```
+
+## 安装包归档（滚动保留）
+
+- `android/build-local.sh` 步骤 5 调用 `tools/collect-apk.sh`
+- 归档到 `/workspace/AAA 安装包/`，命名 `Desktop_v<版本>_<时间戳>.apk`（时间戳精确到秒）
+- **滚动保留最新 10 个**（按 mtime，仅清理本脚本命名模式，手动放入的文件不受影响）
+- release 构建同步归档 R8 `mapping.txt` 到 `<归档目录>/mapping/`（同样保留 10 个）
 
 ## 拼接清单（JS_ORDER / CSS_ORDER）
 

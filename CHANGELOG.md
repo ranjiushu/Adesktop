@@ -20,6 +20,8 @@
 - build-local.sh 归档 release 产物（dev keystore 临时签名，发布前换正式）
 - 安装包归档滚动保留最新 10 个（tools/collect-apk.sh）：按时间戳命名 + 自动清理旧包，
   手动放入目录的文件不受影响；release 构建同步归档 R8 mapping 到 mapping/ 子目录
+- COS bundle 周期备份（tools/cos-bundle-check.sh）：每累计 25 个提交自动上传 git bundle
+  到 cos://backup-data/desktop-git/，构建管线步骤 6 触发，上传失败不阻断构建且不丢周期
 
 ## 0.2.0（2026-08-14）
 

@@ -93,6 +93,17 @@ App.DesktopGesture = (function () {
     return { sg: Object.assign({}, sg, { phase: 'pickedup' }), effect: { type: 'longpress', x: sg.startX, y: sg.startY } }
   }
 
+  // 单指意图取消（1→2 指切换 / touchcancel，状态机强制终结路径）：
+  // 有未完成意图（框选/拿起/拖动）→ 派发 single-cancel 语义事件并复位状态；
+  // 否则原样返回（无意图可取消）。保证拖动生命周期必有收尾——否则 picked-up
+  // 视觉（放大+阴影）与框选矩形会滞留成「悬浮残影」。
+  function singleCancel(sg) {
+    if (sg.phase === 'marquee' || sg.phase === 'pickedup' || sg.phase === 'dragmove') {
+      return { sg: createSingle(), effect: { type: 'single-cancel' } }
+    }
+    return { sg: sg, effect: { type: 'none' } }
+  }
+
   // up：按 phase 收尾（tap / 框选结束 / 放下）
   function singleUp(sg, x, y, opts) {
     const th = _threshold(opts)
@@ -199,6 +210,9 @@ App.DesktopGesture = (function () {
       case 'drop':
         if (_cb.onDrop) _cb.onDrop(toWorld(effect.x, effect.y), !!effect.moved)
         break
+      case 'single-cancel':
+        if (_cb.onSingleCancel) _cb.onSingleCancel()
+        break
     }
   }
 
@@ -242,8 +256,12 @@ App.DesktopGesture = (function () {
       _single = singleDown(c.x, c.y, c.t, hitType)
       startLongPressTimer()
     } else if (_mode === 'double') {
+      // 1→2 指：取消当前单指意图（interaction.md §3——框选/长按拿起均取消）。
+      // 必须派发 single-cancel 让上层回收拿起态/框选矩形，否则残留悬浮阴影。
       cancelLongPressTimer()
-      _single = createSingle()
+      const cancelled = singleCancel(_single)
+      if (cancelled.effect.type !== 'none') handleEffect(cancelled.effect)
+      _single = cancelled.sg
     }
   }
 
@@ -296,7 +314,11 @@ App.DesktopGesture = (function () {
 
   function onCancel(e) {
     cancelLongPressTimer()
-    _single = createSingle()
+    // touchcancel（系统接管，如来电/通知/手势导航）可能发生在拿起/拖动中：
+    // 派发 single-cancel 保证 picked-up 视觉与框选矩形被回收（生命周期终结路径）。
+    const cancelled = singleCancel(_single)
+    if (cancelled.effect.type !== 'none') handleEffect(cancelled.effect)
+    _single = cancelled.sg
     for (let i = 0; i < e.changedTouches.length; i++) {
       _contacts.delete(e.changedTouches[i].identifier)
     }
@@ -328,6 +350,7 @@ App.DesktopGesture = (function () {
       onDragStart: opts.onDragStart || null,
       onDrag: opts.onDrag || null,
       onDrop: opts.onDrop || null,
+      onSingleCancel: opts.onSingleCancel || null,
       onClamp: opts.onClamp || null
     }
     _contacts = new Map()
@@ -357,6 +380,7 @@ App.DesktopGesture = (function () {
     singleDown: singleDown,
     singleMove: singleMove,
     singleLongPress: singleLongPress,
+    singleCancel: singleCancel,
     singleUp: singleUp
   }
 })()

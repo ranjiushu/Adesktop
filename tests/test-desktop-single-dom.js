@@ -65,7 +65,7 @@ function tev(type, pts, changed) {
 }
 
 let hitTypeMode = 'empty'
-const got = { tap: [], marqueeStart: [], marqueeLive: [], marqueeEnd: [], longpress: [], dragStart: [], drag: [], drop: [] }
+const got = { tap: [], marqueeStart: [], marqueeLive: [], marqueeEnd: [], longpress: [], dragStart: [], drag: [], drop: [], singleCancel: [] }
 G.init({
   viewport: viewportEl, canvas: canvasEl, camera: C.create(),
   onHitTest: function () { return hitTypeMode },
@@ -76,7 +76,8 @@ G.init({
   onLongPress: function (w) { got.longpress.push(w) },
   onDragStart: function (w) { got.dragStart.push(w) },
   onDrag: function (w) { got.drag.push(w) },
-  onDrop: function (w, moved) { got.drop.push({ w: w, moved: moved }) }
+  onDrop: function (w, moved) { got.drop.push({ w: w, moved: moved }) },
+  onSingleCancel: function () { got.singleCancel.push(1) }
 })
 
 ;(async () => {
@@ -136,6 +137,38 @@ G.init({
   viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, 240, 200)]))
   check(got.drop.length === dropCountBefore + 1 && got.drop[got.drop.length - 1].moved === true,
     '拖动后抬起 → onDrop moved=true')
+
+  // ── 拿起/拖动中 touchcancel → onSingleCancel（不派发 drop，生命周期强制收尾）──
+  const cancelBefore = got.singleCancel.length
+  const dropBeforeCancel = got.drop.length
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 100, 200)]))
+  await new Promise(function (r) { setTimeout(r, 550) })   // 长按拿起（pickedup）
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, 120, 220)]))  // 进入拖动
+  viewportEl.dispatch('touchcancel', tev('touchcancel', [touch(1, 120, 220)]))
+  check(got.singleCancel.length === cancelBefore + 1, '拖动中 touchcancel → onSingleCancel 一次')
+  check(got.drop.length === dropBeforeCancel, 'touchcancel 不派发 drop（无落盘语义）')
+
+  // ── 框选进行中第二指落下（1→2 指）→ onSingleCancel（框选矩形回收）──
+  hitTypeMode = 'empty'
+  const cancelBefore2 = got.singleCancel.length
+  const marqueeEndBefore = got.marqueeEnd.length
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 200, 100)]))
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, 230, 130)]))   // 转 marquee
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 230, 130), touch(2, 300, 200)]))
+  check(got.singleCancel.length === cancelBefore2 + 1, '框选进行中第二指 → onSingleCancel 一次')
+  check(got.marqueeEnd.length === marqueeEndBefore, '1→2 指取消框选不派发 marquee-end')
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, 230, 130), touch(2, 300, 200)]))  // 清场
+
+  // ── 拖动中第二指落下（1→2 指）→ onSingleCancel（拿起态回收）──
+  const cancelBefore3 = got.singleCancel.length
+  const dropBefore3 = got.drop.length
+  hitTypeMode = 'selected'
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 100, 100)]))
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, 130, 100)]))   // 直接拿起拖动
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 130, 100), touch(2, 200, 100)]))
+  check(got.singleCancel.length === cancelBefore3 + 1, '拖动中第二指 → onSingleCancel 一次')
+  check(got.drop.length === dropBefore3, '1→2 指取消拖动不派发 drop')
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, 130, 100), touch(2, 200, 100)]))
 
   if (failures > 0) {
     console.error('  [FAIL] desktop-single-dom 单指接线测试 ' + failures + ' 项失败')

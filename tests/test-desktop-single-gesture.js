@@ -94,6 +94,28 @@ sg = G.singleMove(sg, 30, 40).sg
 r = G.singleUp(sg, 30, 40)
 check(r.effect.type === 'drop' && r.effect.moved === true, 'dragmove up → drop moved=true')
 
+// ── singleCancel：1→2 指 / touchcancel 的强制终结路径（生命周期收尾）──
+sg = G.singleDown(10, 10, 0)
+r = G.singleCancel(sg)
+check(r.effect.type === 'none' && r.sg.phase === 'pending', 'pending 取消 → none（无意图可取消）')
+sg = G.singleDown(10, 10, 0)
+sg = G.singleLongPress(sg).sg  // pickedup
+r = G.singleCancel(sg)
+check(r.effect.type === 'single-cancel' && r.sg.phase === 'idle', 'pickedup 取消 → single-cancel（拿起态回收）')
+sg = G.singleDown(10, 10, 0)
+sg = G.singleLongPress(sg).sg
+sg = G.singleMove(sg, 30, 40).sg  // dragmove
+r = G.singleCancel(sg)
+check(r.effect.type === 'single-cancel' && r.sg.phase === 'idle', 'dragmove 取消 → single-cancel（拖动终结）')
+sg = G.singleDown(10, 10, 0)
+sg = G.singleMove(sg, 30, 40).sg  // marquee
+r = G.singleCancel(sg)
+check(r.effect.type === 'single-cancel' && r.sg.phase === 'idle', 'marquee 取消 → single-cancel（框选矩形回收）')
+sg = G.singleDown(10, 10, 0)
+sg = G.singleUp(sg, 10, 10).sg  // 已 tap 复位
+r = G.singleCancel(sg)
+check(r.effect.type === 'none', 'tap 复位后再取消 → none（状态已清）')
+
 // ── 阈值可配置 ──
 sg = G.singleDown(0, 0, 0)
 r = G.singleMove(sg, 20, 0, { tapThreshold: 30 })

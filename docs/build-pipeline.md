@@ -43,6 +43,9 @@ build-web.sh 每次构建注入到 JS 尾部（`var` 声明，避免被 minify m
 
 ## Android 壳
 
-- 最小壳：`android.app.Activity` + WebView，零第三方运行时依赖（不依赖 androidx）
+- 最小壳：`android.app.Activity` + WebView
+- 依赖策略：最小化（理念，非绝对零依赖）——androidx.documentfile（SAF 文件访问）、
+  androidx.core（edge-to-edge WindowInsets 安全区注入，与 LexiCull 同款）；
+  避免引入重框架/UI 库，前端保持零第三方依赖
 - 包名占位 `com.example.desktop`，发布前确认后全局替换
 - APK 构建在 ARM64 环境需 QEMU 转发（aapt2/aapt/zipalign 包装器），见 android/build-local.sh

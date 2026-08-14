@@ -1,5 +1,19 @@
 # Desktop 更新日志
 
+## Unreleased
+
+### 交互层
+
+- 沉浸式状态栏/导航栏（参考 LexiCull 方案）：edge-to-edge 内容延伸，状态栏/导航栏
+  透明，安全区经 WindowInsets 注入 CSS 变量（safe-top / safe-bottom / panel-bottom）
+- 系统栏图标明暗由壳层统一控制（浅色主题 → 深色图标），手势临时栏
+- 新建/重命名对话框：键盘弹出时自动上移到键盘上方（ime-open）
+
+### 修复
+
+- 修复 API 30 以下设备启动闪退（VerifyError：直接引用 API 30 的
+  WindowInsetsController，已统一改走 androidx 兼容类）
+
 ## 0.2.0（2026-08-14）
 
 ### 交互层

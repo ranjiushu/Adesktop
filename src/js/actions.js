@@ -92,21 +92,33 @@ App.Actions = (function () {
   }
 
   // ── 阶段 C：重命名（单选才可用，调用方校验）──
-  // oldPath/newPath 均为完整相对路径（选中集合以完整路径为 key，FileAPI 桥天然匹配）
+  // oldPath/newPath 均为完整相对路径（选中集合以完整路径为 key，FileAPI 桥天然匹配）。
+  // 重名预检：list 目标目录（oldPath 父目录，防跨目录调用检查错位置），
+  // 存在同名项即拒绝——SAF renameTo 同名失败、私有模式 File.renameTo 同名行为
+  // 平台相关（可能静默覆盖），两模式行为必须一致：先查后改。
   function rename(oldPath, newPath) {
     if (!oldPath || !newPath || oldPath === newPath) return
-    App.FileAPI.rename(oldPath, newPath)
-      .then(function () {
-        // 布局 key 迁移：positions/bounds 以完整路径为 key，改名后必须迁移，
-        // 否则新名字刷新后回退自动排布（丢位置）。
-        if (App.Desktop && typeof App.Desktop.applyRename === 'function') {
-          App.Desktop.applyRename(oldPath, newPath)
+    const newName = newPath.indexOf('/') >= 0
+      ? newPath.slice(newPath.lastIndexOf('/') + 1) : newPath
+    const targetDir = oldPath.indexOf('/') >= 0
+      ? oldPath.slice(0, oldPath.lastIndexOf('/')) : ''
+    App.FileAPI.list(targetDir).then(function (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].name === newName) {
+          throw new Error('已存在同名项: ' + newName)
         }
-        App.toast.show('已重命名: ' + newPath)
-      })
-      .catch(function (err) {
-        App.toast.show('重命名失败: ' + err.message)
-      })
+      }
+      return App.FileAPI.rename(oldPath, newPath)
+    }).then(function () {
+      // 布局 key 迁移：positions/bounds 以完整路径为 key，改名后必须迁移，
+      // 否则新名字刷新后回退自动排布（丢位置）。
+      if (App.Desktop && typeof App.Desktop.applyRename === 'function') {
+        App.Desktop.applyRename(oldPath, newPath)
+      }
+      App.toast.show('已重命名: ' + newPath)
+    }).catch(function (err) {
+      App.toast.show('重命名失败: ' + err.message)
+    })
   }
 
   // ── 阶段 C：复制（只写剪贴板，Windows 模型，文件不动）──

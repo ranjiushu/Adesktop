@@ -69,8 +69,8 @@ App.onRootChanged = function onRootChanged() {
 }
 
 // 系统返回键（Android 壳 onKeyDown → evaluateJavascript 询问）：
-// 依次消费 Drawer → 整页面板；均未打开返回 false（壳退出 App）。
-// 不依赖 pushState 是否被 WebView 计入 canGoBack。
+// 依次消费 Drawer → 整页面板 → 文件导航后退（子目录内逐级退出，Windows 式），
+// 均未消费返回 false（壳退出 App）。不依赖 pushState 是否被 WebView 计入 canGoBack。
 App.handleSystemBack = function handleSystemBack() {
   if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()) {
     App.Drawer.close()
@@ -86,6 +86,13 @@ App.handleSystemBack = function handleSystemBack() {
     try {
       if (history.state && history.state._buildInfoOpen) history.back()
     } catch (e) { /* 忽略 */ }
+    return true
+  }
+  // 文件导航：子文件夹内返回键 = 后退一级（历史栈）；根目录无可退则交还壳退出。
+  // 曾缺失：返回键在子文件夹内被壳直接 finish，用户只能靠底栏按钮逐级退出。
+  if (App.Desktop && typeof App.Desktop.canGoBack === 'function' &&
+      typeof App.Desktop.goBack === 'function' && App.Desktop.canGoBack()) {
+    App.Desktop.goBack()
     return true
   }
   return false

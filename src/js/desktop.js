@@ -503,7 +503,7 @@ App.Desktop = (function () {
   }
 
   function handleLongPress(world) {
-    // folder 容器：长按 = 选中 + 移动占位提示（拖动语义 = 移动文件到文件夹，功能开发中）
+    // folder 容器：长按 = 拿起选中（拖动移入文件夹语义），实时标签由 applyDrag 负责
     if (isFolderView()) {
       const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
       if (name) {
@@ -512,7 +512,7 @@ App.Desktop = (function () {
           applySelection()
         }
         if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
-        if (App.toast) App.toast.show('移动文件/文件夹到文件夹（功能开发中）')
+        startGroupDrag(world)
       }
       return
     }
@@ -535,7 +535,30 @@ App.Desktop = (function () {
     }
   }
 
-  // 拖动过程：无极跟随（不吸附），放置时再吸附 + 避让
+  // 命中判定辅助：世界坐标 → 命中的文件夹完整路径（非 dragTargets 自身），无则 null。
+  // 供拖入文件夹实时标签与 drop 移动共用。
+  // 注意不能直接用 pointHitTest（重叠时后注册者优先）——拖动中图标 bounds 会
+  // 移动到目标上方，后注册的拖拽项自身会把文件夹「盖掉」。这里遍历 bounds，
+  // 命中判定**跳过拖拽项自身**，只认手指下的非拖拽文件夹。
+  function folderHitAt(world) {
+    let hit = null
+    Object.keys(bounds).forEach(function (key) {
+      const b = bounds[key]
+      if (world.x >= b.x && world.x <= b.x + b.w &&
+          world.y >= b.y && world.y <= b.y + b.h) {
+        if (dragTargets.indexOf(key) < 0) hit = key
+      }
+    })
+    if (!hit) return null
+    let isDir = false
+    state.items.forEach(function (it) {
+      if (fullPath(it.name) === hit) isDir = it.isDir
+    })
+    return isDir ? hit : null
+  }
+
+  // 拖动过程：无极跟随（不吸附），放置时再吸附 + 避让。
+  // 拖入文件夹：手指下命中文件夹 → 实时标签「文件将移入 XXX 文件夹」（顶栏靠下）
   function applyDrag(world) {
     const dx = world.x - dragStartWorld.x
     const dy = world.y - dragStartWorld.y
@@ -550,6 +573,14 @@ App.Desktop = (function () {
         node.style.top = y + 'px'
       }
     })
+    if (App.Loading && typeof App.Loading.showTag === 'function') {
+      const hit = folderHitAt(world)
+      if (hit) {
+        App.Loading.showTag('文件将移入 ' + App.DesktopNav.basename(hit) + ' 文件夹')
+      } else {
+        App.Loading.hideTag()
+      }
+    }
   }
 
   // 已选中组上直接拿起（拖动即拿取，不必长按）；folder 容器不拿起（防御，hitTest 已挡）
@@ -564,6 +595,76 @@ App.Desktop = (function () {
 
   function handleDrop(world, moved) {
     if (!dragTargets.length) return
+    // folder 容器：移入文件夹语义——命中文件夹 → moveIntoFolder；
+    // 未命中 → 还原起始位（folder 位置自动排布，不吸附不落盘）
+    if (isFolderView()) {
+      if (moved) {
+        const hit = folderHitAt(world)
+        if (hit) {
+          if (App.Loading && typeof App.Loading.hideTag === 'function') {
+            App.Loading.hideTag()
+          }
+          const entries = dragTargets.map(function (n) {
+            let isDir = false
+            state.items.forEach(function (it) {
+              if (fullPath(it.name) === n) isDir = it.isDir
+            })
+            return { path: n, isDir: isDir }
+          })
+          if (App.Actions && typeof App.Actions.moveIntoFolder === 'function') {
+            App.Actions.moveIntoFolder(entries, hit)
+          }
+          clearSelection()
+        } else {
+          // 未命中：还原（取消语义）
+          dragTargets.forEach(function (n) {
+            const back = dragStartPositions[n]
+            if (back) {
+              positions[n] = { x: back.x, y: back.y }
+              bounds[n] = { x: back.x, y: back.y, w: bounds[n].w, h: bounds[n].h }
+              const node = iconEls[n]
+              if (node) {
+                node.style.left = back.x + 'px'
+                node.style.top = back.y + 'px'
+              }
+            }
+          })
+        }
+      }
+      dragTargets.forEach(function (n) { setPickedUp(n, false) })
+      dragTargets = []
+      dragStartWorld = null
+      dragStartPositions = {}
+      return
+    }
+    // 拖入文件夹：手指下命中文件夹 → 移动文件到文件夹（移动语义，非吸附）
+    if (moved && !isFolderView()) {
+      const hit = folderHitAt(world)
+      if (hit) {
+        // 清标签 + 执行移动（copy+del 源，目标名自动加序号）
+        if (App.Loading && typeof App.Loading.hideTag === 'function') {
+          App.Loading.hideTag()
+        }
+        const entries = dragTargets.map(function (n) {
+          let isDir = false
+          state.items.forEach(function (it) {
+            if (fullPath(it.name) === n) isDir = it.isDir
+          })
+          return { path: n, isDir: isDir }
+        })
+        const dirPath = hit
+        if (App.Actions && typeof App.Actions.moveIntoFolder === 'function') {
+          App.Actions.moveIntoFolder(entries, dirPath)
+        }
+        dragTargets.forEach(function (n) { setPickedUp(n, false) })
+        dragTargets = []
+        dragStartWorld = null
+        dragStartPositions = {}
+        // Windows 原则：选中态脆弱——移动完成即失效
+        clearSelection()
+        return
+      }
+    }
     if (moved) {
       // 1. 移动组期望位：snap 到网格
       const dx = world.x - dragStartWorld.x
@@ -604,8 +705,12 @@ App.Desktop = (function () {
   // 单指意图取消（1→2 指切换 / touchcancel，由手势层派发）：
   // 取消 = 什么都没发生——收起框选矩形、拖起图标还原起始位、清理拿起态；
   // 不落盘（saveLayout）、不清选中（Windows 拖拽取消语义）。
+  // 实时标签同步回收（曾缺失：1→2 指取消后「文件将移入 XXX」标签滞留，真机偶发）。
   function handleSingleCancel() {
     hideMarquee()
+    if (App.Loading && typeof App.Loading.hideTag === 'function') {
+      App.Loading.hideTag()
+    }
     if (!dragTargets.length) return
     dragTargets.forEach(function (n) {
       const back = dragStartPositions[n]
@@ -625,9 +730,23 @@ App.Desktop = (function () {
     dragStartPositions = {}
   }
 
+  // refresh 代际守卫：异步链完成时若期间又发起了新 refresh（快速连续导航），
+  // 旧路径的 list 结果必须丢弃——否则旧 items 渲染到新视图（先切视图再变目录）
+  // + 用旧 items 做 valid 清空根级 positions（布局像初次启动，真机 Bug A）。
+  // 视图模式（isFolderView）由 curPath 同步切换，但 items 异步加载——
+  // 间隙经 App.Loading 显示不确定进度条（条纹滑动），加载完成隐藏，
+  // 避免「先切视图再变目录」的空白/错位感。
+  let _refreshSeq = 0
+
   function refresh() {
+    const seq = ++_refreshSeq
+    const path = state.curPath   // 快照：发起时的目标路径（list 用快照，不用动态 curPath）
+    if (App.Loading && typeof App.Loading.progress === 'function') {
+      App.Loading.progress('加载中', 0, 0)   // 不确定进度：total=0
+    }
     return App.FileAPI.rootInfo()
       .then(function (info) {
+        if (seq !== _refreshSeq) return null   // 过期响应：丢弃，不写状态
         state.rootName = info.rootName
         state.mode = info.mode
         if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
@@ -637,13 +756,18 @@ App.Desktop = (function () {
         }
       })
       .catch(function () {
+        if (seq !== _refreshSeq) return
         state.rootName = '无法读取'
         if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
           App.Drawer.updatePath(App.NAME, App.NAME, '')
         }
       })
-      .then(function () { return App.FileAPI.list(state.curPath) })
+      .then(function () {
+        if (seq !== _refreshSeq) return null
+        return App.FileAPI.list(path)
+      })
       .then(function (items) {
+        if (seq !== _refreshSeq) return null
         state.items = items
         // 清理失效布局条目（仅 desktop 空间；folder 容器位置是自动的，不存 positions）
         if (!isFolderView()) {
@@ -659,8 +783,16 @@ App.Desktop = (function () {
         if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
           App.BottomBar.updateNavButtons()
         }
+        // 目录加载完成：隐藏不确定进度条
+        if (App.Loading && typeof App.Loading.hideProgress === 'function') {
+          App.Loading.hideProgress()
+        }
       })
       .catch(function (err) {
+        if (seq !== _refreshSeq) return
+        if (App.Loading && typeof App.Loading.hideProgress === 'function') {
+          App.Loading.hideProgress()
+        }
         if (App.toast && typeof App.toast.show === 'function') {
           App.toast.show('读取失败: ' + err.message)
         }

@@ -89,6 +89,8 @@ let listCalls = []
 
 const fabSelection = []        // fabSpeedDial.setSelection 调用记录
 const layoutWrites = []        // localStorage.setItem 记录（真实 LayoutStore 经 localStorage 落盘）
+const loadingCalls = { tag: [], hideTag: 0 }
+const moveCalls = []           // moveIntoFolder 调用记录
 const sandbox = {
   App: {},
   console: console,
@@ -109,6 +111,15 @@ const sandbox = {
 sandbox.window = sandbox
 sandbox.App.bridge = { vibrate: function () {} }
 sandbox.App.toast = { show: function () {} }
+sandbox.App.Loading = {
+  showTag: function (text) { loadingCalls.tag.push(text) },
+  hideTag: function () { loadingCalls.hideTag++ },
+  progress: function () {},
+  hideProgress: function () {}
+}
+sandbox.App.Actions = {
+  moveIntoFolder: function (entries, dirPath) { moveCalls.push({ entries: entries, dirPath: dirPath }) }
+}
 sandbox.App.FileAPI = {
   rootInfo: function () { return Promise.resolve({ rootName: 'Test', mode: 'private', displayPath: '内部存储/Test' }) },
   list: function (p) { listCalls.push(p || ''); return Promise.resolve((fsTree[p || ''] || []).slice()) }
@@ -190,6 +201,96 @@ function screen(wx, wy) { return { x: wx, y: wy + 56 } }
   check(docsIcon.style.left === start2.left && docsIcon.style.top === start2.top, '取消后图标还原起始位')
   check(D.getSelectionNames().length === 1, '取消不清选中（取消 = 什么都没发生）')
   check(layoutWrites.length === writesBefore3, '取消不落盘')
+
+  // ── 场景 4：拖入文件夹——拖动中命中文件夹 → 实时标签；松手 → moveIntoFolder ──
+  // 场景 1 已把 docs 拖走，这里动态读取 docs 当前世界坐标（避免固定坐标失效）
+  const docsIconNow = createdIcons.filter(function (n) { return n.getAttribute('data-name') === 'docs' })[0]
+  const aIcon = createdIcons.filter(function (n) { return n.getAttribute('data-name') === 'a.txt' })[0]
+  const aP = screen(parseInt(aIcon.style.left, 10) + 42, parseInt(aIcon.style.top, 10) + 38)
+  // 选中 a.txt
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, aP.x, aP.y)]))
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, aP.x, aP.y)]))
+  await new Promise(function (r) { setTimeout(r, 350) })
+  check(D.getSelectionNames().length === 1 && D.getSelectionNames()[0] === 'a.txt', '场景4 选中 a.txt')
+  // 拖到 docs 图标中心（动态坐标）
+  const docsC = screen(parseInt(docsIconNow.style.left, 10) + 42, parseInt(docsIconNow.style.top, 10) + 38)
+  loadingCalls.tag.length = 0; loadingCalls.hideTag = 0
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, aP.x, aP.y)]))
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, aP.x + 15, aP.y + 15)]))      // 位移 >6px → 拿起（drag-start）
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, docsC.x, docsC.y)]))          // drag → 实时标签
+  check(loadingCalls.tag.length > 0 && loadingCalls.tag[loadingCalls.tag.length - 1].indexOf('docs') >= 0,
+    '拖动命中文件夹 → 实时标签「文件将移入 docs 文件夹」')
+  // 松手 → moveIntoFolder 被调用
+  moveCalls.length = 0
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, docsC.x, docsC.y)]))
+  check(moveCalls.length === 1, '松手命中文件夹 → 触发 moveIntoFolder')
+  check(moveCalls[0] && moveCalls[0].dirPath === 'docs', 'moveIntoFolder 目标 = docs')
+  check(moveCalls[0] && moveCalls[0].entries.length === 1 && moveCalls[0].entries[0].path === 'a.txt',
+    'moveIntoFolder 携带 a.txt 完整路径')
+  check(loadingCalls.hideTag > 0, '松手后隐藏实时标签')
+  check(!docsIcon.classList.contains('picked-up'), '松手后拿起态回收')
+  check(D.getSelectionNames().length === 0, '移动完成选中清空（Windows 原则）')
+
+  // ── 场景 5：拖动未命中文件夹 → 不触发 moveIntoFolder（吸附排布）──
+  await new Promise(function (r) { setTimeout(r, 350) })
+  const aP2 = screen(parseInt(aIcon.style.left, 10) + 42, parseInt(aIcon.style.top, 10) + 38)
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, aP2.x, aP2.y)]))
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, aP2.x, aP2.y)]))
+  await new Promise(function (r) { setTimeout(r, 350) })
+  moveCalls.length = 0
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, aP2.x, aP2.y)]))
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, aP2.x + 150, aP2.y + 150)]))
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, aP2.x + 150, aP2.y + 150)]))
+  check(moveCalls.length === 0, '拖到空白 → 不触发 moveIntoFolder（吸附移动）')
+  check(layoutWrites.length > 0, '拖到空白 → 落盘（位置移动）')
+
+  // ── 场景 6：拖动中标签显示 → touchcancel 取消 → 标签必须回收（偶发残留修复点）──
+  await new Promise(function (r) { setTimeout(r, 350) })
+  // 场景 5 避让后 docs/a.txt 位置都变了——重新读取当前位置，不用过期的 docsC
+  const docsIconNow6 = createdIcons.filter(function (n) { return n.getAttribute('data-name') === 'docs' })[0]
+  const aIcon6 = createdIcons.filter(function (n) { return n.getAttribute('data-name') === 'a.txt' })[0]
+  const aP3 = screen(parseInt(aIcon6.style.left, 10) + 42, parseInt(aIcon6.style.top, 10) + 38)
+  const docsC6 = screen(parseInt(docsIconNow6.style.left, 10) + 42, parseInt(docsIconNow6.style.top, 10) + 38)
+  // 预选中 a.txt（否则 touchmove 走框选而非拿起）
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, aP3.x, aP3.y)]))
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, aP3.x, aP3.y)]))
+  await new Promise(function (r) { setTimeout(r, 350) })
+  check(D.getSelectionNames().length === 1, '场景6 预选中 a.txt')
+  loadingCalls.tag.length = 0; loadingCalls.hideTag = 0
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, aP3.x, aP3.y)]))
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, aP3.x + 15, aP3.y + 15)]))
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, docsC6.x, docsC6.y)]))   // 命中文件夹 → 标签显示
+  check(loadingCalls.tag.length > 0, '场景6 拖动命中文件夹 → 标签已显示')
+  viewportEl.dispatch('touchcancel', tev('touchcancel', [touch(1, docsC6.x, docsC6.y)]))
+  check(loadingCalls.hideTag > 0, 'touchcancel 取消 → 标签回收（不残留）')
+
+  // ── 场景 7：folder 视图（子文件夹内）移入文件夹——长按拿起 + 拖到文件夹图标 → moveIntoFolder ──
+  // 进入 docs（folder 视图，grid 4 列）：docs 内 b.txt（第 1 格）+ 子文件夹 sub（第 2 格）
+  // 用 fsTree 扩展：docs 下含文件夹 sub 和文件 b.txt
+  // 先改 fsTree 注入 sub 文件夹
+  fsTree['docs'] = [
+    { name: 'sub', isDir: true, size: 0, mtime: 5 },
+    { name: 'b.txt', isDir: false, size: 1, mtime: 3 }
+  ]
+  D.enterFolder('docs')
+  await D.refresh()
+  check(D.getCurPath() === 'docs', '场景7 进入 docs（folder 视图）')
+  const subIcon = createdIcons.filter(function (n) { return n.getAttribute('data-name') === 'sub' })[0]
+  const bIcon = createdIcons.filter(function (n) { return n.getAttribute('data-name') === 'b.txt' })[0]
+  check(!!subIcon && !!bIcon, '场景7 docs 渲染 sub 文件夹 + b.txt')
+  // b.txt 长按拿起（500ms）→ 拖到 sub 上 → 松手 moveIntoFolder
+  const bP = screen(parseInt(bIcon.style.left, 10) + 42, parseInt(bIcon.style.top, 10) + 38)
+  const subC = screen(parseInt(subIcon.style.left, 10) + 42, parseInt(subIcon.style.top, 10) + 38)
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, bP.x, bP.y)]))
+  await new Promise(function (r) { setTimeout(r, 550) })   // 长按 500ms → pickedup
+  check(bIcon.classList.contains('picked-up'), '场景7 长按拿起 b.txt（folder 视图）')
+  moveCalls.length = 0
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, subC.x, subC.y)]))
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, subC.x, subC.y)]))
+  check(moveCalls.length === 1, '场景7 松手命中文件夹 → moveIntoFolder')
+  check(moveCalls[0] && moveCalls[0].dirPath === 'docs/sub', '场景7 moveIntoFolder 目标 = docs/sub')
+  check(moveCalls[0] && moveCalls[0].entries.length === 1 && moveCalls[0].entries[0].path === 'docs/b.txt',
+    '场景7 moveIntoFolder 携带 docs/b.txt')
 
   if (failures > 0) {
     console.error('  [FAIL] desktop-drop-selection 选中态生命周期测试 ' + failures + ' 项失败')

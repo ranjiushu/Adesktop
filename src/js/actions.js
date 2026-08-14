@@ -144,15 +144,19 @@ App.Actions = (function () {
   }
 
   // ── 阶段 C：粘贴（目标名自动加序号；cut 模式 copy+delete 源）──
-  function paste() {
-    const cb = App.Clipboard.get()
-    if (!cb || !cb.entries || !cb.entries.length) {
-      App.toast.show('剪贴板为空')
-      return
-    }
-    App.FileAPI.list(_curPath()).then(function (items) {
-      const plan = App.Clipboard.planPaste(cb, items, _curPath())
+  // 统一执行链：paste（当前目录）与 moveIntoFolder（指定文件夹）共用。
+  // cb = {mode:'copy'|'cut', entries:[{path,isDir}]}；targetDir = 完整相对路径。
+  // opts.keepClipboard = true 时（拖入文件夹）不清剪贴板（非用户剪贴板操作）。
+  // 多文件（total>1）时经 App.Loading 显示顶部进度条「正在移动/粘贴 n/N」。
+  function _transfer(cb, targetDir, opts) {
+    opts = opts || {}
+    App.FileAPI.list(targetDir).then(function (items) {
+      const plan = App.Clipboard.planPaste(cb, items, targetDir)
       if (!plan.length) return
+      const label = cb.mode === 'cut' ? '正在移动' : '正在粘贴'
+      if (App.Loading && typeof App.Loading.progress === 'function') {
+        App.Loading.progress(label, 0, plan.length)
+      }
       // 串行执行（写入路径失败必须告警，不吞错）
       let chain = Promise.resolve()
       let copied = 0
@@ -161,27 +165,55 @@ App.Actions = (function () {
           return App.FileAPI.copy(job.src, job.dst)
         }).then(function () {
           copied++
-          // 剪切模式：粘贴成功后删除源（移动语义）
+          if (App.Loading && typeof App.Loading.progress === 'function') {
+            App.Loading.progress(label, copied, plan.length)
+          }
+          // 剪切/移动模式：粘贴成功后删除源（移动语义）
           if (cb.mode === 'cut') {
             return App.FileAPI.del(job.src)
           }
         })
       })
       return chain.then(function () {
-        if (cb.mode === 'cut') App.Clipboard.clear()
+        if (cb.mode === 'cut' && !opts.keepClipboard) App.Clipboard.clear()
+        if (App.Loading && typeof App.Loading.hideProgress === 'function') {
+          App.Loading.hideProgress()
+        }
         App.toast.show((cb.mode === 'cut' ? '已移动 ' : '已粘贴 ') + copied + ' 项')
         // Windows 原则：选中态脆弱——粘贴后源选中路径已失效（cut 源已删 / 目标已生成），
         // 清空选中 + 收起操作栏，避免「幽灵选中」残留
         App.Desktop.clearSelection()
         App.Desktop.refresh()
       }).catch(function (err) {
+        if (App.Loading && typeof App.Loading.hideProgress === 'function') {
+          App.Loading.hideProgress()
+        }
         App.toast.show('粘贴失败: ' + err.message + '（已成功 ' + copied + ' 项）')
         App.Desktop.clearSelection()
         App.Desktop.refresh()
       })
     }).catch(function (err) {
+      if (App.Loading && typeof App.Loading.hideProgress === 'function') {
+        App.Loading.hideProgress()
+      }
       App.toast.show('粘贴失败: ' + err.message)
     })
+  }
+
+  function paste() {
+    const cb = App.Clipboard.get()
+    if (!cb || !cb.entries || !cb.entries.length) {
+      App.toast.show('剪贴板为空')
+      return
+    }
+    _transfer(cb, _curPath())
+  }
+
+  // 拖入文件夹（桌面空间拖动命中文件夹松手）：移动语义（copy+del 源），
+  // 目标目录 = 文件夹完整路径，不清用户剪贴板（非剪贴板操作）。
+  function moveIntoFolder(entries, dirPath) {
+    if (!entries || !entries.length || !dirPath) return
+    _transfer({ mode: 'cut', entries: entries }, dirPath, { keepClipboard: true })
   }
 
   return {
@@ -193,6 +225,7 @@ App.Actions = (function () {
     rename: rename,
     copySelection: copySelection,
     cutSelection: cutSelection,
-    paste: paste
+    paste: paste,
+    moveIntoFolder: moveIntoFolder
   }
 })()

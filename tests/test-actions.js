@@ -23,7 +23,8 @@ function check(cond, msg) {
 // ── 沙箱：App + 桩依赖（每用例前 resetCalls 重置记录）──
 const calls = {
   list: [], mkdir: [], write: [], rename: [], copy: [], del: [],
-  refresh: 0, clearSelection: 0, toasts: [], applyRename: 0
+  refresh: 0, clearSelection: 0, toasts: [], applyRename: 0,
+  progress: [], hideProgress: 0
 }
 let listResult = []       // FileAPI.list 返回
 let copyShouldReject = false
@@ -32,7 +33,7 @@ function resetCalls() {
   calls.list.length = 0; calls.mkdir.length = 0; calls.write.length = 0
   calls.rename.length = 0; calls.copy.length = 0; calls.del.length = 0
   calls.refresh = 0; calls.clearSelection = 0; calls.toasts.length = 0
-  calls.applyRename = 0
+  calls.applyRename = 0; calls.progress.length = 0; calls.hideProgress = 0
 }
 
 const sandbox = {
@@ -67,6 +68,10 @@ sandbox.App.Desktop = {
 }
 sandbox.App.toast = {
   show: function (m) { calls.toasts.push(m) }
+}
+sandbox.App.Loading = {
+  progress: function (label, done, total) { calls.progress.push([label, done, total]) },
+  hideProgress: function () { calls.hideProgress++ }
 }
 
 vm.runInContext(fs.readFileSync(path.join(SRC, 'actions.js'), 'utf8'), sandbox,
@@ -206,6 +211,34 @@ async function main() {
     return t.indexOf('粘贴失败: 磁盘空间不足') === 0
   }), 'paste copy 失败 → toast 含错误原因')
   check(calls.clearSelection === 1 && calls.refresh === 1, 'paste 失败也清选中 + refresh')
+
+  // ── 多文件进度：progress 推进 + 完成自动隐藏 ──
+  resetCalls(); C.clear()
+  C.set('copy', [{ path: 'a.txt', isDir: false }, { path: 'b.txt', isDir: false }])
+  listResult = []
+  A.paste()
+  await tick()
+  check(calls.progress.length === 3, '多文件 paste → progress 3 次（0/2、1/2、2/2），实际 ' + calls.progress.length)
+  check(calls.progress[0][0] === '正在粘贴' && calls.progress[0][2] === 2,
+    'progress 起始 label=正在粘贴 total=2')
+  check(calls.progress[2][1] === 2, 'progress 末次 done=2（完成）')
+  check(calls.hideProgress === 1, '完成 → hideProgress 一次')
+
+  // ── moveIntoFolder：移动语义（copy+del 源）+ 不清剪贴板 ──
+  resetCalls(); C.clear()
+  C.set('copy', [{ path: 'x.txt', isDir: false }])   // 预置无关剪贴板
+  listResult = []                                     // 目标文件夹 docs 内无同名
+  A.moveIntoFolder([{ path: 'a.txt', isDir: false }], 'docs')
+  await tick()
+  check(calls.list.length >= 1 && calls.list[0] === 'docs',
+    'moveIntoFolder → list(docs) 检查目标目录')
+  check(calls.copy.length === 1 && calls.copy[0][0] === 'a.txt' && calls.copy[0][1] === 'docs/a.txt',
+    'moveIntoFolder → copy(a.txt, docs/a.txt)')
+  check(calls.del.length === 1 && calls.del[0] === 'a.txt', 'moveIntoFolder → del 源（移动语义）')
+  check(C.has() === true, 'moveIntoFolder 不清剪贴板（keepClipboard）')
+  check(calls.toasts.some(function (t) { return t.indexOf('已移动 1 项') === 0 }),
+    'moveIntoFolder toast 已移动 1 项')
+  check(calls.clearSelection === 1 && calls.refresh === 1, 'moveIntoFolder 后清选中 + refresh')
 
   if (failures > 0) {
     console.error('  [FAIL] actions 测试 ' + failures + ' 项失败')

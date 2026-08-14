@@ -1,11 +1,8 @@
-// Viewer folder 容器验证：进入子目录 → 打开文件（无锚点 → 全屏沉浸式）
-//   - 全屏占满内容区 + layer 拦截触摸
-//   - FAB「关闭预览」关闭；取消选择 = 关闭预览
-//   - 目录上下文保持
+// Viewer folder 容器验证：进入子目录 → 打开文件 = 全屏新页面 → 退出 = 关闭 + 目录保持
 'use strict'
 const path = require('path')
 const { launch } = require('/skills/ui-verify/scripts/lib/browser.js')
-const HTML = 'file://' + path.join(__dirname, '..', '..', 'dist', 'desktop.bundle.html')
+const HTML = 'file://' + path.join('/workspace/Desktop', 'dist', 'desktop.bundle.html')
 let failures = 0
 function check(cond, msg) {
   if (cond) console.log('  [ok] ' + msg)
@@ -37,47 +34,41 @@ async function main() {
   await page.evaluate(function () { App.Desktop.openItem('docs') })
   await page.waitForFunction(function () { return document.querySelectorAll('.desktop-icon').length === 1 }, { timeout: 5000 })
 
-  console.log('═══ folder 全屏沉浸式 ═══')
+  console.log('═══ folder 打开文件 = 全屏新页面 ═══')
   await page.evaluate(function () { App.Desktop.openItem('docs/guide.md') })
-  await page.waitForFunction(function () { return document.querySelector('.viewer-card-fullscreen') }, { timeout: 5000 })
+  await page.waitForFunction(function () {
+    return document.getElementById('viewer-fs-page').classList.contains('viewer-fs-page-open')
+  }, { timeout: 5000 })
   const r = await page.evaluate(function () {
-    const layer = document.getElementById('viewer-layer')
-    const lb = layer.getBoundingClientRect()
-    const c = document.querySelector('.viewer-card-fullscreen').getBoundingClientRect()
+    const page = document.getElementById('viewer-fs-page')
+    const card = document.querySelector('.viewer-card-fullscreen')
+    const pb = page.getBoundingClientRect()
+    const cb = card.getBoundingClientRect()
     return {
-      full: Math.abs(c.width - lb.width) < 1 && Math.abs(c.height - lb.height) < 1,
-      inLayer: document.querySelector('.viewer-card-fullscreen').parentNode === layer,
-      layerOpen: layer.classList.contains('viewer-layer-open'),
+      full: Math.abs(cb.width - window.innerWidth) < 1 && Math.abs(cb.height - window.innerHeight) < 1,
+      inPage: card.parentNode === page,
       mode: App.InternalViewer.getMode(),
-      selected: document.querySelectorAll('.desktop-icon.selected').length
+      selected: document.querySelectorAll('.desktop-icon.selected').length,
+      md: !!document.querySelector('.viewer-md h1'),
+      fabHidden: document.getElementById('mode-switch-fab').classList.contains('fab-hidden')
     }
   })
-  check(r.full && r.inLayer && r.layerOpen, 'folder 打开文件 → 全屏占满内容区 + 拦截触摸')
-  check(r.mode === 'fullscreen', 'folder 模式 = 全屏形态')
-  check(r.selected === 1, '文件保持选中态（FAB 关闭入口可用）')
+  check(r.full && r.inPage, 'folder 打开 → 全屏新页面（fixed 覆盖全视口）')
+  check(r.mode === 'fullscreen' && r.fabHidden, 'folder 全屏模式 + FAB 隐藏（简洁新页面）')
+  check(r.selected === 1 && r.md, '文件保持选中 + 内容渲染')
 
-  console.log('═══ FAB 关闭预览（folder）═══')
-  const closed = await page.evaluate(function () {
-    document.querySelector('[data-action="close-preview"]').click()
-    return {
-      open: App.InternalViewer.isOpen(),
-      layerOpen: document.getElementById('viewer-layer').classList.contains('viewer-layer-open'),
-      cur: App.Desktop.getCurPath()
-    }
-  })
-  check(!closed.open && !closed.layerOpen && closed.cur === 'docs', '关闭预览后：Viewer 关、目录保持 docs')
-
-  console.log('═══ 返回键关闭 + 目录保持 ═══')
-  await page.evaluate(function () { App.Desktop.openItem('docs/guide.md') })
-  await page.waitForFunction(function () { return App.InternalViewer.isOpen() }, { timeout: 5000 })
+  console.log('═══ 退出全屏 = 关闭 + 目录保持 ═══')
   const back = await page.evaluate(function () {
     const handled = App.handleSystemBack()
-    return { handled: handled, open: App.InternalViewer.isOpen(), cur: App.Desktop.getCurPath() }
+    return { handled: handled, open: App.InternalViewer.isOpen(),
+             pageOpen: document.getElementById('viewer-fs-page').classList.contains('viewer-fs-page-open'),
+             cur: App.Desktop.getCurPath() }
   })
-  check(back.handled && !back.open && back.cur === 'docs', '返回键关闭 Viewer，目录保持 docs')
+  check(back.handled && !back.open && !back.pageOpen && back.cur === 'docs',
+    '返回键退出全屏 → Viewer 关闭、目录保持 docs')
 
   await browser.close()
   if (failures > 0) { console.error('[FAIL] ' + failures + ' 项失败'); process.exit(1) }
-  console.log('[ok] folder 验证通过')
+  console.log('[ok] folder 全屏验证通过')
 }
 main().catch(function (e) { console.error('[FAIL]', e.message); process.exit(1) })

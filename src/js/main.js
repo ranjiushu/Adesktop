@@ -72,10 +72,16 @@ App.onRootChanged = function onRootChanged() {
 // 依次消费 查看器 → Drawer → 整页面板 → 文件导航后退（子目录内逐级退出，Windows 式），
 // 均未消费返回 false（壳退出 App）。不依赖 pushState 是否被 WebView 计入 canGoBack。
 App.handleSystemBack = function handleSystemBack() {
-// 文件查看器优先：打开时返回键 = 关闭查看器（文件与画布状态恢复）
+// 文件查看器优先：全屏态返回键 = 退出全屏（回到原页面状态）；预览态 = 关闭
 if (App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
     App.InternalViewer.isOpen()) {
-  App.InternalViewer.close()
+  if (App.InternalViewer.getMode && App.InternalViewer.getMode() === 'fullscreen') {
+    if (typeof App.InternalViewer.exitFullscreen === 'function') {
+      App.InternalViewer.exitFullscreen()
+    }
+  } else if (typeof App.InternalViewer.close === 'function') {
+    App.InternalViewer.close()
+  }
   return true
 }
 if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()) {

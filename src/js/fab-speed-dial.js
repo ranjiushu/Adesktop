@@ -56,6 +56,13 @@ App.fabSpeedDial = (function () {
         }
         collapse()
         return
+      case 'fullscreen-preview':
+        // 全屏预览（画布实体 → 独立新页面；返回/退出回到原页面状态）
+        if (App.InternalViewer && typeof App.InternalViewer.toFullscreen === 'function') {
+          App.InternalViewer.toFullscreen()
+        }
+        collapse()
+        return
       case 'copy':
       case 'cut':
         // 复制/剪切：只写剪贴板（内存态），文件不动；需 {path,isDir} 供跨目录粘贴
@@ -157,6 +164,7 @@ App.fabSpeedDial = (function () {
 
   // 选中态驱动：非空 → 自动展开 selection 按钮集；空 → 收起
   // 选中态操作栏是「非模态」的：不加全屏遮罩，桌面保持可交互（长按拖拽/框选/点空白清空）
+  // Viewer 打开时只显示 全屏预览 + 关闭预览（预览焦点模式）；关闭后显示文件操作。
   function setSelection(hasSelection) {
     _selectionActive = !!hasSelection
     let fab = _getEl(FAB_ID)
@@ -167,19 +175,26 @@ App.fabSpeedDial = (function () {
       _expanded = true
       _mode = 'selection'
       sd.setAttribute('data-mode', 'selection')
-      // 「关闭预览」按钮仅 Viewer 打开时显示
-      const cp = sd.querySelector('[data-action="close-preview"]')
-      if (cp) {
-        const viewerOpen = App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
-          App.InternalViewer.isOpen()
-        cp.style.display = viewerOpen ? '' : 'none'
-      }
+      const viewerOpen = App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
+        App.InternalViewer.isOpen()
+      _setBtnVisible(sd, 'open', !viewerOpen)
+      _setBtnVisible(sd, 'fullscreen-preview', viewerOpen)
+      _setBtnVisible(sd, 'close-preview', viewerOpen)
+      _setBtnVisible(sd, 'copy', !viewerOpen)
+      _setBtnVisible(sd, 'cut', !viewerOpen)
+      _setBtnVisible(sd, 'rename', !viewerOpen)
+      _setBtnVisible(sd, 'clear-selection', !viewerOpen)
       if (bd) bd.classList.remove('fab-backdrop-visible')
       sd.classList.add('fab-speed-dial-expanded')
       fab.classList.add('fab-speed-dial-active')
     } else {
       collapse()
     }
+  }
+
+  function _setBtnVisible(sd, action, visible) {
+    const btn = sd.querySelector('[data-action="' + action + '"]')
+    if (btn) btn.style.display = visible ? '' : 'none'
   }
 
   function isSelectionActive() { return _selectionActive }

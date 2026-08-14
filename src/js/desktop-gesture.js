@@ -67,8 +67,9 @@ App.DesktopGesture = (function () {
     if (sg.phase === 'pending') {
       const d = distance({ x: sg.startX, y: sg.startY }, { x: x, y: y })
       if (d > th) {
-        // 已选中 → 直接拿起移动（不必长按）；否则 → 框选（folder 容器同样框选，不引入滚动）
-        if (sg.hitType === 'selected') {
+        // 已选中 → 直接拿起移动（不必长按）；Viewer 实体（viewer-selected）→ 拿起移动实体；
+        // 其余 → 框选（folder 容器同样框选，不引入滚动）
+        if (sg.hitType === 'selected' || sg.hitType === 'viewer' || sg.hitType === 'viewer-selected') {
           return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y } }
         }
         return { sg: Object.assign({}, next, { phase: 'marquee' }), effect: { type: 'marquee-start', x: sg.startX, y: sg.startY } }

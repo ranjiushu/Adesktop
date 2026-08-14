@@ -1,50 +1,47 @@
-/* InternalViewer：通用文件查看器组件。
- * 双形态（由宿主按上下文传入 anchor 决定）：
+/* InternalViewer：通用文件查看器组件（画布实体 + 全屏新页面双形态）。
  *   1. canvas 预览态（anchor 非 null，Desktop 空间）：Viewer 是放置在画布上的
- *      世界坐标实体——随画布 transform 平移/缩放，桌面手势照常作用于其上
- *      （不拦截触摸，不创作独立交互模型），DOM 遮挡使其背后的文件点不到。
- *   2. fullscreen 全屏态（anchor null，folder 容器 / 预览态点「全屏预览」）：
- *      Viewer 占满内容区，拦截触摸，内容可滚动/媒体可控制。
- * 顶栏只有「全屏预览」按钮（canvas 态）；关闭功能由宿主（Morph FAB 选中态
- * 操作栏 / 系统返回键）完成，Viewer 自身不提供关闭入口。
- * 类型：text/markdown/json/html/svg/image/video/audio；媒体走 URI 流式
- *       （FileAPI.resolveUri → content:// 或 file://），不把大文件搬入 JS 内存。
- * HTML 安全：iframe srcdoc + sandbox="allow-scripts"（无 allow-same-origin → opaque
- *       origin，脚本无法触达 window.FileBridge）。
+ *      世界坐标实体——随画布 transform 平移/缩放，具备实体的基本性质：
+ *      点击 = 选中（与文件选中态绑定）、长按/拖动 = 移动实体位置；
+ *      桌面手势照常作用于画布，DOM 遮挡使其背后的文件点不到。
+ *   2. fullscreen 全屏态（anchor null folder 容器 / FAB「全屏预览」）：
+ *      Viewer 进入 #viewer-fs-page 独立新页面（fixed 全屏），退出（返回键 /
+ *      页头返回按钮）回到原页面状态——桌面空间回画布实体，folder 容器关闭。
+ * 顶栏：canvas 态只显示「全屏预览」按钮；全屏态显示返回按钮 + 文件名。
+ * 关闭功能由 Morph FAB 选中态操作栏（全屏预览 / 关闭预览）与系统返回键完成。
+ * 类型：text/markdown/json/html/svg/image/video/audio；媒体走 URI 流式。
+ * HTML 安全：iframe srcdoc + sandbox="allow-scripts"（隔离 Java 桥）。
  * 依赖: namespace.js, file-api.js, markdown.js
- * 导出: App.InternalViewer（worldRect/cardSize/visibleRatio/jsonToNodes 纯函数可单测）
+ * 导出: App.InternalViewer（worldRect/cardSize/visibleRatio/jsonToNodes/shiftRect 纯函数可单测）
  */
 'use strict'
 
 App.InternalViewer = (function () {
-  const VIEWPORT_EDGE = 16   // 世界尺寸：宽 = 视口宽 - 2×EDGE（zoom=1 时接近屏幕）
-  const TOP_GAP = 96         // 世界尺寸：高 = 视口高 - TOP_GAP（让位顶栏/底栏）
+  const VIEWPORT_EDGE = 16
+  const TOP_GAP = 96
   const MIN_W = 200
   const MIN_H = 160
-  const MIN_VISIBLE = 0.3    // 打开瞬间锚点可见性阈值（低于则移到视口中心）
+  const MIN_VISIBLE = 0.3
 
-  // ── 纯函数：世界矩形（卡片中心对齐锚点世界坐标；anchor = {x, y}，与 Desktop positions 一致）──
+  // ── 纯函数 ──
+  // 世界矩形（卡片中心对齐锚点世界坐标；anchor = {x, y}，与 Desktop positions 一致）
   function worldRect(anchor, w, h) {
     return { x: anchor.x - w / 2, y: anchor.y - h / 2, w: w, h: h }
   }
-
-  // ── 纯函数：世界尺寸（接近屏幕尺度，不随当前 zoom 调整；zoom 由画布 transform 决定）──
+  // 世界尺寸（zoom=1 时接近屏幕）
   function cardSize(vw, vh) {
-    return {
-      w: Math.max(MIN_W, vw - VIEWPORT_EDGE * 2),
-      h: Math.max(MIN_H, vh - TOP_GAP)
-    }
+    return { w: Math.max(MIN_W, vw - VIEWPORT_EDGE * 2), h: Math.max(MIN_H, vh - TOP_GAP) }
   }
-
   // 矩形与视口交集面积占比（0~1）
   function visibleRatio(rect, vw, vh) {
     const ix = Math.max(0, Math.min(rect.x + rect.w, vw) - Math.max(rect.x, 0))
     const iy = Math.max(0, Math.min(rect.y + rect.h, vh) - Math.max(rect.y, 0))
     return (ix * iy) / (rect.w * rect.h)
   }
-
-  // ── 纯函数：JSON → 树节点（对象/数组 → children；标量 → preview）──
-  // 节点: { key, type: 'object'|'array'|'string'|'number'|'boolean'|'null', value, children, preview }
+  // 矩形平移（拖动用）
+  function shiftRect(rect, dx, dy) {
+    return { x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h }
+  }
+  // JSON → 树节点
   function jsonToNodes(value, key) {
     const k = key == null ? '' : String(key)
     if (value === null) return { key: k, type: 'null', value: null, children: [], preview: 'null' }
@@ -71,29 +68,37 @@ App.InternalViewer = (function () {
   }
 
   // ── DOM 状态 ──
-  let _layer = null          // #viewer-layer（fullscreen 宿主，触摸拦截挂载点）
-  let _canvas = null         // #desktop-canvas（canvas 预览宿主）
+  let _layer = null        // #viewer-layer（fullscreen 触摸拦截宿主；folder 全屏）
+  let _fsPage = null       // #viewer-fs-page（全屏新页面宿主）
+  let _canvas = null       // #desktop-canvas（画布实体宿主）
   let _card = null
   let _title = null
   let _body = null
-  let _fsBtn = null          // 顶栏「全屏预览」按钮
-  let _state = { open: false, mode: null, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null }
+  let _backBtn = null
+  let _fsBtn = null
+  let _drag = null         // { startWorld, startRect } 拖动状态
+  let _state = { open: false, mode: null, fsFrom: null, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null, canvasRect: null }
 
   function ensureInit() {
     if (_card) return
     _layer = document.getElementById('viewer-layer')
+    _fsPage = document.getElementById('viewer-fs-page')
     _canvas = document.getElementById('desktop-canvas')
-    // 触摸拦截只挂在 layer：fullscreen 态 card 在 layer 内才命中（canvas 态不受影响），
-    // capture 阶段阻断冒泡到桌面手势层；内部滚动/控件正常。
-    if (_layer) {
+    // 触摸拦截：layer 与 fs-page 均 capture 阶段阻断冒泡到桌面手势层
+    // （canvas 态实体不经过二者 → 桌面手指依旧有效）
+    ;[_layer, _fsPage].forEach(function (host) {
+      if (!host) return
       ;['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (type) {
-        _layer.addEventListener(type, function (e) { e.stopPropagation() }, true)
+        host.addEventListener(type, function (e) { e.stopPropagation() }, true)
       })
-    }
+    })
     _card = document.createElement('div')
     _card.className = 'viewer-card'
     _card.innerHTML =
       '<header class="viewer-header">' +
+      '<button class="viewer-back-btn" aria-label="退出全屏">' +
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>' +
+      '</button>' +
       '<span class="viewer-title"></span>' +
       '<button class="viewer-fs-btn" aria-label="全屏预览">' +
       '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>' +
@@ -102,8 +107,16 @@ App.InternalViewer = (function () {
       '<div class="viewer-body"></div>'
     _title = _card.querySelector('.viewer-title')
     _body = _card.querySelector('.viewer-body')
+    _backBtn = _card.querySelector('.viewer-back-btn')
     _fsBtn = _card.querySelector('.viewer-fs-btn')
     _fsBtn.addEventListener('click', toFullscreen)
+    _backBtn.addEventListener('click', function () {
+      // 页面返回按钮：退出全屏 + 清理历史栈（popstate 触发 exitFullscreen 幂等）
+      exitFullscreen()
+      try {
+        if (history.state && history.state._viewerFs) history.back()
+      } catch (e) { /* 忽略 */ }
+    })
     // 内容区链接点击：不跳转（避免 file:// 页面被顶掉），toast 提示
     _body.addEventListener('click', function (e) {
       const a = e.target && e.target.closest ? e.target.closest('a') : null
@@ -113,6 +126,10 @@ App.InternalViewer = (function () {
           App.toast.show('链接跳转暂不支持（内部查看器）')
         }
       }
+    })
+    // 全屏返回键：popstate（系统返回键 → webView.goBack → popstate；file:// 存疑时走 handleSystemBack 兜底）
+    window.addEventListener('popstate', function () {
+      if (_state.open && _state.mode === 'fullscreen') exitFullscreen()
     })
   }
 
@@ -133,12 +150,19 @@ App.InternalViewer = (function () {
     if (btn) btn.addEventListener('click', function () { _state.onFallback() })
   }
 
-  // 定位并挂载到宿主
+  // 全屏时隐藏 FAB（简洁新页面；退出恢复）
+  function setFabHidden(hidden) {
+    const fab = document.getElementById('mode-switch-fab')
+    if (!fab) return
+    if (hidden) fab.classList.add('fab-hidden')
+    else fab.classList.remove('fab-hidden')
+  }
+
+  // ── 挂载 ──
   function mount() {
     const vw = _layer.clientWidth
     const vh = _layer.clientHeight
     if (_state.mode === 'canvas') {
-      // 世界坐标实体：中心对齐锚点；锚点不可见时移到视口中心世界点（保证首屏可见）
       const size = cardSize(vw, vh)
       let rect = worldRect(_state.anchor, size.w, size.h)
       if (visibleRatio(rect, vw, vh) < MIN_VISIBLE && _state.camera) {
@@ -146,49 +170,124 @@ App.InternalViewer = (function () {
         const ch = _state.camera.y + vh / (2 * _state.camera.zoom)
         rect = worldRect({ x: cw, y: ch }, size.w, size.h)
       }
-      _state.rect = rect
-      _card.style.left = rect.x + 'px'
-      _card.style.top = rect.y + 'px'
-      _card.style.width = rect.w + 'px'
-      _card.style.height = rect.h + 'px'
-      _card.className = 'viewer-card viewer-card-canvas'
+      applyCanvasRect(rect)
+      _card.classList.add('viewer-card-selected')   // 选中视觉（与文件选中态绑定）
       _fsBtn.style.display = ''
+      _backBtn.style.display = 'none'
       if (_canvas) _canvas.appendChild(_card)
     } else {
-      // 全屏态：占满内容区
-      _state.rect = { x: 0, y: 0, w: vw, h: vh }
-      _card.className = 'viewer-card viewer-card-fullscreen'
-      _fsBtn.style.display = 'none'
-      if (_layer) _layer.appendChild(_card)
+      // folder 全屏：进入新页面
+      enterFullscreenPage()
     }
   }
 
-  // 顶栏「全屏预览」：canvas 实体 → 全屏覆盖（内容保留，不重新渲染）
-  function toFullscreen() {
-    if (!_state.open || _state.mode !== 'canvas' || !_layer) return
+  // 画布实体矩形应用（世界坐标）
+  function applyCanvasRect(rect) {
+    _state.rect = rect
+    _state.canvasRect = { x: rect.x, y: rect.y, w: rect.w, h: rect.h }
+    _card.style.left = rect.x + 'px'
+    _card.style.top = rect.y + 'px'
+    _card.style.width = rect.w + 'px'
+    _card.style.height = rect.h + 'px'
+  }
+
+  // ── 全屏新页面 ──
+  function enterFullscreenPage() {
     _state.mode = 'fullscreen'
     _state.rect = { x: 0, y: 0, w: _layer.clientWidth, h: _layer.clientHeight }
     if (_card.parentNode) _card.parentNode.removeChild(_card)
-    // 清掉画布实体留下的 inline 定位（让 .viewer-card-fullscreen 的 100% 生效）
+    // 清掉画布实体 inline 定位（fixed 全屏由 CSS 控制）
     _card.style.left = ''
     _card.style.top = ''
     _card.style.width = ''
     _card.style.height = ''
     _card.className = 'viewer-card viewer-card-fullscreen'
+    _card.classList.remove('viewer-card-selected')
     _fsBtn.style.display = 'none'
-    _layer.appendChild(_card)
-    _layer.classList.add('viewer-layer-open')
-    _layer.setAttribute('aria-hidden', 'false')
+    _backBtn.style.display = ''
+    if (_fsPage) {
+      _fsPage.appendChild(_card)
+      _fsPage.classList.add('viewer-fs-page-open')
+      _fsPage.setAttribute('aria-hidden', 'false')
+    }
+    setFabHidden(true)
+    // 系统返回键：pushState 使 webView.canGoBack() 可回退（buildinfo 同款模式）
+    try { history.pushState({ _viewerFs: true }, '') } catch (e) { /* 降级：handleSystemBack 兜底 */ }
   }
 
-  // 画布实体命中测试：世界坐标点是否落在 Viewer 矩形内（宿主 tap 不反选用）
+  // 退出全屏：桌面空间 → 回画布实体；folder → 关闭。
+  // 不主动调 history.back()：系统返回键路径（canGoBack→popstate / handleSystemBack）
+  // 与页面返回按钮（backBtn 显式 back）已覆盖；避免 file:// 下 back 触发整页导航。
+  function exitFullscreen() {
+    if (!_state.open || _state.mode !== 'fullscreen') return
+    const from = _state.fsFrom
+    if (_fsPage) {
+      _fsPage.classList.remove('viewer-fs-page-open')
+      _fsPage.setAttribute('aria-hidden', 'true')
+    }
+    if (_card.parentNode) _card.parentNode.removeChild(_card)
+    setFabHidden(false)
+    if (from === 'canvas') {
+      // 回到画布实体（保留内容与位置）
+      _state.mode = 'canvas'
+      _card.className = 'viewer-card viewer-card-canvas viewer-card-selected'
+      _fsBtn.style.display = ''
+      _backBtn.style.display = 'none'
+      if (_canvas) _canvas.appendChild(_card)
+      applyCanvasRect(_state.canvasRect || _state.rect)
+    } else {
+      close()
+    }
+  }
+
+  // 顶栏「全屏预览」（canvas 态）
+  function toFullscreen() {
+    if (!_state.open || _state.mode !== 'canvas' || !_fsPage) return
+    _state.fsFrom = 'canvas'
+    enterFullscreenPage()
+  }
+
+  // ── 画布实体拖动（实体基本性质：长按/拖动 = 移动实体位置） ──
+  function beginDrag(world) {
+    if (!_state.open || _state.mode !== 'canvas' || !_state.rect) return false
+    _drag = {
+      startWorld: { x: world.x, y: world.y },
+      startRect: { x: _state.rect.x, y: _state.rect.y, w: _state.rect.w, h: _state.rect.h }
+    }
+    _card.classList.add('viewer-card-dragging')
+    return true
+  }
+
+  function moveBy(world) {
+    if (!_drag) return
+    const dx = world.x - _drag.startWorld.x
+    const dy = world.y - _drag.startWorld.y
+    applyCanvasRect(shiftRect(_drag.startRect, dx, dy))
+  }
+
+  function endDrag() {
+    if (!_drag) return
+    _drag = null
+    _card.classList.remove('viewer-card-dragging')
+  }
+
+  function cancelDrag() {
+    if (!_drag) return
+    applyCanvasRect(_drag.startRect)
+    _drag = null
+    _card.classList.remove('viewer-card-dragging')
+  }
+
+  function isDragging() { return !!_drag }
+
+  // 画布实体命中测试：世界坐标点是否落在 Viewer 矩形内（宿主 tap 选中 / 反选判定）
   function hitTestWorld(wx, wy) {
     if (!_state.open || _state.mode !== 'canvas' || !_state.rect) return false
     const r = _state.rect
     return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h
   }
 
-  // ── 渲染（与形态无关，内容渲染一次，切全屏时保留）──
+  // ── 渲染（与形态无关；切全屏时内容保留）──
   function renderContent() {
     setLoading()
     const p = _state.path
@@ -226,7 +325,7 @@ App.InternalViewer = (function () {
           const baseHref = dirHref(uri, _state.name)
           const iframe = document.createElement('iframe')
           iframe.className = 'viewer-frame'
-          iframe.setAttribute('sandbox', 'allow-scripts')   // 隔离 Java 桥（opaque origin）
+          iframe.setAttribute('sandbox', 'allow-scripts')
           if (baseHref) {
             iframe.srcdoc = content.replace(/<head([^>]*)>/i, function (m, attrs) {
               return '<head' + attrs + '><base href="' + baseHref + '">'
@@ -261,7 +360,6 @@ App.InternalViewer = (function () {
     }
   }
 
-  // 媒体类：URI 流式挂载（img/video/audio），不读入内存
   function mountMedia(tag, cls) {
     App.FileAPI.resolveUri(_state.path).then(function (uri) {
       _state.uri = uri
@@ -281,8 +379,6 @@ App.InternalViewer = (function () {
     })
   }
 
-  // file:// URI → 所在目录的 base href（供 HTML 相对资源加载）；
-  // content:// 无法可靠推导目录，不注入（本阶段接受相对资源缺失）
   function dirHref(uri, name) {
     if (!uri || !name || uri.indexOf('file:') !== 0) return ''
     const i = uri.lastIndexOf('/')
@@ -290,7 +386,6 @@ App.InternalViewer = (function () {
     return uri.slice(0, i + 1)
   }
 
-  // JSON 树 DOM 构建（textContent 构建，天然防注入）
   function buildTreeDom(node, container) {
     const ul = document.createElement('ul')
     ul.className = 'viewer-json'
@@ -324,7 +419,6 @@ App.InternalViewer = (function () {
   function close() {
     if (!_state.open && !_card) return
     if (_card) {
-      // 暂停媒体 + 清空 iframe，释放资源
       const v = _card.querySelector('video')
       if (v) { try { v.pause() } catch (e) { /* 忽略 */ } }
       const a = _card.querySelector('audio')
@@ -336,11 +430,17 @@ App.InternalViewer = (function () {
       _body.innerHTML = ''
       if (_card.parentNode) _card.parentNode.removeChild(_card)
     }
-    _state = { open: false, mode: null, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null }
+    if (_fsPage) {
+      _fsPage.classList.remove('viewer-fs-page-open')
+      _fsPage.setAttribute('aria-hidden', 'true')
+    }
     if (_layer) {
       _layer.classList.remove('viewer-layer-open')
       _layer.setAttribute('aria-hidden', 'true')
     }
+    setFabHidden(false)
+    _drag = null
+    _state = { open: false, mode: null, fsFrom: null, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null, canvasRect: null }
   }
 
   function open(opts) {
@@ -348,26 +448,25 @@ App.InternalViewer = (function () {
     ensureInit()
     if (!_layer || !_card) return false
     if (_state.open) close()
+    const hasAnchor = !!opts.anchor
     _state = {
       open: false,
-      mode: opts.anchor ? 'canvas' : 'fullscreen',   // anchor = 画布实体；无锚点（folder） = 全屏
+      mode: hasAnchor ? 'canvas' : 'fullscreen',
+      fsFrom: hasAnchor ? null : 'folder',   // folder 容器打开 = 直接全屏，退出 = 关闭
       path: opts.path || '',
       name: opts.name || '',
       kind: opts.kind || 'text',
       anchor: opts.anchor || null,
-      camera: opts.camera || null,   // 打开瞬间相机快照（canvas 态锚点不可见时居中用）
+      camera: opts.camera || null,
       onFallback: typeof opts.onFallback === 'function' ? opts.onFallback : null,
       uri: null,
       rect: null
     }
     if (!_state.path) return false
     _title.textContent = _state.name
+    _card.className = 'viewer-card viewer-card-canvas'
     mount()
     _state.open = true
-    if (_state.mode === 'fullscreen') {
-      _layer.classList.add('viewer-layer-open')
-      _layer.setAttribute('aria-hidden', 'false')
-    }
     renderContent()
     return true
   }
@@ -378,10 +477,17 @@ App.InternalViewer = (function () {
     isOpen: isOpen,
     getMode: getMode,
     toFullscreen: toFullscreen,
+    exitFullscreen: exitFullscreen,
+    beginDrag: beginDrag,
+    moveBy: moveBy,
+    endDrag: endDrag,
+    cancelDrag: cancelDrag,
+    isDragging: isDragging,
     hitTestWorld: hitTestWorld,
     worldRect: worldRect,
     cardSize: cardSize,
     visibleRatio: visibleRatio,
+    shiftRect: shiftRect,
     jsonToNodes: jsonToNodes
   }
 })()

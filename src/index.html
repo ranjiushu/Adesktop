@@ -26,11 +26,14 @@
         <div id="desktop-grid" class="desktop-grid"></div>
       </div>
       <div id="desktop-marquee" class="desktop-marquee"></div>
-      <!-- 文件查看器 Overlay Layer：位于画布之上，不属于网格/布局/框选/碰撞；
-           锚点模式随画布平移，immersive 模式占满内容区（见 viewer.js / viewer.css） -->
+      <!-- 文件查看器 Overlay Layer：canvas 态实体位于 desktop-canvas 内；
+           全屏态进入 #viewer-fs-page（独立新页面，见 viewer.js / viewer.css） -->
       <div id="viewer-layer" class="viewer-layer" aria-hidden="true"></div>
     </div>
   </section>
+
+<!-- ===== 文件查看器全屏页（Viewer 的全屏状态 = 简洁新页面，退出回到原页面状态） ===== -->
+<div id="viewer-fs-page" class="viewer-fs-page" aria-hidden="true"></div>
 </main>
 
 <!-- ===== 底部工具栏：5 个矢量图标按钮，中间加号弹新建对话框 =====
@@ -183,11 +186,17 @@
       <span class="fab-child-label">粘贴</span>
     </button>
   </div>
-  <!-- 选中态操作栏按钮集（selection 非空时自动展开；「关闭预览」仅 Viewer 打开时显示） -->
+  <!-- 选中态操作栏按钮集（selection 非空时自动展开）：
+       Viewer 打开时仅显示 全屏预览 / 关闭预览（2、3 位），文件操作隐藏；
+       Viewer 关闭时显示 打开/复制/剪切/重命名/取消选择 -->
   <div class="fab-btn-set fab-set-selection">
     <button class="fab-child fab-child-up" data-action="open">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       <span class="fab-child-label">打开</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="fullscreen-preview">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      <span class="fab-child-label">全屏预览</span>
     </button>
     <button class="fab-child fab-child-up" data-action="close-preview">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -204,10 +213,6 @@
     <button class="fab-child fab-child-up" data-action="rename">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
       <span class="fab-child-label">重命名</span>
-    </button>
-    <button class="fab-child fab-child-up" data-action="delete">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-      <span class="fab-child-label">删除</span>
     </button>
     <button class="fab-child fab-child-up" data-action="clear-selection">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

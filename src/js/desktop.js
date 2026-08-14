@@ -493,8 +493,13 @@ App.Desktop = (function () {
   }
 
   // 命中类型（desktop 空间）：selected=已选中（可直接拿起）/ icon=未选中图标 / empty=空白
+  // viewer-selected = Viewer 画布实体（点击选中态绑定文件，可直接拿起移动实体）
   // folder 容器：icon=图标（可框选，不拿起）/ empty=空白（滚动），永不 selected（禁止移动）
   function hitTest(world) {
+    if (App.InternalViewer && typeof App.InternalViewer.hitTestWorld === 'function' &&
+        App.InternalViewer.hitTestWorld(world.x, world.y)) {
+      return 'viewer-selected'
+    }
     if (isFolderView()) {
       const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
       return name ? 'icon' : 'empty'
@@ -528,6 +533,14 @@ App.Desktop = (function () {
   }
 
   function handleLongPress(world) {
+    // Viewer 画布实体：长按拿起（移动实体位置，不动文件）
+    if (App.InternalViewer && typeof App.InternalViewer.beginDrag === 'function' &&
+        App.InternalViewer.hitTestWorld(world.x, world.y)) {
+      if (App.InternalViewer.beginDrag(world)) {
+        if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+      }
+      return
+    }
     // folder 容器：长按 = 拿起选中（拖动移入文件夹语义），实时标签由 applyDrag 负责
     if (isFolderView()) {
       const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
@@ -608,17 +621,33 @@ App.Desktop = (function () {
     }
   }
 
-  // 已选中组上直接拿起（拖动即拿取，不必长按）；folder 容器不拿起（防御，hitTest 已挡）
+  // 已选中组上直接拿起（拖动即拿取，不必长按）；folder 容器不拿起（防御，hitTest 已挡）；
+  // Viewer 实体（viewer-selected）→ 拿起移动实体
   function handleDragStart(world) {
+    if (App.InternalViewer && typeof App.InternalViewer.beginDrag === 'function' &&
+        App.InternalViewer.hitTestWorld(world.x, world.y)) {
+      App.InternalViewer.beginDrag(world)
+      return
+    }
     if (isFolderView()) return
     if (selection.size > 0) startGroupDrag(world)
   }
 
   function handleDrag(world) {
+    if (App.InternalViewer && typeof App.InternalViewer.isDragging === 'function' &&
+        App.InternalViewer.isDragging()) {
+      App.InternalViewer.moveBy(world)
+      return
+    }
     if (dragTargets.length) applyDrag(world)
   }
 
   function handleDrop(world, moved) {
+    if (App.InternalViewer && typeof App.InternalViewer.isDragging === 'function' &&
+        App.InternalViewer.isDragging()) {
+      App.InternalViewer.endDrag()
+      return
+    }
     if (!dragTargets.length) return
     // folder 容器：移入文件夹语义——命中文件夹 → moveIntoFolder；
     // 未命中 → 还原起始位（folder 位置自动排布，不吸附不落盘）
@@ -733,6 +762,11 @@ App.Desktop = (function () {
   // 实时标签同步回收（曾缺失：1→2 指取消后「文件将移入 XXX」标签滞留，真机偶发）。
   function handleSingleCancel() {
     hideMarquee()
+    // Viewer 实体拖动取消：还原起始位置
+    if (App.InternalViewer && typeof App.InternalViewer.isDragging === 'function' &&
+        App.InternalViewer.isDragging()) {
+      App.InternalViewer.cancelDrag()
+    }
     if (App.Loading && typeof App.Loading.hideTag === 'function') {
       App.Loading.hideTag()
     }

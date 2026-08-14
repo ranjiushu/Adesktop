@@ -142,19 +142,19 @@ async function main() {
     App.InternalViewer.toFullscreen()
   })
   const fs = await page.evaluate(function () {
-    const layer = document.getElementById('viewer-layer')
+    const page = document.getElementById('viewer-fs-page')
     const card = document.querySelector('.viewer-card-fullscreen')
-    const lb = layer.getBoundingClientRect()
+    const pb = page.getBoundingClientRect()
     const cb = card.getBoundingClientRect()
     return {
-      inLayer: card.parentNode === layer,
-      layerOpen: layer.classList.contains('viewer-layer-open'),
-      full: Math.abs(cb.width - lb.width) < 1 && Math.abs(cb.height - lb.height) < 1,
+      inPage: card.parentNode === page,
+      pageOpen: page.classList.contains('viewer-fs-page-open'),
+      full: Math.abs(cb.width - window.innerWidth) < 1 && Math.abs(cb.height - window.innerHeight) < 1,
       fsBtnHidden: getComputedStyle(document.querySelector('.viewer-fs-btn')).display === 'none',
       mode: App.InternalViewer.getMode()
     }
   })
-  check(fs.inLayer && fs.layerOpen && fs.full, '全屏：卡片占满内容区 + layer 拦截触摸')
+  check(fs.inPage && fs.pageOpen && fs.full, '全屏：独立新页面 fixed 覆盖全视口')
   check(fs.mode === 'fullscreen' && fs.fsBtnHidden, '全屏态：模式切换 + 顶栏按钮隐藏')
 
   console.log('═══ 5. 关闭：FAB「关闭预览」═══')

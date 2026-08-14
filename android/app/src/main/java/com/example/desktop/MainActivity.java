@@ -5,17 +5,27 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
@@ -31,6 +41,10 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // ── Edge-to-Edge 沉浸式（参考 LexiCull）：内容延伸至系统栏下方，
+        //    状态栏/导航栏透明，安全区经 WindowInsets 注入 CSS 变量 ──
+        setupEdgeToEdge();
+
         webView = new WebView(this);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -41,7 +55,14 @@ public class MainActivity extends Activity {
         settings.setNeedInitialFocus(true);
 
         // 页面内导航一律留在 WebView，不跳系统浏览器
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                // 注入当前安全区 CSS 变量。Insets 回调可能早于 JS 环境就绪，
+                // 每次页面加载完成都补注一次（含渲染进程重载场景）。
+                injectSafeAreaInsets(view);
+            }
+        });
 
         // ── 主动拉起软键盘（仅条件触发）：WebView 内核只在「触摸目标为输入框」时
         //    自动弹键盘——加号按钮触摸后前端 focus() 输入框，内核不会补弹。
@@ -81,6 +102,16 @@ public class MainActivity extends Activity {
         });
 
         setContentView(webView);
+
+        // ── WindowInsets：安全区/键盘终态注入 ──
+        // 历史教训（LexiCull fix/edge-to-edge-regressions）：曾用
+        // WindowInsetsAnimationCompat.onProgress 逐帧注入 JS 跟手，导致过冲反弹、
+        // 干扰触摸、末帧跳变。现方案：insets 监听器在键盘动画开始即获终态并注入
+        // --panel-bottom，CSS transition 单机制平滑到位——bottom 只有一个主人。
+        ViewCompat.setOnApplyWindowInsetsListener(webView, (v, insets) -> {
+            updatePanelBottom(insets);
+            return insets;
+        });
 
         // ── 文件系统桥：SAF 授权根 或 私有目录兜底 ──
         String uriStr = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_ROOT_URI, null);
@@ -159,6 +190,120 @@ public class MainActivity extends Activity {
             return true;
         }
         return super.onKeyDown(keyCode, event);
+    }
+
+    /**
+     * Edge-to-Edge 沉浸式：透明系统栏 + 内容延伸 + 手势临时栏 + 深色图标。
+     * 参考 LexiCull 的优化方案（透明栏架构下只同步图标明暗一个布尔值）。
+     */
+    private void setupEdgeToEdge() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= 29) {
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
+        // 手势临时栏：一律走 WindowInsetsControllerCompat（androidx 兼容类在
+        // 所有 API 的 dex 中都存在）。历史教训：曾直接引用 API 30 的
+        // android.view.WindowInsetsController 作为局部变量类型，API < 30
+        // 设备上 ART 类型解析失败抛 VerifyError，启动即闪退。
+        WindowInsetsControllerCompat controller =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (controller != null) {
+            controller.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        }
+        // 当前仅浅色主题 → 深色系统栏图标
+        applyBarsStyle(true);
+    }
+
+    /**
+     * 控制状态栏/导航栏图标明暗（透明栏架构下，只同步这一个布尔值）。
+     * @param darkIcons true=深色图标（浅色页面），false=浅色图标（深色页面）
+     */
+    private void applyBarsStyle(boolean darkIcons) {
+        WindowInsetsControllerCompat controller =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (controller != null) {
+            controller.setAppearanceLightStatusBars(darkIcons);
+            controller.setAppearanceLightNavigationBars(darkIcons);
+        }
+    }
+
+    // ── 安全区注入：WindowInsets → CSS 变量（--safe-top/--safe-bottom/--panel-bottom） ──
+    private float _lastSafeTop = -1, _lastSafeBottom = -1, _lastPanelBottom = -1;
+    private boolean _lastImeVisible = false;
+
+    /**
+     * 从 WindowInsetsCompat 计算安全区 / 键盘高度并注入 CSS 变量。
+     * 内置变化检测：值不变时跳过 evaluateJavascript，避免干扰触摸事件。
+     * IME 可见性边沿（键盘弹/收）另派发 desktop:ime 事件通知前端。
+     */
+    private void updatePanelBottom(WindowInsetsCompat insets) {
+        int sysTop = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top;
+        int sysBottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+        int imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+        float density = getResources().getDisplayMetrics().density;
+
+        float safeTopDp = sysTop / density;
+        float safeBottomDp = sysBottom / density;
+
+        float panelBottomDp;
+        if (imeBottom > 0) {
+            panelBottomDp = imeBottom / density + 10f;
+        } else {
+            panelBottomDp = Math.max(10f, sysBottom / density);
+        }
+
+        boolean imeVisible = imeBottom > 0;
+        if (imeVisible != _lastImeVisible) {
+            _lastImeVisible = imeVisible;
+            webView.evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('desktop:ime',{detail:{open:" + imeVisible + "}}))",
+                null);
+        }
+
+        // 值未变化则跳过
+        if (Math.abs(safeTopDp - _lastSafeTop) < 0.5f
+            && Math.abs(safeBottomDp - _lastSafeBottom) < 0.5f
+            && Math.abs(panelBottomDp - _lastPanelBottom) < 0.5f) {
+            return;
+        }
+        _lastSafeTop = safeTopDp;
+        _lastSafeBottom = safeBottomDp;
+        _lastPanelBottom = panelBottomDp;
+
+        String js = String.format(Locale.US,
+            "if(document.documentElement){" +
+            "document.documentElement.style.setProperty('--safe-top','%.1fpx');" +
+            "document.documentElement.style.setProperty('--safe-bottom','%.1fpx');" +
+            "document.documentElement.style.setProperty('--panel-bottom','%.1fpx');" +
+            "}",
+            safeTopDp, safeBottomDp, panelBottomDp);
+        webView.evaluateJavascript(js, null);
+    }
+
+    /**
+     * 从 WebView 当前 WindowInsets 读取安全区值并注入 CSS 变量。
+     * 用于 onPageFinished 补注（Insets 回调可能早于 JS 环境就绪）。
+     */
+    private void injectSafeAreaInsets(WebView wv) {
+        if (wv == null || Build.VERSION.SDK_INT < 23) return;
+        WindowInsets insets = wv.getRootWindowInsets();
+        if (insets == null) return;
+        // 重置缓存：页面刚就绪，之前的值可能已记录但注入失败
+        _lastSafeTop = -1;
+        _lastSafeBottom = -1;
+        _lastPanelBottom = -1;
+        updatePanelBottom(WindowInsetsCompat.toWindowInsetsCompat(insets, wv));
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 恢复图标颜色（onResume 是 Activity 可见的最终保证点；
+        // onStop-onRestart 周期中某些系统会重置系统栏外观）。幂等操作。
+        applyBarsStyle(true);
     }
 
     @Override

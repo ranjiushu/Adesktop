@@ -132,6 +132,17 @@ down ─────────────────────────
 - **桥缺口**：需新增 `FileBridge.copy(srcPath, dstPath)`（Java 递归拷贝，支持目录）。
 - **入口**：复制/剪切 = 选中态操作栏按钮；粘贴 = 预览态菜单按钮（剪贴板为空时点击提示）。
 
+## 7.3 目录导航（阶段 C 定稿）
+
+- 桌面**不再固定根目录**：以「当前目录」为视图范围，图标渲染 = `list(curPath)` 的结果。
+- **进入文件夹**：双击文件夹图标 / 选中后点「打开」→ `nav.enter(curPath + '/' + name)`，刷新视图。
+- **后退/前进**：底栏左侧两个按钮 = 后退（＜）/ 前进（＞），驱动历史栈 `{ stack, index }`（模块 `desktop-nav.js` 纯函数）：
+  - `enter`：截断前进分支后压栈；`back`：index-1；`forward`：index+1。
+  - 根目录不可后退、栈尾不可前进（按钮禁用态）。
+- **布局 key 升级为完整路径**：`positions`/`bounds`/`iconEls` 的 key = `join(curPath, name)`（如 `docs/a.txt`），避免不同目录同名文件冲突；localStorage 旧数据（根目录短名 key）天然兼容（根目录下 `join('', name) === name`）。
+- **剪贴板存完整路径**：跨目录粘贴时目标 = `join(curPath, uniqueName(...))`。
+- **双击窗口**：300ms 内二击同一位置 → `doubletap`（打开）；超时 → 确认单击语义（`tap` 视觉即时选中，仅反选延迟）。
+
 ## 8. 位置持久化（当前：localStorage 临时方案）
 
 - 存 `localStorage['desktop.layout.v1']`（模块 `layout-store.js`）：

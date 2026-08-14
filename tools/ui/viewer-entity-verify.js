@@ -39,7 +39,7 @@ async function main() {
   await page.goto(HTML, { waitUntil: 'networkidle0' })
   await page.waitForFunction(function () { return window.App && document.querySelectorAll('.desktop-icon').length === 3 }, { timeout: 10000 })
 
-  console.log('═══ 1. 打开 Viewer = 文件锁定 + Viewer 实体选中 ═══')
+  console.log('═══ 1. 打开 Viewer = 文件锁定 + Viewer 未选中（打开不选中） ═══')
   await page.evaluate(function () { App.Desktop.openItem('readme.md') })
   await page.waitForFunction(function () { return document.querySelector('.viewer-card-canvas') }, { timeout: 5000 })
   let r1 = await page.evaluate(function () {
@@ -51,20 +51,20 @@ async function main() {
       selectedClass: document.querySelector('.viewer-card-canvas').classList.contains('viewer-card-selected'),
       fileNotSelected: document.querySelectorAll('.desktop-icon.selected').length === 0,
       fsBtnGone: !document.querySelector('.viewer-fs-btn'),   // 全屏按钮已收纳进 FAB
-      fabFs: getComputedStyle(document.querySelector('[data-action="fullscreen-preview"]')).display !== 'none',
-      fabClose: getComputedStyle(document.querySelector('[data-action="close-preview"]')).display !== 'none',
-      fabOpenHidden: getComputedStyle(document.querySelector('[data-action="open"]')).display === 'none'
+      fabCollapsed: !document.querySelector('.fab-speed-dial-expanded')
     }
   })
   check(r1.locked && r1.lockedIcon, '打开 → 文件锁定（图标锁标记 + getLockedPath）')
-  check(r1.viewerSelected && r1.selectedClass, 'Viewer 实体选中（脆弱/临时态，非文件选中）')
+  check(!r1.viewerSelected && !r1.selectedClass, '打开 → Viewer 未选中（打开动作不触发选中）')
   check(r1.fileNotSelected, '文件不进入选中集（锁定 ≠ 选中）')
-  check(r1.fsBtnGone && r1.fabFs && r1.fabClose && r1.fabOpenHidden,
-    '全屏按钮收纳进 Morph FAB；Viewer 选中时 FAB 显示 全屏/关闭')
+  check(r1.fsBtnGone && r1.fabCollapsed, '打开未选中 → FAB 收起（全屏/关闭入口需选中后出现）')
 
-  console.log('═══ 2. 点击外部 = 取消 Viewer 选中（Viewer 保持打开）═══')
-  // 真实触摸：点击 Viewer 矩形外的空白（屏幕坐标，卡片 x 从 16 起、y 从 viewport 顶开始）
-  await page.touchscreen.tap(5, 120)
+  console.log('═══ 2. 点击 Viewer = 选中（点击触发选中） ═══')
+  const center = await page.evaluate(function () {
+    const b = document.querySelector('.viewer-card-canvas').getBoundingClientRect()
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+  })
+  await page.touchscreen.tap(center.x, center.y)
   await new Promise(function (res) { setTimeout(res, 200) })
   const r2 = await page.evaluate(function () {
     return {
@@ -74,27 +74,41 @@ async function main() {
       stillLocked: App.Desktop.getLockedPath() === 'readme.md'
     }
   })
-  check(!r2.selected && !r2.selectedClass, '点击外部 → Viewer 取消选中（选中态脆弱/临时）')
-  check(r2.stillOpen && r2.stillLocked, 'Viewer 保持打开、文件保持锁定（取消选中 ≠ 关闭）')
+  check(r2.selected && r2.selectedClass, '点击 Viewer → 选中（脆弱/临时态）')
+  check(r2.stillOpen && r2.stillLocked, 'Viewer 保持打开、文件保持锁定')
 
-  console.log('═══ 3. 再点 Viewer = 重新选中 ═══')
+  console.log('═══ 3. 点击外部 = 取消选中（Viewer 保持打开） ═══')
+  await page.touchscreen.tap(5, 120)
+  await new Promise(function (res) { setTimeout(res, 200) })
   const r3 = await page.evaluate(function () {
-    // 模拟点击 Viewer 中心（世界坐标）
-    const rect = App.InternalViewer.worldRect({ x: 180, y: 320 }, 380, 672)
-    return { hit: App.InternalViewer.hitTestWorld(180, 320) }
+    return {
+      selected: App.InternalViewer.isSelected(),
+      selectedClass: document.querySelector('.viewer-card-canvas').classList.contains('viewer-card-selected'),
+      stillOpen: App.InternalViewer.isOpen(),
+      stillLocked: App.Desktop.getLockedPath() === 'readme.md'
+    }
   })
-  check(r3.hit, '世界点命中 Viewer（点击选中入口）')
+  check(!r3.selected && !r3.selectedClass, '点击外部 → Viewer 取消选中（选中态脆弱/临时）')
+  check(r3.stillOpen && r3.stillLocked, 'Viewer 保持打开、文件保持锁定（取消选中 ≠ 关闭）')
 
-  console.log('═══ 4. 锁定拦截：复制/剪切/重命名拒绝 ═══')
+  console.log('═══ 4. 再点 Viewer = 重新选中 ═══')
+  await page.touchscreen.tap(center.x, center.y)
+  await new Promise(function (res) { setTimeout(res, 200) })
   const r4 = await page.evaluate(function () {
+    return { selected: App.InternalViewer.isSelected() }
+  })
+  check(r4.selected, '再次点击 Viewer → 重新选中')
+
+  console.log('═══ 5. 锁定拦截：复制/剪切/重命名拒绝 ═══')
+  const r5 = await page.evaluate(function () {
     const before = App.Desktop.getLockedPath()
-    const copyRes = App.Actions.copySelection([{ path: 'readme.md', isDir: false }])
-    const renameRes = App.Actions.rename('readme.md', 'renamed.md')
+    App.Actions.copySelection([{ path: 'readme.md', isDir: false }])
+    App.Actions.rename('readme.md', 'renamed.md')
     return { before: before, stillLocked: App.Desktop.getLockedPath() === before }
   })
-  check(r4.stillLocked, '锁定文件复制/重命名被拦截（锁定保持）')
+  check(r5.stillLocked, '锁定文件复制/重命名被拦截（锁定保持）')
 
-  console.log('═══ 5. 拖动移动实体 ═══')
+  console.log('═══ 6. 拖动移动实体 ═══')
   const posBefore = await page.evaluate(function () {
     return { x: parseFloat(document.querySelector('.viewer-card-canvas').style.left),
              y: parseFloat(document.querySelector('.viewer-card-canvas').style.top) }
@@ -110,7 +124,7 @@ async function main() {
   check(!moved.dragging && Math.abs(moved.pos.x - (posBefore.x + 100)) < 1 && Math.abs(moved.pos.y - (posBefore.y + 100)) < 1,
     '拖动 (100,100) → 实体世界坐标同步位移')
 
-  console.log('═══ 6. 全屏 = 相册式新页面 ═══')
+  console.log('═══ 7. 全屏 = 相册式新页面 ═══')
   await page.evaluate(function () { App.InternalViewer.toFullscreen() })
   const fs = await page.evaluate(function () {
     const page = document.getElementById('viewer-fs-page')
@@ -139,7 +153,7 @@ async function main() {
   check(back.handled && back.mode === 'canvas' && back.open && back.inCanvas,
     '返回键退出全屏 → 回到画布实体预览态')
 
-  console.log('═══ 7. 关闭预览 = 解除锁定 ═══')
+  console.log('═══ 8. 关闭预览 = 解除锁定 ═══')
   const closed = await page.evaluate(function () {
     App.Desktop.closeViewer()
     return { open: App.InternalViewer.isOpen(), locked: App.Desktop.getLockedPath(),

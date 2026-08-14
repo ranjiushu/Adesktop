@@ -130,7 +130,27 @@ async function main() {
   })
   check(Math.abs(rImg.ratio - 320 / 180) < 0.03, '图片 Viewer 态 = 原始比例（320:180 ≈ 1.78，实测 ' + rImg.ratio.toFixed(3) + '）')
 
-  console.log('═══ 6. 纯函数三模块映射 ═══')
+  console.log('═══ 6. 框选划过未选中 Viewer → 触发选中 ═══')
+  await page.evaluate(function () { App.Desktop.closeViewer() })
+  await page.evaluate(function () { App.Desktop.openItem('note.txt') })
+  await page.waitForFunction(function () { return document.querySelector('.viewer-card-canvas') }, { timeout: 5000 })
+  await new Promise(function (res) { setTimeout(res, 200) })
+  const card = await page.evaluate(function () {
+    const b = document.querySelector('.viewer-card-canvas').getBoundingClientRect()
+    return { left: b.left, top: b.top, w: b.width, h: b.height, right: b.right }
+  })
+  const before = await page.evaluate(function () { return App.InternalViewer.isSelected() })
+  const client = await page.target().createCDPSession()
+  const sy = card.top + card.h / 2
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: Math.max(0, card.left - 40), y: sy, id: 1 }] })
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: card.left + card.w / 2, y: sy, id: 1 }] })
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: card.right + 40, y: sy, id: 1 }] })
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await new Promise(function (res) { setTimeout(res, 200) })
+  const after = await page.evaluate(function () { return App.InternalViewer.isSelected() })
+  check(!before && after, '框选划过未选中 Viewer → 触发选中（' + before + ' → ' + after + '）')
+
+  console.log('═══ 7. 纯函数三模块映射 ═══')
   const r5 = await page.evaluate(function () {
     return {
       md: App.InternalViewer.moduleFor('markdown'),

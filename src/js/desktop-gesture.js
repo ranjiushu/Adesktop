@@ -67,10 +67,10 @@ App.DesktopGesture = (function () {
     if (sg.phase === 'pending') {
       const d = distance({ x: sg.startX, y: sg.startY }, { x: x, y: y })
       if (d > th) {
-        // 已选中 → 直接拿起移动（不必长按）；Viewer 实体（viewer-selected）→ 拿起移动实体；
-        // 其余 → 框选（folder 容器同样框选，不引入滚动）
-        if (sg.hitType === 'selected' || sg.hitType === 'viewer' || sg.hitType === 'viewer-selected') {
-          return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y } }
+        // 已选中（文件 selected / Viewer viewer-selected）→ 直接拿起移动（不必长按）；
+        // 其余（未选中图标 icon / 未选中 Viewer viewer / 空白 empty）→ 框选（划过触发选中）
+        if (sg.hitType === 'selected' || sg.hitType === 'viewer-selected') {
+          return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y, hitType: sg.hitType } }
         }
         return { sg: Object.assign({}, next, { phase: 'marquee' }), effect: { type: 'marquee-start', x: sg.startX, y: sg.startY } }
       }
@@ -203,7 +203,7 @@ App.DesktopGesture = (function () {
         if (_cb.onLongPress) _cb.onLongPress(toWorld(effect.x, effect.y))
         break
       case 'drag-start':
-        if (_cb.onDragStart) _cb.onDragStart(toWorld(effect.x, effect.y))
+        if (_cb.onDragStart) _cb.onDragStart(toWorld(effect.x, effect.y), effect.hitType)
         break
       case 'drag':
         if (_cb.onDrag) _cb.onDrag(toWorld(effect.x, effect.y))

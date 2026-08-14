@@ -81,6 +81,14 @@ sg = G.singleDown(100, 100, 0, 'icon')
 r2 = G.singleMove(sg, 130, 100, plainOpts)
 check(r2.sg.phase === 'marquee' && r2.effect.type === 'marquee-start',
   '未选中图标拖动 → marquee（框选）')
+sg = G.singleDown(100, 100, 0, 'viewer-selected')
+r2 = G.singleMove(sg, 130, 100, plainOpts)
+check(r2.sg.phase === 'dragmove' && r2.effect.type === 'drag-start',
+  '已选中 Viewer 拖动 → drag-start（直接拿起）')
+sg = G.singleDown(100, 100, 0, 'viewer')
+r2 = G.singleMove(sg, 130, 100, plainOpts)
+check(r2.sg.phase === 'marquee' && r2.effect.type === 'marquee-start',
+  '未选中 Viewer 拖动 → marquee（框选触发选中，不直接拿起）')
 sg = G.singleDown(100, 100, 0, 'empty')
 r2 = G.singleMove(sg, 130, 100, plainOpts)
 check(r2.sg.phase === 'marquee' && r2.effect.type === 'marquee-start',

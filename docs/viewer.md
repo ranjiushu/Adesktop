@@ -66,9 +66,13 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 
 - Viewer **不属于网格**：不参与布局、排序、框选、碰撞；DOM 上位于
   `#desktop-canvas` 内 grid 之后（z-index 5），天然遮挡其背后的文件。
-- **画布实体，具备实体基本性质**：
-  - **点击 = 选中实体**（选中态脆弱/临时，符合 Desktop 原则）：点击 Viewer =
-    选中（accent 边框视觉）；点击外部 = 取消选中，**Viewer 保持打开**。
+- **画布实体，具备实体基本性质**（与文件图标手势统一）：
+  - **打开不选中**：打开文件动作不触发选中，Viewer 初始为未选中态。
+  - **点击/框选触发选中**（选中态脆弱/临时，符合 Desktop 原则）：点击 Viewer =
+    选中（accent 边框视觉）；框选划过未选中 Viewer = 触发选中；点击外部 =
+    取消选中，**Viewer 保持打开**。
+  - **选中可直接拖动**：已选中 Viewer 拖动 = 直接拿起移动实体；未选中 Viewer
+    拖动 = 框选（不直接拿起）；长按未选中 = 先选中再拿起。
   - **长按/拖动 = 移动实体**：`beginDrag → moveBy → endDrag`（世界坐标位移，
     `shiftRect` 纯函数）；拖动取消（1→2 指 / touchcancel）还原到拖动起点。
   - **随画布 transform 平移/缩放**：世界坐标定位（left/top/width/height），
@@ -86,7 +90,8 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 - **桌面手指依旧有效**：不拦截触摸——单指拖动/框选/双击/双指缩放照常作用于画布，
   不在 Viewer 内部创作独立交互模型；Viewer 只是遮挡其背后的文件。
 - **顶栏只有文件名**（canvas 态无任何按钮）；全屏入口在 Morph FAB（Viewer 选中时
-  展开 全屏预览 / 关闭预览，文件操作隐藏）。
+  展开 全屏预览 / 关闭预览，文件操作隐藏）。打开未选中时 FAB 收起，点击 Viewer
+  选中后 FAB 才展开预览操作。
 
 ## 完整预览 = 相册式独立新页面（#viewer-fs-page）
 
@@ -121,7 +126,7 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 
 - 纯函数（可单测）：`Markdown.render/inline/safeUrl`、`FileOpener.kindFor/extOf`、
   `InternalViewer.moduleFor/cardIsPortrait/anchorIsCenter/cardSize34/visualCenter/
-  visibleRatio/fitAspectRect/jsonToNodes`
+  visibleRatio/fitAspectRect/jsonToNodes/rectHitWorld`
 - 单元测试：`tests/test-markdown.js` / `tests/test-file-opener.js` / `tests/test-viewer.js`
 - 无头 UI 验证（注入模拟 FileBridge）：
   - `tools/ui/viewer-verify.js`：画布实体定位/transform 跟随/点击不反选/全屏新页面/
@@ -130,7 +135,7 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
     全屏进出/位置保留/选中态绑定关闭
   - `tools/ui/viewer-folder-verify.js`：folder 全屏新页面 + 返回键退出关闭 + 目录保持
   - `tools/ui/viewer-modules-verify.js`：三模块 × 两状态——3:4 卡片/视觉中心锚点/
-    reader 工具条（缩放+换行）/音频封面卡片/模块映射
+    reader 工具条（缩放+换行）/音频封面卡片/框选触发选中/模块映射
 
 ## 已知限制（本阶段接受）
 

@@ -91,7 +91,7 @@ async function main() {
   })
   check(r.inCanvas, '卡片宿主 = #desktop-canvas（画布实体）')
   check(r.locked && r.lockIcon, '打开后文件锁定（Windows 式：禁文件操作）')
-  check(r.viewerSelected, 'Viewer 实体选中（FAB 预览操作入口）')
+  check(!r.viewerSelected, '打开后 Viewer 未选中（选中由点击/框选触发）')
   check(r.w > 300 && r.h > 500, '世界尺寸接近屏幕尺度（' + r.w.toFixed(0) + '×' + r.h.toFixed(0) + '）')
   check(r.fsBtnGone, '全屏按钮已收纳进 Morph FAB（顶栏无按钮）')
   check(r.h1 === '标题', 'Markdown 渲染')
@@ -126,16 +126,14 @@ async function main() {
   await page.evaluate(function () {
     const cam = App.DesktopCamera.create(0, 0, 1)
     App.DesktopCamera.applyTo(cam, document.getElementById('desktop-canvas'))
-    // 记录选中态，然后模拟点击 Viewer 表面（世界坐标命中 Viewer 矩形）
-    App.InternalViewer.hitTestWorld(200, 400)
   })
   const tapCheck = await page.evaluate(function () {
-    // 世界坐标 (200,400) 应命中 Viewer 实体（锚点 180,320 中心附近）
+    // 世界坐标命中 Viewer 实体矩形（打开未选中，命中测试不改变选中态）
     const hit = App.InternalViewer.hitTestWorld(200, 400)
     return { hit: hit, selected: App.InternalViewer.isSelected() }
   })
-  check(tapCheck.hit, '世界点 (200,400) 命中 Viewer 实体矩形')
-  check(tapCheck.selected, 'Viewer 实体保持选中（点击不清空）')
+  check(tapCheck.hit, '世界点命中 Viewer 实体矩形')
+  check(!tapCheck.selected, '打开未选中 → 命中测试不触发选中（需真实点击）')
 
   console.log('═══ 4. 全屏预览 ═══')
   await page.evaluate(function () {

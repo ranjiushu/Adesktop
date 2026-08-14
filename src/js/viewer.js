@@ -226,7 +226,7 @@ App.InternalViewer = (function () {
       _backBtn.style.display = 'none'
       updateTools()   // 清空工具条（Viewer 态无 reader 工具条）
       if (_canvas) _canvas.appendChild(_card)
-      setSelected(true)   // 打开默认选中（FAB 预览操作入口）
+      // 打开不选中：选中态由点击/框选触发（与文件图标一致的脆弱选中），打开动作不触发选中
     } else {
       enterFullscreenPage()
     }
@@ -357,6 +357,13 @@ App.InternalViewer = (function () {
     return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h
   }
 
+  // 矩形命中（AABB 相交，含边缘相切）：框选结束判断是否选中 Viewer 用
+  function rectHitWorld(rect) {
+    if (!_state.open || _state.mode !== 'canvas' || !_state.rect || !rect) return false
+    const r = _state.rect
+    return !(r.x + r.w < rect.x || rect.x + rect.w < r.x || r.y + r.h < rect.y || rect.y + rect.h < r.y)
+  }
+
   // ── 文本 reader 工具条（完整预览态：字号缩放 + 自动换行）──
   function renderReaderTools() {
     if (!_tools) return
@@ -436,12 +443,13 @@ App.InternalViewer = (function () {
           const content = r[0]
           const uri = r[1]
           const baseHref = dirHref(uri, _state.name)
+          _body.innerHTML = ''   // 清 loading 占位
           const iframe = document.createElement('iframe')
           iframe.className = 'viewer-frame'
           iframe.setAttribute('sandbox', 'allow-scripts')
           if (baseHref) {
             iframe.srcdoc = content.replace(/<head([^>]*)>/i, function (m, attrs) {
-              return '<head' + attrs + '><base href="' + baseHref + '">'
+              return '<head' + attrs + '><base href=\"' + baseHref + '\">'
             })
           } else {
             iframe.srcdoc = content
@@ -451,6 +459,7 @@ App.InternalViewer = (function () {
         break
       case 'svg':
         App.FileAPI.read(p).then(function (content) {
+          _body.innerHTML = ''   // 清 loading 占位
           const img = document.createElement('img')
           img.className = 'viewer-media-img'
           img.alt = _state.name
@@ -477,6 +486,7 @@ App.InternalViewer = (function () {
   function mountMedia(tag, cls) {
     App.FileAPI.resolveUri(_state.path).then(function (uri) {
       _state.uri = uri
+      _body.innerHTML = ''   // 清 loading 占位
       const el = document.createElement(tag)
       el.className = cls
       if (tag === 'video' || tag === 'audio') {
@@ -499,6 +509,7 @@ App.InternalViewer = (function () {
   function mountAudio() {
     App.FileAPI.resolveUri(_state.path).then(function (uri) {
       _state.uri = uri
+      _body.innerHTML = ''   // 清 loading 占位
       const wrap = document.createElement('div')
       wrap.className = 'viewer-audio'
       wrap.innerHTML =
@@ -633,6 +644,7 @@ App.InternalViewer = (function () {
     cancelDrag: cancelDrag,
     isDragging: isDragging,
     hitTestWorld: hitTestWorld,
+    rectHitWorld: rectHitWorld,
     worldRect: worldRect,
     cardSize: cardSize,
     cardSize34: cardSize34,

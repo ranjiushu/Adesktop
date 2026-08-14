@@ -283,7 +283,7 @@ App.Desktop = (function () {
       // 拖动摆放仍可）；文件不进入选中集——Viewer 实体自身有独立选中态（脆弱/临时）。
       _lockedPath = full
       selection = new Set()
-      _viewerSelected = true    // Viewer 实体默认选中（Morph FAB 预览操作入口）
+      _viewerSelected = false   // 打开不选中：选中由点击/框选触发（与文件图标一致的脆弱选中）
       // 锚点：desktop 空间 = 文件世界坐标（Viewer 为画布实体，随画布 transform 平移缩放）；
       // folder 容器 = 无锚点（全屏新页面）
       const anchor = isFolderView() ? null : (positions[full] || null)
@@ -522,6 +522,15 @@ App.Desktop = (function () {
     hideMarquee()
     const rect = App.DesktopSelection.rectFromPoints(start.x, start.y, cur.x, cur.y)
     selection = new Set(App.DesktopSelection.marqueeHitTest(rect, bounds))
+    // 框选命中 Viewer 实体 → 触发选中（划过未选中实体通过框选选中）；未命中 → 取消 Viewer 选中（替换选择语义）
+    if (App.InternalViewer && typeof App.InternalViewer.rectHitWorld === 'function' &&
+        App.InternalViewer.rectHitWorld(rect)) {
+      _viewerSelected = true
+      App.InternalViewer.setSelected(true)
+    } else if (_viewerSelected) {
+      _viewerSelected = false
+      App.InternalViewer.setSelected(false)
+    }
     applySelection()
   }
 
@@ -534,12 +543,12 @@ App.Desktop = (function () {
   }
 
   // 命中类型（desktop 空间）：selected=已选中（可直接拿起）/ icon=未选中图标 / empty=空白
-  // viewer-selected = Viewer 画布实体（点击选中态绑定文件，可直接拿起移动实体）
+  // viewer-selected = Viewer 已选中（可直接拿起移动实体）；viewer = Viewer 未选中（长按/框选触发选中）
   // folder 容器：icon=图标（可框选，不拿起）/ empty=空白（滚动），永不 selected（禁止移动）
   function hitTest(world) {
     if (App.InternalViewer && typeof App.InternalViewer.hitTestWorld === 'function' &&
         App.InternalViewer.hitTestWorld(world.x, world.y)) {
-      return 'viewer-selected'
+      return _viewerSelected ? 'viewer-selected' : 'viewer'
     }
     if (isFolderView()) {
       const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
@@ -574,9 +583,14 @@ App.Desktop = (function () {
   }
 
   function handleLongPress(world) {
-    // Viewer 画布实体：长按拿起（移动实体位置，不动文件）
+    // Viewer 画布实体：长按拿起——未选中先选中再拿（与文件图标语义一致），已选中直接拿
     if (App.InternalViewer && typeof App.InternalViewer.beginDrag === 'function' &&
         App.InternalViewer.hitTestWorld(world.x, world.y)) {
+      if (!_viewerSelected) {
+        _viewerSelected = true
+        App.InternalViewer.setSelected(true)
+        syncFab()
+      }
       if (App.InternalViewer.beginDrag(world)) {
         if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
       }
@@ -662,12 +676,13 @@ App.Desktop = (function () {
     }
   }
 
-  // 已选中组上直接拿起（拖动即拿取，不必长按）；folder 容器不拿起（防御，hitTest 已挡）；
-  // Viewer 实体（viewer-selected）→ 拿起移动实体
-  function handleDragStart(world) {
-    if (App.InternalViewer && typeof App.InternalViewer.beginDrag === 'function' &&
-        App.InternalViewer.hitTestWorld(world.x, world.y)) {
-      App.InternalViewer.beginDrag(world)
+  // 已选中组上直接拿起（拖动即拿取，不必长按）；folder 容器不拿起（防御，hitTest 已挡）。
+  // hitType 由手势层 down 时确定：viewer-selected=已选中 Viewer 拿起移动实体；selected=已选中文件组拿起
+  function handleDragStart(world, hitType) {
+    if (hitType === 'viewer-selected') {
+      if (App.InternalViewer && typeof App.InternalViewer.beginDrag === 'function') {
+        App.InternalViewer.beginDrag(world)
+      }
       return
     }
     if (isFolderView()) return

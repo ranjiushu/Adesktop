@@ -14,7 +14,7 @@ App.Desktop = (function () {
   const ICON_W = 84
   const ICON_H = 76
   const DOUBLE_TAP_MS = 300   // 双击窗口（interaction.md §7）
-  const HOME_ANIM_MS = 400    // Home 平滑过渡时长（easeInOutCubic 缓入缓出）
+  const HOME_ANIM_MS = 400    // Home 平滑过渡时长（zoom 不变=easeInOutCubic 缓入缓出；zoom 变化=easeOut 弧长，见 desktop-camera.js）
 
   // RAF 驱动（无 RAF 环境兜底 setTimeout ~16ms）
   function _raf(cb) {
@@ -367,7 +367,8 @@ App.Desktop = (function () {
   // 从当前相机平滑飞行到 target（van Wijk & Nuij，Leaflet flyTo 同款）；动画中再次调用会从当前位置重新起播。
   // 手势开始（onGestureStart）与目录切换（applyCameraForPath）都会打断，
   // 保证「动画永不与手势抢相机」——用户一碰就归手势直控。
-  // lerpCentered 契约：收真实时间比例 k（内部统一缓动，调用方不得预缓动）——
+  // lerpCentered 契约：收真实时间比例 k（内部按分支缓动：zoom 不变=easeInOutCubic，
+  // zoom 变化=flightPath 内部 easeOut 弧长参数化，Leaflet 同款手感；调用方一律不得预缓动）——
   // 曾因预缓动传入导致段边界错位（真机「震感」）。zoom 变化走单一连续飞行曲线
   // （无分段断续）；zoom 不变退化为与 lerp 一致（纯平移动画不受影响）。
   function animateCameraTo(target, durationMs) {
@@ -376,6 +377,8 @@ App.Desktop = (function () {
     const dur = (durationMs && durationMs > 0) ? durationMs : HOME_ANIM_MS
     const vw = viewportWidth()
     const vh = viewportHeight()
+    // 视口尺寸动画中快照：中途旋转/尺寸变化只影响轨迹形状，落点精确
+    // （终点公式中 w/h 项数学抵消，k=1 恒等于 target）
     const t0 = _now()
     function frame() {
       const k = Math.min(1, (_now() - t0) / dur)

@@ -32,8 +32,10 @@ App.DesktopCamera = (function () {
     return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
   }
 
-  // 缓入缓出三次曲线：k∈[0,1] → [0,1]，起步/收尾斜率 0，中段最快（Home 平滑过渡用，可单测）。
-  // 曾用缓出曲线（easeOutCubic）：起步即全速（k=0 斜率最大）→ 视觉「弹射/甩」，
+  // 缓入缓出三次曲线：k∈[0,1] → [0,1]，起步/收尾斜率 0，中段最快（可单测）。
+  // 仅 zoom 不变分支使用（Home 纯平移动画）；zoom 变化分支刻意走 flightPath 的
+  // easeOut 弧长参数化（Leaflet flyTo 同款手感：起步轻快、收尾平滑，见 flightPath）。
+  // 曾用缓出曲线（easeOutCubic）起步即全速（k=0 斜率最大）→ 视觉「弹射/甩」，
   // 前 100ms 走完 58% 路程，且 RAF 首帧延迟会被放大。缓入缓出无起步突跳，对称 f(0.5)=0.5。
   function easeInOutCubic(k) {
     const t = Math.min(Math.max(k, 0), 1)
@@ -59,7 +61,9 @@ App.DesktopCamera = (function () {
   // zoom 不变时退化为普通 lerp（数学上严格一致），是 lerp 的超集。
   // 视口尺寸非法（0/NaN）时退化为 lerp（防御）。
   //
-  // 契约：k = 真实时间比例 [0,1]，内部统一缓动（调用方不得预缓动）。
+  // 契约：k = 真实时间比例 [0,1]，内部按分支缓动，调用方一律不得预缓动——
+  //   zoom 不变 → easeInOutCubic（缓入缓出）；
+  //   zoom 变化 → flightPath 内部 easeOut 弧长参数化（Leaflet 同款）。
   // 曾因调用方预缓动 + 段边界比较缓动值 ck，段2 平移被压缩到 18% 时间（72ms 内急冲
   // 65% 路程后骤停）——真机感知「震感」；且单测直传进度与生产契约不一致，防震测试失效。
   //
@@ -67,9 +71,9 @@ App.DesktopCamera = (function () {
   // 同进度插值（zoom 与屏幕中心点共用同一缓动）时，图标屏幕位置 = (P-W)·z 是 k 的
   // 二次函数——中途出现比起终点更大的极值，屏幕边缘图标被推出视口再拉回（扫描复现：
   // zoom 0.5→2 + 平移 400 世界单位出界 120px；2→0.5 对称案例 30px）。zoom 变化时
-  // 改为单一连续飞行曲线：center 沿 tanh 曲线（先 zoom-out 再 zoom-in），zoom 沿
-  // cosh 曲线同步协调——无分段（不断续）、无骤停（不震）、数学上图标不出界（全量
-  // 扫描 0px）。zoom 不变时走 ck 原逻辑（退化一致）。
+  // 改为单一连续飞行曲线：center 沿 tanh 曲线（远距离放大时先 zoom-out 让路再 zoom-in，
+  // 近距离放大/缩放下 zoom 单调），zoom 沿 cosh 曲线同步协调——无分段（不断续）、无骤停
+  // （不震）、数学上图标中心点不出界（全量扫描 0px）。zoom 不变时走 easeInOutCubic 原逻辑（退化一致）。
   // 双曲函数：sinh/cosh/tanh（叶利夫/Mapbox flyTo 同源）。
   function _sinh(n) { return (Math.exp(n) - Math.exp(-n)) / 2 }
   function _cosh(n) { return (Math.exp(n) + Math.exp(-n)) / 2 }
@@ -84,6 +88,9 @@ App.DesktopCamera = (function () {
     const W1y = t.y + h / (2 * t.zoom)
     const w0 = Math.max(w, h)
     const w1 = w0 * (f.zoom / t.zoom)
+    // u1 = 两端屏幕中心世界点的像素距离（from zoom 尺度）。同心缩放（W0==W1 但 zoom 不同）
+    // 时 u1=0，原公式发散（Leaflet 此处直接 NaN 链）；兜底 1 使 zoom 曲线走近似形状，
+    // 位置项 (W1x-W0x)·fu=0 仍精确锚定中心。仅影响 zoom 缓动形状，视觉可接受。
     const u1 = Math.hypot(W1x - W0x, W1y - W0y) * f.zoom || 1
     const rho = 1.42
     const rho2 = rho * rho
@@ -94,7 +101,7 @@ App.DesktopCamera = (function () {
       const b1 = 2 * s2 * rho2 * u1
       const b = t1 / b1
       const sq = Math.sqrt(b * b + 1) - b
-      return sq < 0.000000015 ? -18 : Math.log(sq)  // 浮点精度兜底（Leaflet 同款）
+      return sq < 1e-15 ? -18 : Math.log(sq)  // 浮点精度兜底（Leaflet 1e-15 同款；阈值若过大，r0/r1 同截断 → S=0 飞行静默不动）
     }
     const r0 = r(0)
     function wf(s) { return w0 * (_cosh(r0) / _cosh(r0 + rho * s)) }
@@ -117,7 +124,6 @@ App.DesktopCamera = (function () {
   function lerpCentered(from, to, k, vw, vh) {
     const f = from || create()
     const t = to || create()
-    const ck = easeInOutCubic(clamp01(k))
     const w = num(vw, 0)
     const h = num(vh, 0)
     if (!(w > 0) || !(h > 0)) return lerp(from, to, k)
@@ -129,12 +135,15 @@ App.DesktopCamera = (function () {
     const zoomSame = Math.abs(t.zoom - f.zoom) < ANIM_EPS
     if (zoomSame) {
       // 退化：zoom 不变 → 与 lerp(from, to, easeInOutCubic(k)) 数值一致
+      const ck = easeInOutCubic(clamp01(k))
       return {
         x: fx + (tx - fx) * ck - w / (2 * f.zoom),
         y: fy + (ty - fy) * ck - h / (2 * f.zoom),
         zoom: f.zoom
       }
     }
+    // zoom 变化：flightPath 自带 easeOut 弧长参数化（Leaflet 同款）。
+    // 此处传原始时间比例 k，不得预缓动（双重缓动会压缩起步段、扭曲飞行曲线）。
     return flightPath(f, t, w, h)(clamp01(k))
   }
 

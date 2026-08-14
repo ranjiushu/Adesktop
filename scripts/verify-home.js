@@ -209,7 +209,7 @@ async function main() {
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: homeRect.x, y: homeRect.y }] })
   await sleep(60)
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-  await sleep(100)                                // 动画中段采样（k≈0.25，easeInOutCubic 已推进 ~6%，仍严格介于两端）
+  await sleep(100)                                // 动画中段采样（k≈0.25；zoom 变化走 easeOut 弧长推进 ~35%，zoom 不变 easeInOutCubic ~6%；均严格介于两端）
   const tMid = parseTransform(await canvasTransform(page))
   // 中间态：位于偏离态与快照态之间（非瞬切），且尚未到达终点
   const between = tMid && (tMid.tx - tSnap.tx) * (tMid.tx - tAway.tx) < 0 &&

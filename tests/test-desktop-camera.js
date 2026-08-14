@@ -178,13 +178,15 @@ const lcBad = C.lerpCentered(LC_FROM, LC_TO, 0.5, 0, LC_VH)
 const lpBad = C.lerp(LC_FROM, LC_TO, 0.5)
 check(approx(lcBad.x, lpBad.x) && approx(lcBad.zoom, lpBad.zoom), 'lerpCentered 视口 0 → 退化为 lerp')
 
-// ── lerpCentered 平滑飞行（防图标被甩出屏幕 + 无分段断续）──
+// ── lerpCentered 平滑飞行（防图标中心点被甩出屏幕 + 无分段断续）──
 // 背景：同进度插值（zoom 与屏幕中心点 W 共用同一缓动）时，图标屏幕位置 = (P-W)·z
 // 是 k 的二次函数——中途出现比起终点更大的极值。数值扫描复现：zoom 0.5→2 + W 平移
-// -400 世界单位，起点屏内图标中途出界 120px；zoom 2→0.5 对称案例出界 30px。
+// -400 世界单位，起点屏内图标中心点中途出界 120px；zoom 2→0.5 对称案例出界 30px。
 // 修复：zoom 变化时走 van Wijk & Nuij 平滑飞行曲线（Leaflet flyTo 同款数学）——
-// 单一连续 cosh/tanh 曲线（先 zoom-out 后 zoom-in），无分段（不「断断续续」）、
-// 无骤停（不「震」）；全量扫描图标出界深度 0px。zoom 不变时完全退化为 lerp。
+// 单一连续 cosh/tanh 曲线（远距放大先 zoom-out 让路，其余 zoom 单调），无分段
+// （不「断断续续」）、无骤停（不「震」）；全量扫描图标中心点出界深度 0px。
+// zoom 不变时完全退化为 lerp(easeInOutCubic)。注意：保证的是中心点不出界，
+// 图标 84×76 盒子在中心点距边缘 <42px 时仍可能部分出界（视觉可接受的边缘裁切）。
 // 防回归：以下两个复现案例动画全程图标中心点必须留在视口内。
 function lcScreenPos(P, from, to, k) {
   const cam = C.lerpCentered(from, to, k, LC_VW, LC_VH)
@@ -202,12 +204,12 @@ function lcMaxOutOfView(P, from, to) {
 const LC_ZF = C.create(0, 0, 0.5)
 const LC_ZT = C.create(-130, 80, 2)   // W1 = W0 + (-400,-400)
 const lcBigOut = lcMaxOutOfView({ x: 0, y: 88 }, LC_ZF, LC_ZT)
-check(lcBigOut <= 0.5, '放大案例图标不出界（旧实现 120px，现在 ' + lcBigOut.toFixed(1) + 'px）')
+check(lcBigOut <= 0.5, '放大案例图标中心点不出界（旧实现 120px，现在 ' + lcBigOut.toFixed(1) + 'px）')
 // 缩小案例（2→0.5，W 移 -400,-400）：起点 (60,400) 终点 (350,540)，旧实现中途出界 30px
 const LC_SF = C.create(0, 0, 2)
 const LC_ST = C.create(-670, -880, 0.5)
 const lcSmallOut = lcMaxOutOfView({ x: 30, y: 200 }, LC_SF, LC_ST)
-check(lcSmallOut <= 0.5, '缩小案例图标不出界（旧实现 30px，现在 ' + lcSmallOut.toFixed(1) + 'px）')
+check(lcSmallOut <= 0.5, '缩小案例图标中心点不出界（旧实现 30px，现在 ' + lcSmallOut.toFixed(1) + 'px）')
 // 错相不破坏端点：k=1 精确落点（zoom 无论领先/滞后都必须收敛到 to）
 const lcEndBig = C.lerpCentered(LC_ZF, LC_ZT, 1, LC_VW, LC_VH)
 check(approx(lcEndBig.x, LC_ZT.x) && approx(lcEndBig.y, LC_ZT.y) && approx(lcEndBig.zoom, LC_ZT.zoom),

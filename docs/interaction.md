@@ -181,7 +181,7 @@ down ─────────────────────────
   home 与 fallback 互不覆盖；zoom 超范围数据在应用时由 `DesktopCamera.create()` 钳制。
 - **视觉**：已记录快照时 Home 图标强调色（`home-has-snapshot`），提示「快照存在，点按即回」。
 - **边界**：Home 不覆盖 `rootCamera`——从文件夹返回仍恢复进文件夹前的视角，Home 只负责「现在」的空间锚点。
-- **切换动画**：视角切换为平滑飞行——`lerpCentered` 单一连续飞行曲线（van Wijk & Nuij 平滑 zoom-pan 算法，Leaflet `flyTo` 同款数学：tanh 曲线走 center + cosh 曲线走 zoom，先 zoom-out 后 zoom-in），400ms RAF 驱动。无分段（不断续）、无骤停（不震）、数学上屏幕内图标全程不出界；zoom 不变时退化为与 `lerp` 一致（纯平移）。动画中开始手势（`onGestureStart`）或目录切换（`applyCameraForPath`）即打断，手势直控优先，动画永不与手势抢相机。
+- **切换动画**：视角切换为平滑飞行——`lerpCentered` 单一连续飞行曲线（van Wijk & Nuij 平滑 zoom-pan 算法，Leaflet `flyTo` 同款数学：tanh 曲线走 center + cosh 曲线走 zoom；远距离放大时先 zoom-out 让路再 zoom-in，近距离放大/缩放下 zoom 单调），400ms RAF 驱动。zoom 变化走 easeOut 弧长参数化（起步轻快、收尾平滑，Leaflet 同款手感），zoom 不变退化为 easeInOutCubic 与 `lerp` 一致（纯平移，缓入缓出）。无分段（不断续）、无骤停（不震）、数学上屏幕内图标**中心点**全程不出界。动画中开始手势（`onGestureStart`）或目录切换（`applyCameraForPath`）即打断，手势直控优先，动画永不与手势抢相机。
 
 ## 8. 位置持久化（当前：localStorage 临时方案）
 

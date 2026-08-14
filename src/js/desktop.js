@@ -591,12 +591,38 @@ App.Desktop = (function () {
           node.style.top = resolved[n].y + 'px'
         }
       })
+      // Windows 原则：选中态是临时/脆弱状态——移动完成即失效（清空选中 + 收起 FAB 操作栏）
+      clearSelection()
     }
     dragTargets.forEach(function (n) { setPickedUp(n, false) })
     dragTargets = []
     dragStartWorld = null
     dragStartPositions = {}
     if (moved) saveLayout()
+  }
+
+  // 单指意图取消（1→2 指切换 / touchcancel，由手势层派发）：
+  // 取消 = 什么都没发生——收起框选矩形、拖起图标还原起始位、清理拿起态；
+  // 不落盘（saveLayout）、不清选中（Windows 拖拽取消语义）。
+  function handleSingleCancel() {
+    hideMarquee()
+    if (!dragTargets.length) return
+    dragTargets.forEach(function (n) {
+      const back = dragStartPositions[n]
+      if (back) {
+        positions[n] = { x: back.x, y: back.y }
+        bounds[n] = { x: back.x, y: back.y, w: bounds[n].w, h: bounds[n].h }
+        const node = iconEls[n]
+        if (node) {
+          node.style.left = back.x + 'px'
+          node.style.top = back.y + 'px'
+        }
+      }
+      setPickedUp(n, false)
+    })
+    dragTargets = []
+    dragStartWorld = null
+    dragStartPositions = {}
   }
 
   function refresh() {
@@ -733,7 +759,8 @@ App.Desktop = (function () {
       onLongPress: handleLongPress,
       onDragStart: handleDragStart,
       onDrag: handleDrag,
-      onDrop: handleDrop
+      onDrop: handleDrop,
+      onSingleCancel: handleSingleCancel
     })
     // 同步手势层相机 + 模式标志 + 菜单可用态（根目录初始 = desktop 空间）
     applyCameraForPath()

@@ -158,9 +158,13 @@ App.Actions = (function () {
       return chain.then(function () {
         if (cb.mode === 'cut') App.Clipboard.clear()
         App.toast.show((cb.mode === 'cut' ? '已移动 ' : '已粘贴 ') + copied + ' 项')
+        // Windows 原则：选中态脆弱——粘贴后源选中路径已失效（cut 源已删 / 目标已生成），
+        // 清空选中 + 收起操作栏，避免「幽灵选中」残留
+        App.Desktop.clearSelection()
         App.Desktop.refresh()
       }).catch(function (err) {
         App.toast.show('粘贴失败: ' + err.message + '（已成功 ' + copied + ' 项）')
+        App.Desktop.clearSelection()
         App.Desktop.refresh()
       })
     }).catch(function (err) {

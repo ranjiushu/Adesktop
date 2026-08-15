@@ -90,25 +90,18 @@ App.Thumbnail = (function () {
       if (!uri || typeof uri !== 'string' || uri.indexOf('data:image/') !== 0) {
         throw new Error('快捷方式无图标')
       }
-      const img = new Image()
-      img.onload = function () {
-        entry.state = 'ready'
-        entry.uri = uri
-        const ws = entry.waiters
-        entry.waiters = []
-        ws.forEach(function (w) { w.ok(uri) })
-      }
-      img.onerror = function () {
-        entry.state = 'failed'
-        const ws = entry.waiters
-        entry.waiters = []
-        ws.forEach(function (w) { w.fail() })
-      }
-      img.src = uri
-    }).catch(function () {
-      entry.state = 'failed'
+      // data URI 已随文件落盘（桥层 appIcon 产出），无需二次 Image 解码验证——
+      // 交给 setThumbImg 的 onerror 兜底；直接标记 ready，消除「onload 偶发不触发 → 卡 pending」。
+      entry.state = 'ready'
+      entry.uri = uri
       const ws = entry.waiters
       entry.waiters = []
+      ws.forEach(function (w) { w.ok(uri) })
+    }).catch(function () {
+      // 失败不永久缓存：删除条目，下次 render 重试——防瞬时读失败毒化缓存（否则需重启才恢复）
+      const ws = entry.waiters
+      entry.waiters = []
+      delete shortcutEntries[path]
       ws.forEach(function (w) { w.fail() })
     })
   }

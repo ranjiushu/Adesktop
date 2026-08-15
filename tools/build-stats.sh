@@ -316,7 +316,7 @@ try:
         grouped[group].append(f)
 
     lines = []
-    lines.append('# LexiCull 仓库地图')
+    lines.append('# Desktop 仓库地图')
     lines.append('')
     lines.append(f'> 自动生成于 {gen_time} | {len(files)} 个源文件 | 构建时可刷新')
     lines.append('')

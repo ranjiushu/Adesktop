@@ -114,6 +114,7 @@ pre-push 拦截分支命名违规 + 墓地复活 + `main` 非 merge 推送；pos
 ## 参考
 
 - **文档索引**：`docs/README.md`
+- **仓库地图**：`docs/repo-map.md`（逐源文件行数+职责，构建时自动生成，不入库）
 - **构建管线**：`docs/build-pipeline.md`
 - **数据纪律**：`docs/data-integrity.md`
 - **架构分层**：`docs/architecture.md`

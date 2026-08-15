@@ -114,23 +114,40 @@ App.Markdown = (function () {
         continue
       }
 
-      // 无序列表：连续 - / * / + 行聚合
+      // 无序列表：连续 - / * / + 行聚合；缩进续行并入当前项（多行列表项）
       if (/^\s*[-*+]\s+/.test(line)) {
         const buf = []
-        while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-          buf.push('<li>' + inline(lines[i].replace(/^\s*[-*+]\s+/, '')) + '</li>')
-          i++
+        while (i < lines.length) {
+          const l = lines[i]
+          if (/^\s*[-*+]\s+/.test(l)) {
+            buf.push('<li>' + inline(l.replace(/^\s*[-*+]\s+/, '')) + '</li>')
+            i++
+          } else if (/^\s{2,}\S/.test(l)) {
+            // 续行：并入上一项（软换行 = 空格，与段落聚合口径一致）
+            buf[buf.length - 1] = buf[buf.length - 1].replace(/<\/li>$/, ' ' + inline(l.trim()) + '</li>')
+            i++
+          } else {
+            break
+          }
         }
         out.push('<ul>' + buf.join('') + '</ul>')
         continue
       }
 
-      // 有序列表：连续数字. 行聚合
+      // 有序列表：连续数字. 行聚合；缩进续行并入当前项
       if (/^\s*\d+\.\s+/.test(line)) {
         const buf = []
-        while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-          buf.push('<li>' + inline(lines[i].replace(/^\s*\d+\.\s+/, '')) + '</li>')
-          i++
+        while (i < lines.length) {
+          const l = lines[i]
+          if (/^\s*\d+\.\s+/.test(l)) {
+            buf.push('<li>' + inline(l.replace(/^\s*\d+\.\s+/, '')) + '</li>')
+            i++
+          } else if (/^\s{2,}\S/.test(l)) {
+            buf[buf.length - 1] = buf[buf.length - 1].replace(/<\/li>$/, ' ' + inline(l.trim()) + '</li>')
+            i++
+          } else {
+            break
+          }
         }
         out.push('<ol>' + buf.join('') + '</ol>')
         continue

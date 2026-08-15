@@ -207,22 +207,31 @@
   top: 0;
   z-index: 2;
   background: var(--bg-app);
-  margin: 0 -4px;
-  padding: 8px 8px;
+  margin: 0;          /* 与内容列对齐（此前负 margin 外扩 4px，视觉上与屏幕宽度不一致） */
+  padding: 8px 4px;
   border-radius: 0;
 }
 .changelog-section .mcp-guide-toggle:active {
   background: var(--hover-dim);
 }
 
+/* 更新日志正文：App.Markdown 渲染（h1-h6/ul/ol/blockquote/pre/code/a），
+   容器与上方卡片同宽（左 16px 内容列对齐，无额外横向 padding）。
+   断行：overflow-wrap:anywhere——CHANGELOG 含超长无空格 ASCII token
+   （如 folder/trash/text/... 斜杠串），默认换行规则不在 / 处断行，
+   会横向撑宽滚动容器（历史 bug：展开后整页可左右滑动、内容被裁）。 */
 .changelog-container {
   font-size: 13.5px;
   line-height: 1.85;
   letter-spacing: 0.02em;
   color: var(--text-secondary);
-  padding: 4px 4px 32px;
+  padding: 4px 0 32px;
+  user-select: text;
+  -webkit-user-select: text;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
-.changelog-h1 {
+.changelog-container h1 {
   font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
@@ -230,7 +239,7 @@
   padding: 0 0 4px 0;
   letter-spacing: 0.01em;
 }
-.changelog-h2 {
+.changelog-container h2 {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
@@ -238,28 +247,50 @@
   padding: 0 0 3px 0;
   letter-spacing: 0.01em;
 }
-.changelog-p {
+.changelog-container h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 14px 0 6px 0;
+  letter-spacing: 0.01em;
+}
+.changelog-container h4,
+.changelog-container h5,
+.changelog-container h6 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 12px 0 5px 0;
+}
+.changelog-container p {
   margin: 6px 0;
   padding: 0 2px;
 }
-.changelog-ul {
+.changelog-container ul,
+.changelog-container ol {
   margin: 4px 0 8px 0;
   padding: 0 0 0 20px;
   list-style: none;
 }
-.changelog-ul li {
+.changelog-container li {
   position: relative;
   padding: 1.5px 0 1.5px 12px;
   margin: 0;
 }
-.changelog-ul li::before {
+.changelog-container ul li::before {
   content: "•";
   position: absolute;
   left: -2px;
   color: var(--text-tertiary);
   font-weight: 700;
 }
-.changelog-blockquote {
+.changelog-container ol {
+  list-style: decimal;
+}
+.changelog-container ol li::before {
+  content: none;
+}
+.changelog-container blockquote {
   margin: 6px 0;
   padding: 4px 12px;
   border-left: 3px solid var(--accent-blue);
@@ -267,4 +298,48 @@
   border-radius: 0 6px 6px 0;
   font-style: italic;
   color: var(--text-secondary);
+}
+.changelog-container code {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  font-size: 12px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-outer);
+  border-radius: 3px;
+  padding: 0 3px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.changelog-container pre {
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-outer);
+  border-radius: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.changelog-container pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: pre;
+}
+.changelog-container a {
+  color: var(--accent-blue);
+  text-decoration: underline;
+}
+.changelog-container hr {
+  border: none;
+  border-top: 1px solid var(--border-outer);
+  margin: 12px 0;
+}
+/* 更新日志折叠区兼容旧类名（构建产物历史遗留，防外部引用失效） */
+.changelog-h1,
+.changelog-h2,
+.changelog-p,
+.changelog-ul,
+.changelog-blockquote,
+.changelog-hr,
+.changelog-table {
+  /* 占位：新版渲染走标签选择器，旧类不再输出 */
 }

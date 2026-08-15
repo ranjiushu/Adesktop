@@ -108,7 +108,7 @@ echo ""
 # ── 检查 4: var 纪律（JS ES6+，禁止新增 var；构建注入变量豁免） ──
 echo "── [4/5] var 纪律 ──"
 VAR_HITS=$(grep -rnE '\bvar\s+[A-Za-z_$]' "$SCRIPT_DIR"/src/js/ 2>/dev/null | \
-  grep -vE 'BUILD_|GIT_|FIRST_|RECENT_|CONTRIBUTION_|SOURCE_|FILE_|NON_SOURCE_|CHANGELOG_HTML' || true)
+  grep -vE 'BUILD_|GIT_|FIRST_|RECENT_|CONTRIBUTION_|SOURCE_|FILE_|NON_SOURCE_|CHANGELOG_MD' || true)
 if [ -z "$VAR_HITS" ]; then
   ok "src/js 无裸 var（构建注入变量豁免）"
 else

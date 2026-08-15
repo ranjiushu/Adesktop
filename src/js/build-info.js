@@ -23,6 +23,38 @@ App.BuildInfo = (function () {
     } catch (e) { return isoStr }
   }
 
+  // git %ai 时间（"YYYY-MM-DD HH:MM:SS +HHMM"，作者时区）→ 北京时区（+08:00）显示。
+  // 口径统一：构建信息页其他时间（构建时间/首次构建）均为北京时间；git 时间若不转换，
+  // 页面会显示 UTC 原值（差 8 小时）——「弹窗信息不准确」的根因。
+  function formatGitTime(gitStr) {
+    if (!gitStr) return '--'
+    let m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) ([+-])(\d{2})(\d{2})$/.exec(gitStr)
+    if (!m) return formatBuildTime(gitStr)
+    let sign = m[7] === '-' ? -1 : 1
+    let offMin = sign * (parseInt(m[8], 10) * 60 + parseInt(m[9], 10))
+    let utcMs = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - offMin * 60000
+    let d = new Date(utcMs + 8 * 3600000)
+    let p = function (n) { return (n < 10 ? '0' : '') + n }
+    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) +
+      ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes())
+  }
+
+  // git %ai 时间（"YYYY-MM-DD HH:MM:SS +HHMM"，UTC 或带偏移）→ 北京时区（+08:00）显示。
+  // 口径统一：构建信息页其他时间（构建时间/首次构建）均为北京时间，提交/文件时间若不转换
+  // 会差 8 小时（历史上「信息不准确」的根因：git 时间原样显示 UTC）。
+  function formatGitTime(gitStr) {
+    if (!gitStr) return '--'
+    let m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) ([+-])(\d{2})(\d{2})$/.exec(gitStr)
+    if (!m) return formatBuildTime(gitStr)
+    let sign = m[7] === '-' ? -1 : 1
+    let offMin = sign * (parseInt(m[8], 10) * 60 + parseInt(m[9], 10))
+    let utcMs = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - offMin * 60000
+    let d = new Date(utcMs + 8 * 3600000)
+    let p = function (n) { return (n < 10 ? '0' : '') + n }
+    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) +
+      ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes())
+  }
+
   function _copyToClipboard(text, msg) {
     if (App.ui && typeof App.ui.copyText === 'function') App.ui.copyText(text, msg)
   }
@@ -165,9 +197,16 @@ App.BuildInfo = (function () {
       chips[i].addEventListener('click', function () {
         let cached = _barOptsCache[bodyId]
         if (!cached) return
-        cached.sortKey = this.getAttribute('data-sort')
+        let newKey = this.getAttribute('data-sort')
+        if (newKey === cached.sortKey) return
+        // 关键：sortKey 必须写回 opts（renderBarList 只读 opts.sortKey），
+        // 否则重渲染仍按旧键排序——「切换排列方式标签不工作」的根因
+        cached.sortKey = newKey
+        cached.opts.sortKey = newKey
         let box = document.getElementById(bodyId)
-        if (box) box.innerHTML = renderBarList(cached.items, cached.opts).replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '')
+        if (box) {
+          box.innerHTML = renderBarList(cached.items, cached.opts).replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '')
+        }
         bindExpandToggle(cached.opts.toggleId, '.' + cached.opts.rowClass, 8)
         bindSortChips(bodyId)
       })
@@ -277,49 +316,66 @@ App.BuildInfo = (function () {
     return html
   }
 
-  // ==================== 详情弹窗 ====================
+  // ==================== 详情弹窗（统一 dialog-overlay + dialog 模板） ====================
+  // 关闭途径：点击遮罩空白（overlay 本体）/ 系统返回键（handleSystemBack → App.Dialog.handleBack）。
+  // 模块约定：不设「取消/关闭」按钮；弹窗正文可长按选择复制（.dialog 保证 user-select:text）；
+  // 点击弹窗本体不关闭（否则长按选字会被点击打断——「文字不可复制」的根因）。
+  let DETAIL_OVERLAY_ID = 'detail-modal-overlay'
 
   function closeDetailModal() {
-    let overlays = document.querySelectorAll('.modal-overlay')
-    for (let i = overlays.length - 1; i >= 0; i--) {
-      let o = overlays[i]
+    let o = document.getElementById(DETAIL_OVERLAY_ID)
+    if (o) {
+      App.Dialog.close(DETAIL_OVERLAY_ID)
       if (o.parentNode) o.parentNode.removeChild(o)
-      break
     }
   }
 
-  function showFileDetailModal(f) {
-    if (!f) return
+  function _openDetailModal(innerHtml) {
     let overlay = document.createElement('div')
-    overlay.className = 'modal-overlay'
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;animation:fadeIn .15s'
+    overlay.id = DETAIL_OVERLAY_ID
+    overlay.className = 'dialog-overlay'
+    overlay.setAttribute('aria-hidden', 'true')
     let modal = document.createElement('div')
-    modal.style.cssText = 'width:84vw;max-width:340px;max-height:70vh;background:var(--bg-card);border-radius:14px;padding:16px;box-sizing:border-box;overflow-y:auto'
-    modal.innerHTML =
-      '<div class="commit-modal-title" style="font-size:15px;font-weight:700;margin-bottom:8px;cursor:pointer">' + App.utils.escapeHtml((f.name || '').split('/').pop()) + '</div>' +
-      '<div class="commit-modal-hash" style="font-size:12px;color:var(--text-tertiary);margin-bottom:12px;cursor:pointer">' + App.utils.escapeHtml(f.name || '') + '</div>' +
-      '<div style="font-size:13px;color:var(--text-primary)">' +
-        '行数: ' + App.utils.escapeHtml(String(f.lines || 0)) + (f.chars ? ' · ' + f.chars + ' 字' : '') + '<br>' +
-        '创建: ' + App.utils.escapeHtml(f.created || '--') + '<br>' +
-        '修改: ' + App.utils.escapeHtml(f.modified || '--') +
-      '</div>' +
-      '<div style="margin-top:14px;display:flex;gap:8px">' +
-        '<button class="commit-modal-btn" data-copy="name" style="flex:1;padding:8px 0;border:none;border-radius:8px;background:var(--accent-blue);color:#fff;cursor:pointer;font-size:13px">复制文件名</button>' +
-        '<button class="commit-modal-btn" data-copy="path" style="flex:1;padding:8px 0;border:none;border-radius:8px;background:var(--bg-page);color:var(--text-primary);cursor:pointer;font-size:13px">复制路径</button>' +
-        '<button class="commit-modal-btn" data-copy="close" style="flex:1;padding:8px 0;border:none;border-radius:8px;background:var(--bg-page);color:var(--text-secondary);cursor:pointer;font-size:13px">关闭</button>' +
-      '</div>'
+    modal.className = 'dialog build-detail-modal'
+    modal.setAttribute('role', 'dialog')
+    modal.setAttribute('aria-modal', 'true')
+    modal.innerHTML = innerHtml
     overlay.appendChild(modal)
     document.body.appendChild(overlay)
     overlay.addEventListener('click', function (e) {
       if (e.target === overlay) closeDetailModal()
     })
-    modal.querySelectorAll('.commit-modal-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        let act = btn.getAttribute('data-copy')
-        if (act === 'close') { closeDetailModal(); return }
-        _copyToClipboard(act === 'name' ? (f.name || '').split('/').pop() : (f.name || ''), act === 'name' ? '已复制文件名' : '已复制路径')
+    // 点击即复制（模块约定：「点击谁就复制谁」+ 吐司提示）：
+    // 弹窗内所有 [data-copy] 元素——复制 data-copy-text（缺省 = 该元素文本），
+    // 吐司 data-toast（缺省 '已复制'）。长按选字不受影响（click 与 selection 手势互斥）。
+    let copyEls = modal.querySelectorAll('[data-copy]')
+    for (let i = 0; i < copyEls.length; i++) {
+      copyEls[i].addEventListener('click', function () {
+        let text = this.getAttribute('data-copy-text')
+        if (text === null) text = this.textContent
+        _copyToClipboard(text, this.getAttribute('data-toast') || '已复制')
       })
-    })
+    }
+    App.Dialog.open(DETAIL_OVERLAY_ID, closeDetailModal)
+  }
+
+  function showFileDetailModal(f) {
+    if (!f) return
+    let shortName = (f.name || '').split('/').pop()
+    let fullPath = f.name || ''
+    let rows = '<span class="build-detail-label">行数</span><span class="build-detail-value" data-copy data-toast="已复制">' + App.utils.escapeHtml(String(f.lines || 0)) + '</span>'
+    if (f.chars) rows += '<span class="build-detail-label">字数</span><span class="build-detail-value" data-copy data-toast="已复制">' + App.utils.escapeHtml(String(f.chars)) + '</span>'
+    rows += '<span class="build-detail-label">创建</span><span class="build-detail-value" data-copy data-toast="已复制">' + App.utils.escapeHtml(formatGitTime(f.created)) + '</span>' +
+      '<span class="build-detail-label">修改</span><span class="build-detail-value" data-copy data-toast="已复制">' + App.utils.escapeHtml(formatGitTime(f.modified)) + '</span>'
+    _openDetailModal(
+      '<h2 class="dialog-title" data-copy data-toast="已复制文件名">' + App.utils.escapeHtml(shortName) + '</h2>' +
+      '<div class="build-detail-path" data-copy data-toast="已复制路径">' + App.utils.escapeHtml(fullPath) + '</div>' +
+      '<div class="build-detail-grid">' + rows + '</div>' +
+      '<div class="dialog-actions">' +
+        '<button class="dialog-btn dialog-btn-secondary" data-copy data-copy-text="' + App.utils.escapeHtml(shortName) + '" data-toast="已复制文件名">复制文件名</button>' +
+        '<button class="dialog-btn dialog-btn-primary" data-copy data-copy-text="' + App.utils.escapeHtml(fullPath) + '" data-toast="已复制路径">复制路径</button>' +
+      '</div>'
+    )
   }
 
   function showCommitDetailModal(commit) {
@@ -335,52 +391,32 @@ App.BuildInfo = (function () {
         if (t.indexOf('+') >= 0) ins = t
         else if (t.indexOf('-') >= 0) del = t
       }
-      statHtml = '<div class="commit-modal-stat" style="margin:8px 0">' + App.utils.escapeHtml(files)
-      if (ins) statHtml += ' <span style="color:#4CAF50">' + App.utils.escapeHtml(ins) + '</span>'
-      if (del) statHtml += ' <span style="color:#E57373">' + App.utils.escapeHtml(del) + '</span>'
+      statHtml = '<div class="build-detail-stat" data-copy data-toast="已复制变更统计">' + App.utils.escapeHtml(files)
+      if (ins) statHtml += ' <span class="build-detail-stat-ins">' + App.utils.escapeHtml(ins) + '</span>'
+      if (del) statHtml += ' <span class="build-detail-stat-del">' + App.utils.escapeHtml(del) + '</span>'
       statHtml += '</div>'
     }
     let filesHtml = ''
     if (commit.files && commit.files.length > 0) {
       for (let i = 0; i < commit.files.length; i++) {
         let f = commit.files[i]
-        filesHtml += '<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">' +
-          '<span style="color:var(--text-primary);word-break:break-all;flex:1">' + App.utils.escapeHtml(f.name || '') + '</span>' +
-          '<span style="flex-shrink:0;margin-left:8px">' +
-            (f.ins > 0 ? '<span style="color:#4CAF50">+' + f.ins + '</span> ' : '') +
-            (f.del > 0 ? '<span style="color:#E57373">-' + f.del + '</span>' : '') +
+        filesHtml += '<div class="build-detail-file" data-copy data-copy-text="' + App.utils.escapeHtml(f.name || '') + '" data-toast="已复制文件路径">' +
+          '<span class="build-detail-file-name">' + App.utils.escapeHtml(f.name || '') + '</span>' +
+          '<span class="build-detail-file-stat">' +
+            (f.ins > 0 ? '<span class="build-detail-stat-ins">+' + f.ins + '</span> ' : '') +
+            (f.del > 0 ? '<span class="build-detail-stat-del">-' + f.del + '</span>' : '') +
           '</span></div>'
       }
     }
-
-    let overlay = document.createElement('div')
-    overlay.className = 'modal-overlay'
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;animation:fadeIn .15s'
-    let modal = document.createElement('div')
-    modal.style.cssText = 'width:84vw;max-width:340px;max-height:70vh;background:var(--bg-card);border-radius:14px;padding:16px;box-sizing:border-box;overflow-y:auto'
-    modal.innerHTML =
-      '<div class="commit-modal-title" style="font-size:15px;font-weight:700;margin-bottom:6px;cursor:pointer">' + App.utils.escapeHtml(commit.msg || '') + '</div>' +
-      '<div class="commit-modal-hash" style="font-size:12px;color:var(--text-tertiary);margin-bottom:6px;cursor:pointer">' + App.utils.escapeHtml(commit.fullHash || commit.hash || '') + '</div>' +
-      '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:10px">' +
-        (commit.author ? App.utils.escapeHtml(commit.author) + ' · ' : '') + formatBuildTime(commit.date || '') +
+    let inner =
+      '<h2 class="dialog-title" data-copy data-toast="已复制提交信息">' + App.utils.escapeHtml(commit.msg || '') + '</h2>' +
+      '<div class="build-detail-path" data-copy data-toast="已复制完整 Hash">' + App.utils.escapeHtml(commit.fullHash || commit.hash || '') + '</div>' +
+      '<div class="build-detail-meta" data-copy data-toast="已复制作者与时间">' +
+        (commit.author ? App.utils.escapeHtml(commit.author) + ' · ' : '') + App.utils.escapeHtml(formatGitTime(commit.date || '')) +
       '</div>' +
-      statHtml + (statHtml && filesHtml ? '<div style="height:1px;background:var(--border-outer);margin:6px 0"></div>' : '') + filesHtml
-    overlay.appendChild(modal)
-    document.body.appendChild(overlay)
-    overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) closeDetailModal()
-    })
-    modal.addEventListener('click', function () { closeDetailModal() })
-    let titleEl = modal.querySelector('.commit-modal-title')
-    if (titleEl) titleEl.addEventListener('click', function (e) {
-      e.stopPropagation()
-      _copyToClipboard(commit.msg || '', '已复制提交信息')
-    })
-    let hashEl = modal.querySelector('.commit-modal-hash')
-    if (hashEl) hashEl.addEventListener('click', function (e) {
-      e.stopPropagation()
-      _copyToClipboard(commit.fullHash || commit.hash || '', '已复制完整 Hash')
-    })
+      statHtml +
+      (statHtml && filesHtml ? '<div class="build-detail-divider"></div>' : '') + filesHtml
+    _openDetailModal(inner)
   }
 
   // ==================== 主渲染 ====================
@@ -419,7 +455,7 @@ App.BuildInfo = (function () {
     let sourceStats = _safe(function () { return typeof SOURCE_STATS !== 'undefined' ? SOURCE_STATS : null }, null)
     let fileStats = _safe(function () { return (typeof FILE_STATS !== 'undefined' && Array.isArray(FILE_STATS)) ? FILE_STATS : [] }, [])
     let nsStats = _safe(function () { return (typeof NON_SOURCE_STATS !== 'undefined' && Array.isArray(NON_SOURCE_STATS)) ? NON_SOURCE_STATS : [] }, [])
-    let changelogHtml = _safe(function () { return (typeof CHANGELOG_HTML !== 'undefined' && CHANGELOG_HTML) ? CHANGELOG_HTML : null }, null)
+    let changelogMd = _safe(function () { return (typeof CHANGELOG_MD !== 'undefined' && CHANGELOG_MD) ? CHANGELOG_MD : null }, null)
 
     // 区块组装
     if (contribGrid) {
@@ -491,10 +527,13 @@ App.BuildInfo = (function () {
     if (recentCommits.length > 0) {
       sections.push(wrapSection('提交动态', renderCommitList(recentCommits, 10), { secId: 'build-commit-section' }))
     }
-    if (changelogHtml) {
+    if (changelogMd) {
+      // 更新日志：注入原文（CHANGELOG_MD），运行时用 App.Markdown 渲染——
+      // 与仓库内其他 markdown 共用同一渲染器（h1-h6/多行列表/有序列表/引用/代码等），
+      // 避免构建期 python 迷你渲染器语法覆盖不全（### 标题/列表续行被拆段）
       sections.push(wrapSection(
         '<span class="mcp-guide-arrow" id="build-guide-arrow">▶</span> 更新日志',
-        '<div class="changelog-container" id="build-guide-content" style="display:none">' + changelogHtml + '</div>',
+        '<div class="changelog-container" id="build-guide-content" style="display:none">' + App.Markdown.render(changelogMd) + '</div>',
         { secCls: 'changelog-section', titleCls: 'mcp-guide-toggle', titleId: 'build-guide-toggle' }
       ))
     }

@@ -156,7 +156,7 @@ App.AppList = (function () {
     _pending = app
     const desc = _getEl(CONFIRM_DESC_ID)
     if (desc) desc.textContent = '在桌面创建快捷方式：' + (app.label || app.package)
-    App.Dialog.open(CONFIRM_OVERLAY_ID)
+    App.Dialog.open(CONFIRM_OVERLAY_ID, _cancelConfirm)
   }
 
   function _confirmAdd() {
@@ -288,8 +288,6 @@ App.AppList = (function () {
     }
     const okBtn = _getEl('app-list-confirm-ok')
     if (okBtn) App.utils.bindPress(okBtn, _confirmAdd)
-    const cancelBtn = _getEl('app-list-confirm-cancel')
-    if (cancelBtn) App.utils.bindPress(cancelBtn, _cancelConfirm)
     const overlay = _getEl(CONFIRM_OVERLAY_ID)
     if (overlay) App.utils.bindPress(overlay, function (e) {
       if (e.target === overlay) _cancelConfirm()

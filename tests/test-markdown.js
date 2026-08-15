@@ -33,6 +33,11 @@ check(M.render('### 三级') === '<h3>三级</h3>', '### 三级 → h3')
 // ── 列表 ──
 check(M.render('- 甲\n- 乙') === '<ul><li>甲</li><li>乙</li></ul>', '无序列表聚合')
 check(M.render('1. 一\n2. 二') === '<ol><li>一</li><li>二</li></ol>', '有序列表聚合')
+// 多行列表项：缩进续行并入上一项（软换行 = 空格，与段落口径一致）
+check(M.render('- 甲\n  续行甲') === '<ul><li>甲 续行甲</li></ul>', '无序列表缩进续行并入当前项')
+check(M.render('1. 一\n  续行一\n2. 二') === '<ol><li>一 续行一</li><li>二</li></ol>', '有序列表缩进续行并入当前项')
+check(M.render('- 甲\n\n- 乙') === '<ul><li>甲</li></ul>\n<ul><li>乙</li></ul>', '列表间空行分段')
+check(M.render('- 甲\n  续行 `code` **粗**') === '<ul><li>甲 续行 <code>code</code> <strong>粗</strong></li></ul>', '续行内行内标记生效')
 
 // ── 代码块 ──
 check(M.render('```js\nconst a = 1\n```') === '<pre><code class="lang-js">const a = 1</code></pre>',

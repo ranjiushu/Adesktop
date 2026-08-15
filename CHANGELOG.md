@@ -13,14 +13,18 @@
 - **缩略图服务（ThumbnailService，`thumbnail.js`）**：与 Desktop 核心引擎解耦——File 对象
   不含缩略图状态，desktop.js / selection / layout-store 只关心 name/path/type/position；
   「能否缩略图 + 获取 + 缓存 + 请求去重」全部收敛在 `App.Thumbnail`
+- **桥层缩略图（`FileBridge.thumb`）**：图片采样解码（BitmapFactory inSampleSize，大图不全量加载、
+  内存可控）/ 视频首帧提取（MediaMetadataRetriever）→ 缩放到 256px 最长边 → JPEG 写磁盘缓存
+  （cacheDir/thumbs，key = path@mtime@size，文件修改后自然失效）→ 返回 file:// URI
 - **渐进式获取**：render 先画类型图标（fallback 基线）→ `Thumbnail.request` 异步命中/生成
   → 成功替换为真缩略图；命中缓存（ready）立即回调、失败缓存（failed）立即回退、同路径
-  并发请求合并（pending 去重，避免重复 resolveUri/解码）
-- **本次缩略图范围**：图片（image 类型，含 SVG 渲染预览 / GIF 首帧）；`canThumbnail(kind)`
-  基于类型判定，视频（video）预留接口，待桥层 MediaMetadataRetriever 提取帧后放行
-- **失败回退**：resolveUri 失败（reject）或解码失败（Image onerror）均回退类型图标
+  并发请求合并（pending 去重，避免重复 thumb/解码）
+- **缩略图范围**：图片（image 类型，含 SVG 渲染预览 / GIF 首帧）+ 视频（video 类型，首帧提取）；
+  `canThumbnail(kind)` 基于类型判定放行 image + video
+- **失败回退**：桥层 thumb 失败（reject，解码失败）或 img 加载失败（onerror）均回退类型图标
 - 测试：`test-type-icons`（类型判定/SVG 生成）、`test-thumbnail`（可缩略图判定/缓存命中/
-  请求去重/失败回退），无头 E2E `tools/ui/type-icons-verify.js`（类型 SVG + 缩略图三路径）
+  请求去重/失败回退/视频路径），无头 E2E `tools/ui/type-icons-verify.js`（类型 SVG + 图片/视频
+  缩略图 + 失败回退）
 
 ### 回收站（安全删除）
 

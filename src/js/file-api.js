@@ -56,6 +56,8 @@ App.FileAPI = (function () {
     copy: function (srcPath, dstPath) { return call('copy', [srcPath, dstPath]) },
     // 文件 → WebView 可直接加载的 URI（content:// 或 file://），媒体流式访问用（不搬入内存）
     resolveUri: function (path) { return call('resolveUri', [path]) },
+    // 缩略图：桥层采样解码 / 视频首帧提取 → file:// 缓存 URI（磁盘缓存 + 内存可控）
+    thumb: function (path) { return call('thumb', [path]) },
     // 交外部应用打开（ACTION_VIEW；无可用应用时 reject）
     openExternal: function (path) { return call('openExternal', [path]) },
     hasBridge: function () { return !!window.FileBridge }

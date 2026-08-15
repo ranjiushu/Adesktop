@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
+# 防线 0: 废弃分支（墓地）拦截
 # 防线 1: main 稳定分支保护（只接受 merge commit）
 # 防线 2: src/ 与构建产物一致性校验（src 比 dist 新则拦截）
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# ── 防线 1: main 保护 ──
+# ── 防线 0: 分支墓地检查 ──
 _branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+_graveyard="$(git rev-parse --git-dir)/branch-graveyard"
+if [ -n "$_branch" ] && [ -f "$_graveyard" ] && grep -qxF "$_branch" "$_graveyard"; then
+  echo "[pre-commit] 分支 '$_branch' 已废弃，禁止在其上提交" >&2
+  echo "[pre-commit] 请切换到 feat/dev，或从主线新建 feat/|fix/|exp/ 分支" >&2
+  exit 1
+fi
+
+# ── 防线 1: main 保护 ──
 if [ "$_branch" = "main" ]; then
   # 无 HEAD（新仓库首个提交）允许：main 需要初始基线
   if git rev-parse -q --verify HEAD >/dev/null 2>&1 && ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
     echo "[pre-commit] main 是稳定发布分支，禁止直接提交" >&2
-    echo "[pre-commit] 请在 topic 分支（feat/|fix/）上开发，稳定后 merge --no-ff 合入" >&2
+    echo "[pre-commit] 请在 feat/dev 上开发，稳定后 merge --no-ff 合入" >&2
     exit 1
   fi
 fi

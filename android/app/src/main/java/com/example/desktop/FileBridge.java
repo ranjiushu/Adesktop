@@ -35,6 +35,9 @@ public class FileBridge {
     /** 单次 read 上限：防止大文件整读导致 OOM（预览/编辑功能上线前先做护栏） */
     private static final long MAX_READ_BYTES = 10L * 1024 * 1024;
 
+    /** 回收站文件夹名：根目录下的隐藏文件夹，删除 = 移入回收站（安全删除，不做彻底删除） */
+    private static final String TRASH_NAME = ".trash";
+
     private final Activity activity;
     private final WebView webView;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -204,11 +207,36 @@ public class FileBridge {
                     o.put("mode", "private");
                     o.put("displayPath", privateRoot.getAbsolutePath());
                 }
+                // 幂等确保回收站存在（桌面初始化即出现回收站图标）；失败不阻断 rootInfo——
+                // 删除时 copy 会自动创建目录，降级为「回收站图标延迟到首次删除后出现」
+                try {
+                    ensureTrash();
+                } catch (Exception ignored) {
+                }
+                o.put("trashName", TRASH_NAME);
                 resolveOk(cbId, o);
             } catch (Exception e) {
                 resolveErr(cbId, e.getMessage());
             }
         });
+    }
+
+    /** 幂等确保回收站文件夹存在（SAF 模式 findFile→createDirectory / 私有模式 mkdirs） */
+    private void ensureTrash() throws IOException {
+        if (rootUri != null) {
+            DocumentFile dir = DocumentFile.fromTreeUri(activity, rootUri);
+            if (dir == null) throw new IOException("根目录不可用");
+            DocumentFile trash = dir.findFile(TRASH_NAME);
+            if (trash == null) {
+                trash = dir.createDirectory(TRASH_NAME);
+                if (trash == null) throw new IOException("无法创建回收站: " + TRASH_NAME);
+            }
+        } else {
+            File trash = new File(privateRoot, TRASH_NAME);
+            if (!trash.exists() && !trash.mkdirs()) {
+                throw new IOException("无法创建回收站: " + TRASH_NAME);
+            }
+        }
     }
 
     /* SAF tree uri → 可显示路径：tree/primary%3ADesktop → "内部存储/Desktop" */

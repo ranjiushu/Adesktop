@@ -64,7 +64,10 @@ sandbox.App.Desktop = {
   getCurPath: function () { return '' },
   refresh: function () { calls.refresh++ },
   clearSelection: function () { calls.clearSelection++ },
-  applyRename: function (o, n) { calls.applyRename++; calls.rename.push([o, n]) }
+  applyRename: function (o, n) { calls.applyRename++; calls.rename.push([o, n]) },
+  getTrashName: function () { return '.trash' },
+  isTrashPath: function (p) { return p === '.trash' },
+  getLockedPaths: function () { return [] }
 }
 sandbox.App.toast = {
   show: function (m) { calls.toasts.push(m) }
@@ -259,6 +262,48 @@ async function main() {
   check(calls.toasts.some(function (t) { return t.indexOf('已移动 1 项') === 0 }),
     'moveIntoFolder toast 已移动 1 项')
   check(calls.clearSelection === 1 && calls.refresh === 1, 'moveIntoFolder 后清选中 + refresh')
+
+  // ── 删除 = 移入回收站（安全删除）：copy+del 源到 .trash ──
+  resetCalls(); C.clear()
+  listResult = []   // 回收站 .trash 内无同名
+  A.deleteSelection([{ path: 'a.txt', isDir: false }])
+  await tick()
+  check(calls.list.length >= 1 && calls.list[0] === '.trash',
+    'deleteSelection → list(.trash) 检查回收站')
+  check(calls.copy.length === 1 && calls.copy[0][0] === 'a.txt' && calls.copy[0][1] === '.trash/a.txt',
+    'deleteSelection → copy(a.txt, .trash/a.txt)')
+  check(calls.del.length === 1 && calls.del[0] === 'a.txt', 'deleteSelection → del 源（移入回收站）')
+  check(calls.toasts.some(function (t) { return t.indexOf('已删除 1 项') === 0 }),
+    'deleteSelection toast 已删除 1 项')
+  check(calls.clearSelection === 1 && calls.refresh === 1, 'deleteSelection 后清选中 + refresh')
+
+  // ── 删除回收站自身 → 拒绝 ──
+  resetCalls(); C.clear()
+  A.deleteSelection([{ path: '.trash', isDir: true }])
+  await tick()
+  check(calls.copy.length === 0 && calls.del.length === 0, 'deleteSelection 回收站自身 → 不 copy/del')
+  check(calls.toasts.some(function (t) { return t.indexOf('回收站不可删除') === 0 }),
+    'deleteSelection 回收站自身 → toast 回收站不可删除')
+
+  // ── 删除（无回收站名，如未授权）→ 拒绝 ──
+  const savedTrashName = sandbox.App.Desktop.getTrashName
+  sandbox.App.Desktop.getTrashName = function () { return '' }
+  resetCalls(); C.clear()
+  A.deleteSelection([{ path: 'a.txt', isDir: false }])
+  await tick()
+  check(calls.copy.length === 0 && calls.del.length === 0, 'deleteSelection 无回收站名 → 不 copy/del')
+  check(calls.toasts.some(function (t) { return t.indexOf('回收站不可用') === 0 }),
+    'deleteSelection 无回收站名 → toast 回收站不可用')
+  sandbox.App.Desktop.getTrashName = savedTrashName
+
+  // ── 删除混入回收站的集合 → 仅删非回收站项 ──
+  resetCalls(); C.clear()
+  listResult = []
+  A.deleteSelection([{ path: 'a.txt', isDir: false }, { path: '.trash', isDir: true }])
+  await tick()
+  check(calls.copy.length === 1 && calls.copy[0][0] === 'a.txt',
+    'deleteSelection 混入回收站 → 只 copy 非回收站项')
+  check(calls.del.length === 1 && calls.del[0] === 'a.txt', 'deleteSelection 混入回收站 → 只 del 非回收站项')
 
   if (failures > 0) {
     console.error('  [FAIL] actions 测试 ' + failures + ' 项失败')

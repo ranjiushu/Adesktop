@@ -191,7 +191,7 @@ App.Actions = (function () {
       const plan = App.Clipboard.planPaste(cb, items, targetDir)
       if (!plan.length) return
       const isMove = cb.mode === 'cut'
-      const title = isMove ? '正在移动' : '正在粘贴'
+      const title = opts.title || (isMove ? '正在移动' : '正在粘贴')
       const totalSteps = plan.length * (isMove ? 2 : 1)
       if (App.Loading && typeof App.Loading.show === 'function') {
         App.Loading.show({
@@ -250,7 +250,7 @@ App.Actions = (function () {
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
-        App.toast.show((isMove ? '已移动 ' : '已粘贴 ') + copied + ' 项')
+        App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + copied + ' 项')
         // Windows 原则：选中态脆弱——粘贴后源选中路径已失效（cut 源已删 / 目标已生成），
         // 清空选中 + 收起操作栏，避免「幽灵选中」残留
         App.Desktop.clearSelection()
@@ -259,7 +259,7 @@ App.Actions = (function () {
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
-        App.toast.show((isMove ? '移动' : '粘贴') + '失败: ' + err.message + '（已成功 ' + copied + ' 项）')
+        App.toast.show((opts.failText || (isMove ? '移动' : '粘贴')) + '失败: ' + err.message + '（已成功 ' + copied + ' 项）')
         App.Desktop.clearSelection()
         App.Desktop.refresh()
       })
@@ -267,7 +267,38 @@ App.Actions = (function () {
       if (App.Loading && typeof App.Loading.hide === 'function') {
         App.Loading.hide()
       }
-      App.toast.show((cb.mode === 'cut' ? '移动' : '粘贴') + '失败: ' + err.message)
+      App.toast.show((opts.failText || (cb.mode === 'cut' ? '移动' : '粘贴')) + '失败: ' + err.message)
+    })
+  }
+
+  // ── 阶段 C+：删除 = 移入回收站（安全删除，不做彻底删除）──
+  // entries: [{path, isDir}]（完整路径）；目标 = 根目录回收站（Desktop.getTrashName）。
+  // 复用移动管道（copy+del 源，SAF 无跨目录 rename），重名自动加序号、失败保留源（安全）。
+  // 守卫：回收站自身不可删；锁定文件（正在预览）不可删；无回收站名（未授权）拒绝。
+  function deleteSelection(entries) {
+    if (!entries || !entries.length) return
+    const trashName = App.Desktop && typeof App.Desktop.getTrashName === 'function'
+      ? App.Desktop.getTrashName() : ''
+    if (!trashName) {
+      App.toast.show('回收站不可用（未授权根目录）')
+      return
+    }
+    const safe = entries.filter(function (e) {
+      return !(App.Desktop && typeof App.Desktop.isTrashPath === 'function' && App.Desktop.isTrashPath(e.path))
+    })
+    if (!safe.length) {
+      App.toast.show('回收站不可删除')
+      return
+    }
+    if (_lockedEntry(safe)) {
+      App.toast.show('文件正在预览（锁定），不可删除')
+      return
+    }
+    _transfer({ mode: 'cut', entries: safe }, trashName, {
+      keepClipboard: true,
+      title: '正在删除',
+      doneText: '已删除 ',
+      failText: '删除'
     })
   }
 
@@ -297,6 +328,7 @@ App.Actions = (function () {
     copySelection: copySelection,
     cutSelection: cutSelection,
     paste: paste,
+    deleteSelection: deleteSelection,
     moveIntoFolder: moveIntoFolder
   }
 })()

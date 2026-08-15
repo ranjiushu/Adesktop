@@ -35,6 +35,7 @@ App.Desktop = (function () {
     mode: 'unknown',
     items: [],
     curPath: '',          // 当前目录（相对根，'' = 根）
+    trashName: '',        // 回收站文件夹名（rootInfo 返回，'' = 未知/未初始化）
     viewStyle: 'grid',    // folder 容器视图：grid（4 列）| list（单列）
     sortBy: 'name',       // folder 容器排序：name | mtime | type | size
     sortDir: 1,           // 1 升序 | -1 降序
@@ -95,6 +96,17 @@ App.Desktop = (function () {
     return App.DesktopNav.join(state.curPath, name)
   }
 
+  // 回收站：根目录下固定名文件夹（桥层 rootInfo 返回 trashName），只锚定根目录。
+  // 完整路径恒等于 trashName（无子目录前缀），供删除目标 / 守卫 / 渲染特判共用。
+  function isTrashPath(path) {
+    return !!state.trashName && path === state.trashName
+  }
+
+  // 当前视图是否已进入回收站（folder 容器，curPath === trashName）
+  function inTrash() {
+    return !!state.trashName && state.curPath === state.trashName
+  }
+
   // 自动排布：
   //   desktop 空间：世界坐标按网格铺开（已有位置优先，位置来自 LayoutStore 持久化）
   //   folder 容器：排序后固定排布（网格 4 列自适应 / 列表单列），不读持久化位置
@@ -145,7 +157,8 @@ App.Desktop = (function () {
     placed.forEach(function (p) {
       positions[p.key] = { x: p.x, y: p.y }
       bounds[p.key] = { x: p.x, y: p.y, w: ICON_W, h: ICON_H }
-      let card = el('div', 'desktop-icon' + (p.item.isDir ? ' is-dir' : ''))
+      const isTrashItem = p.item.isDir && isTrashPath(p.key)
+      let card = el('div', 'desktop-icon' + (p.item.isDir ? ' is-dir' : '') + (isTrashItem ? ' is-trash' : ''))
       if (isFolderView()) {
         if (state.viewStyle === 'list') {
           card.classList.add('desktop-list-row')
@@ -160,7 +173,7 @@ App.Desktop = (function () {
       if (App.Clipboard && App.Clipboard.isCut(p.key)) {
         card.classList.add('clip-cut')
       }
-      let icon = el('div', 'desktop-icon-glyph', p.item.isDir ? '📁' : '📄')
+      let icon = el('div', 'desktop-icon-glyph', isTrashItem ? '🗑️' : (p.item.isDir ? '📁' : '📄'))
       let name = el('div', 'desktop-icon-name', p.item.name)
       card.appendChild(icon)
       card.appendChild(name)
@@ -608,9 +621,10 @@ App.Desktop = (function () {
 
   // 拿起整个选中组并开始拖（组内相对位置不变）
   function startGroupDrag(world) {
-    // 过滤掉 positions/bounds 缺失的幽灵项（文件已删/不可见），避免访问 undefined 中断拖动
+    // 过滤掉 positions/bounds 缺失的幽灵项（文件已删/不可见），避免访问 undefined 中断拖动；
+    // 回收站不可拖动（锚定根目录，排除出 dragTargets）
     dragTargets = Array.from(selection).filter(function (n) {
-      return positions[n] && bounds[n]
+      return positions[n] && bounds[n] && !isTrashPath(n)
     })
     dragStartWorld = { x: world.x, y: world.y }
     dragStartPositions = {}
@@ -708,7 +722,11 @@ App.Desktop = (function () {
     if (App.Loading && typeof App.Loading.showTag === 'function') {
       const hit = folderHitAt(world)
       if (hit) {
-        App.Loading.showTag('文件将移入 ' + App.DesktopNav.basename(hit) + ' 文件夹')
+        if (isTrashPath(hit)) {
+          App.Loading.showTag('将移入回收站')
+        } else {
+          App.Loading.showTag('文件将移入 ' + App.DesktopNav.basename(hit) + ' 文件夹')
+        }
       } else {
         App.Loading.hideTag()
       }
@@ -929,6 +947,7 @@ App.Desktop = (function () {
         if (seq !== _refreshSeq) return null   // 过期响应：丢弃，不写状态
         state.rootName = info.rootName
         state.mode = info.mode
+        state.trashName = info.trashName || ''
         if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
           const base = info.displayPath || info.rootName
           App.Drawer.updatePath(state.curPath ? base + '/' + state.curPath : base,
@@ -1101,6 +1120,9 @@ App.Desktop = (function () {
     getLockedPaths: getLockedPaths,
     isLockedPath: isLockedPath,
     closeViewer: closeViewer,
+    isTrashPath: isTrashPath,
+    inTrash: inTrash,
+    getTrashName: function () { return state.trashName },
     viewMode: viewMode,
     isFolderView: isFolderView,
     applyViewPrefs: applyViewPrefs,

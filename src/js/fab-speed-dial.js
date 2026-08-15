@@ -107,9 +107,19 @@ App.fabSpeedDial = (function () {
         collapse()
         return
       case 'delete':
+        // 删除 = 移入回收站（安全删除，不做彻底删除）。单选直接删，多选批量删。
+        // 回收站自身/锁定文件由 App.Actions.deleteSelection 内部守卫。
+        if (App.Desktop && typeof App.Desktop.getSelectionEntries === 'function') {
+          const entries = App.Desktop.getSelectionEntries()
+          if (entries && entries.length && App.Actions && typeof App.Actions.deleteSelection === 'function') {
+            App.Actions.deleteSelection(entries)
+          }
+        }
+        collapse()
+        return
       case 'properties':
-        // 阶段 C 实现操作动作，阶段 B 占位
-        if (App.toast) App.toast.show('操作「' + action + '」阶段 C 实现')
+        // 属性面板尚未实现（占位）
+        if (App.toast) App.toast.show('操作「属性」待实现')
         collapse()
         return
     }
@@ -173,12 +183,22 @@ App.fabSpeedDial = (function () {
       sd.setAttribute('data-mode', 'selection')
       const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
         App.InternalViewer.anySelected()
+      // 回收站守卫：选中含回收站（根目录）→ 隐藏文件操作，只留「打开/取消选择」；
+      // 进入回收站视图（inTrash）→ 禁用 删除/剪切/重命名（只读，防二次删除嵌套）。
+      const selNames = App.Desktop && typeof App.Desktop.getSelectionNames === 'function'
+        ? App.Desktop.getSelectionNames() : []
+      const selHasTrash = selNames.some(function (n) {
+        return App.Desktop && typeof App.Desktop.isTrashPath === 'function' && App.Desktop.isTrashPath(n)
+      })
+      const inTrash = App.Desktop && typeof App.Desktop.inTrash === 'function' && App.Desktop.inTrash()
+      const fileOps = !viewerSel && !selHasTrash
       _setBtnVisible(sd, 'open', !viewerSel)
       _setBtnVisible(sd, 'fullscreen-preview', viewerSel)
       _setBtnVisible(sd, 'close-preview', viewerSel)
-      _setBtnVisible(sd, 'copy', !viewerSel)
-      _setBtnVisible(sd, 'cut', !viewerSel)
-      _setBtnVisible(sd, 'rename', !viewerSel)
+      _setBtnVisible(sd, 'copy', fileOps)
+      _setBtnVisible(sd, 'cut', fileOps && !inTrash)
+      _setBtnVisible(sd, 'rename', fileOps && !inTrash)
+      _setBtnVisible(sd, 'delete', fileOps && !inTrash)
       _setBtnVisible(sd, 'clear-selection', !viewerSel)
       if (bd) bd.classList.remove('fab-backdrop-visible')
       sd.classList.add('fab-speed-dial-expanded')

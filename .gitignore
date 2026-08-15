@@ -2,6 +2,7 @@
 screenshots/
 temp/
 tmp/
+coscli_output/
 *.log
 *.swp
 *.swo

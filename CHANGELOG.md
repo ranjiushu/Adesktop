@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### 已安装应用（Application Shortcut）
+
+- **Shortcut File 契约**（`shortcut.js`）：快捷方式 = 真实文件（`.desktop` 扩展名 + JSON 内容），
+  `type` 字段区分 `application`（应用快捷方式，`package` 稳定引用）与 `file`（文件快捷方式，
+  持久化 SAF URI，预留）；文件即真相——可复制/移动/删除、随 Desktop 文件夹一起迁移
+- **已安装应用工具**（`app-list.js/css`）：Drawer「已安装应用」→ 全屏搜索面板（第三方/系统分段 +
+  确认框）→ 点按生成 `<应用名>.desktop` 快捷方式文件，重名自动加序号
+- **桥层**：`FileBridge.listApps`（PackageManager 查询 launcher 应用）/ `launchApp`
+  （getLaunchIntentForPackage 拉起，UI 线程 startActivity）；AndroidManifest 声明
+  `<queries>` MAIN+LAUNCHER（Android 11+ 包可见性，比 QUERY_ALL_PACKAGES 更受限）
+- **双击拉起**：`FileOpener` 分派 `.desktop` → 读 JSON → `type=application` 时 `launchApp`；
+  解析/启动失败 toast 提示不崩溃
+- **应用图标**：`FileBridge.appIcon`（Drawable→48dp PNG→base64 data URI，自适应图标 draw 兜底）
+  内嵌进快捷方式 JSON（自包含可迁移）；桌面经 `Thumbnail.requestShortcutIcon` 渐进替换类型图标；
+  列表 IntersectionObserver 懒加载（仅可视区 +300px，数百应用不一次性传输）
+- **类型图标**：`.desktop` → `shortcut` 类型（四宫格 SVG），图标显示名剥离扩展名
+- **修复**：外部文件打开后不再永久锁定（返回契约区分 Viewer 实例 / 外部分派）；快捷方式图标失败
+  可重试（不再永久缓存 failed）；回收站显示为「回收站」且可重定位（禁止移入文件夹）；子文件夹
+  幽灵 positions 导致的拖动崩溃
+- 测试：`test-shortcut` / `test-app-list` / `test-desktop-drop-stale-positions` 新增，
+  `test-file-opener` / `test-type-icons` 扩展
+
 ### 类型图标系统 + 缩略图服务（Type Icons & ThumbnailService）
 
 - **类型图标系统**（`type-icons.js` + `type-icons.css`）：按文件名/目录判定 18 类语义

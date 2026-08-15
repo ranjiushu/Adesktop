@@ -15,6 +15,8 @@ InternalViewer 按文件语义分三个模块，每个模块都有两个状态�
 - **Viewer 态**：画布实体（世界坐标定位），随画布 transform 平移/缩放；点击选中、
   拖动移动；手势照常作用于画布。
 - **完整预览态**：`#viewer-fs-page` 独立新页面（相册式），返回键/页头返回退出回到原状态。
+- **多实例**：`open()` 每次创建独立实例（各自 DOM/状态/拖动），同时打开多个互不干扰。
+  同一时刻最多一个实例处于 fullscreen 态（`#viewer-fs-page` 为单例容器）。
 - 纯函数可单测：`moduleFor`（kind→模块）、`cardIsPortrait`（是否 3:4）、
   `anchorIsCenter`（是否视觉中心）、`cardSize34`（3:4 竖版尺寸）、`visualCenter`（相机中心世界点）。
 
@@ -68,9 +70,9 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
   `#desktop-canvas` 内 grid 之后（z-index 5），天然遮挡其背后的文件。
 - **画布实体，具备实体基本性质**（与文件图标手势统一）：
   - **打开不选中**：打开文件动作不触发选中，Viewer 初始为未选中态。
-  - **点击/框选触发选中**（选中态脆弱/临时，符合 Desktop 原则）：点击 Viewer =
-    选中（accent 边框视觉）；框选划过未选中 Viewer = 触发选中；点击外部 =
-    取消选中，**Viewer 保持打开**。
+  - **点击/框选触发选中（单选）**：点击 Viewer = 单选选中该实例（其余取消，
+    accent 边框视觉）；框选划过未选中 Viewer = 触发选中；点击外部 = 取消选中，
+    **Viewer 保持打开**。
   - **选中可直接拖动**：已选中 Viewer 拖动 = 直接拿起移动实体；未选中 Viewer
     拖动 = 框选（不直接拿起）；长按未选中 = 先选中再拿起。
   - **长按/拖动 = 移动实体**：`beginDrag → moveBy → endDrag`（世界坐标位移，
@@ -82,11 +84,13 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
   - media 图/视频/svg：满屏初始 → 加载后按固有宽高比自适应（`fitAspectRect`，中心点不变）；
   - media 音频：3:4 封面卡片（占位封面 + 原生播放控制）。
 - **锚点**（按模块）：text/parsed 打开瞬间锚点 = **视觉中心**（相机中心世界坐标，
-  `visualCenter`，保证首屏居中，无论文件图标在画布何处）；media 锚点 = 文件位置
-  （不可见面积 < 30% 时才移到视觉中心兜底）。
+  `visualCenter`，保证首屏居中）；media 锚点 = 文件位置（不可见面积 < 30% 时才移视觉中心兜底）。
+  **级联错位**：视觉中心类（text/parsed）每次打开向右下偏移 24px（Windows 窗口风格），
+  打开多个自然错开。
 - **文件锁定（Windows 式）**：被 Viewer 打开的文件进入锁定状态（图标 🔒 标记）——
   禁止复制/剪切/重命名/移动（拖入文件夹），**拖动摆放（改布局位置）仍可**；
-  关闭 Viewer 即解除。
+  关闭对应 Viewer 即解除。多实例：多个文件可同时锁定（`Set` 集合）。
+- **框选遮挡**：被 Viewer 覆盖的文件图标不参与框选（Viewer 遮挡语义）。
 - **桌面手指依旧有效**：不拦截触摸——单指拖动/框选/双击/双指缩放照常作用于画布，
   不在 Viewer 内部创作独立交互模型；Viewer 只是遮挡其背后的文件。
 - **顶栏只有文件名**（canvas 态无任何按钮）；全屏入口在 Morph FAB（Viewer 选中时
@@ -111,16 +115,18 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 ## 目录（folder 容器）中的 Viewer（直接全屏）
 
 同一 InternalViewer，anchor=null → 打开即进入全屏新页面，退出 = 关闭，
-不另写一套「打开器」。
+不另写一套「打开器」。目录切换：canvas 态 Viewer（根目录打开的画布实体）保留
+（隐藏于 folder 视图，退回根目录恢复）；全屏态 Viewer 退出全屏。
 
 ## 关闭链路（Morph FAB / 返回键）
 
 - **Morph FAB（Viewer 实体选中时）**：显示「全屏预览」「关闭预览」两项
   （文件操作隐藏，预览焦点模式）；文件选中时恢复 打开/复制/剪切/重命名/取消选择。
-- **关闭预览** = 关闭 Viewer + 解除文件锁定（`Desktop.closeViewer` 统一出口）。
+- **关闭预览** = 关闭「选中的」Viewer + 解除其文件锁定（`Desktop.closeViewer` 出口）。
 - **取消选中 ≠ 关闭**：点 Viewer 外部取消 Viewer 选中（脆弱/临时），Viewer 与锁定保持。
-- **返回键**：`App.handleSystemBack` 查看器优先（全屏 → 退出全屏；预览 → closeViewer）
-  → Drawer → 面板 → 文件导航后退。
+- **返回键**：`App.handleSystemBack` 优先级——全屏态 Viewer → 退出全屏；有选中
+  （Viewer 或文件）→ 取消选中；Drawer → 面板 → 文件导航后退。**返回键不关闭 Viewer**
+  （Viewer 是画布实体，关闭走 FAB「关闭」，删除语义）。
 
 ## 状态与测试
 

@@ -69,21 +69,26 @@ App.onRootChanged = function onRootChanged() {
 }
 
 // 系统返回键（Android 壳 onKeyDown → evaluateJavascript 询问）：
-// 依次消费 查看器 → Drawer → 整页面板 → 文件导航后退（子目录内逐级退出，Windows 式），
+// 依次消费 全屏 Viewer → 选中态取消 → Drawer → 整页面板 → 文件导航后退（子目录内逐级退出，Windows 式），
 // 均未消费返回 false（壳退出 App）。不依赖 pushState 是否被 WebView 计入 canGoBack。
+// 返回键「不关闭」Viewer：Viewer 是画布实体，关闭走 Morph FAB「关闭」（删除语义）。
 App.handleSystemBack = function handleSystemBack() {
-// 文件查看器优先：全屏态返回键 = 退出全屏（回到原页面状态）；预览态 = 关闭并解除锁定
-if (App.InternalViewer && typeof App.InternalViewer.isOpen === 'function' &&
-    App.InternalViewer.isOpen()) {
-  if (App.InternalViewer.getMode && App.InternalViewer.getMode() === 'fullscreen') {
-    if (typeof App.InternalViewer.exitFullscreen === 'function') {
-      App.InternalViewer.exitFullscreen()
-    }
-  } else if (App.Desktop && typeof App.Desktop.closeViewer === 'function') {
-    App.Desktop.closeViewer()
-  } else if (typeof App.InternalViewer.close === 'function') {
-    App.InternalViewer.close()
-  }
+// 1. 全屏态 Viewer 优先：返回键 = 退出全屏（回到原页面状态）
+if (App.InternalViewer && typeof App.InternalViewer.hasFullscreen === 'function' &&
+    App.InternalViewer.hasFullscreen()) {
+  const fs = App.InternalViewer.fullscreenInstance()
+  if (fs && typeof fs.exitFullscreen === 'function') fs.exitFullscreen()
+  return true
+}
+// 2. 有选中（Viewer 选中 或 文件选中）→ 取消选中（脆弱选中态，返回键统一取消）
+if (App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
+    App.InternalViewer.anySelected()) {
+  App.InternalViewer.deselectAll()
+  if (App.Desktop && typeof App.Desktop.clearSelection === 'function') App.Desktop.clearSelection()
+  return true
+}
+if (App.Desktop && typeof App.Desktop.hasSelection === 'function' && App.Desktop.hasSelection()) {
+  if (App.Desktop.clearSelection) App.Desktop.clearSelection()
   return true
 }
 if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()) {

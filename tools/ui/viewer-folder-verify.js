@@ -47,20 +47,20 @@ async function main() {
     return {
       full: Math.abs(cb.width - window.innerWidth) < 1 && Math.abs(cb.height - window.innerHeight) < 1,
       inPage: card.parentNode === page,
-      mode: App.InternalViewer.getMode(),
-      locked: App.Desktop.getLockedPath() === 'docs/guide.md',
+      mode: App.InternalViewer.hasFullscreen(),
+      locked: App.Desktop.isLockedPath('docs/guide.md'),
       md: !!document.querySelector('.viewer-md h1'),
       fabHidden: document.getElementById('mode-switch-fab').classList.contains('fab-hidden')
     }
   })
   check(r.full && r.inPage, 'folder 打开 → 全屏新页面（fixed 覆盖全视口）')
-  check(r.mode === 'fullscreen' && r.fabHidden, 'folder 全屏模式 + FAB 隐藏（简洁新页面）')
+  check(r.mode === true && r.fabHidden, 'folder 全屏模式 + FAB 隐藏（简洁新页面）')
   check(r.locked && r.md, '文件锁定 + 内容渲染')
 
   console.log('═══ 退出全屏 = 关闭 + 目录保持 ═══')
   const back = await page.evaluate(function () {
     const handled = App.handleSystemBack()
-    return { handled: handled, open: App.InternalViewer.isOpen(),
+    return { handled: handled, open: App.InternalViewer.isAnyOpen(),
              pageOpen: document.getElementById('viewer-fs-page').classList.contains('viewer-fs-page-open'),
              cur: App.Desktop.getCurPath() }
   })

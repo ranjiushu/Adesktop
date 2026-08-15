@@ -158,20 +158,22 @@ App.Actions = (function () {
 
   // 锁定检查：entries 中任一完整路径 = 锁定文件（含锁定目录内文件）→ 拒绝
   function _lockedEntry(entries) {
-    const locked = App.Desktop && typeof App.Desktop.getLockedPath === 'function'
-      ? App.Desktop.getLockedPath() : null
-    if (!locked) return false
+    const locked = App.Desktop && typeof App.Desktop.getLockedPaths === 'function'
+      ? App.Desktop.getLockedPaths() : []
+    if (!locked || !locked.length) return false
     for (let i = 0; i < entries.length; i++) {
       const p = entries[i].path
-      if (p === locked) return true
-      if (entries[i].isDir && locked.indexOf(p + '/') === 0) return true
+      for (let j = 0; j < locked.length; j++) {
+        if (p === locked[j]) return true
+        if (entries[i].isDir && locked[j].indexOf(p + '/') === 0) return true
+      }
     }
     return false
   }
   function _isLocked(path) {
-    const locked = App.Desktop && typeof App.Desktop.getLockedPath === 'function'
-      ? App.Desktop.getLockedPath() : null
-    return !!locked && locked === path
+    const locked = App.Desktop && typeof App.Desktop.getLockedPaths === 'function'
+      ? App.Desktop.getLockedPaths() : []
+    return locked.indexOf(path) >= 0
   }
 
   // ── 阶段 C：粘贴（目标名自动加序号；cut 模式 copy+delete 源）──

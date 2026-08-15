@@ -40,9 +40,9 @@ App.FileOpener = (function () {
 
   // 打开：item = { name, path }（path 为完整相对路径），anchor = 桌面空间世界坐标或 null
   // camera = 打开瞬间相机快照（canvas 实体锚点不可见时居中用）
-  // 返回 true = 已分派（内部查看或外部打开）；false = 分派失败
+  // 返回：内部查看 = 实例 id（数字）；外部应用 = true；分派失败 = null
   function open(item, anchor, camera) {
-    if (!item || !item.path) return false
+    if (!item || !item.path) return null
     const kind = kindFor(item.name || '')
     if (kind === 'external') {
       App.FileAPI.openExternal(item.path)
@@ -59,7 +59,7 @@ App.FileOpener = (function () {
       return true
     }
     if (App.InternalViewer && typeof App.InternalViewer.open === 'function') {
-      App.InternalViewer.open({
+      return App.InternalViewer.open({
         path: item.path,
         name: item.name,
         kind: kind,
@@ -69,9 +69,8 @@ App.FileOpener = (function () {
           App.FileAPI.openExternal(item.path).catch(function () {})
         }
       })
-      return true
     }
-    return false
+    return null
   }
 
   return {

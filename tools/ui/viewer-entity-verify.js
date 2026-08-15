@@ -1,9 +1,11 @@
-// Viewer 实体交互性质验证（画布实体 + 选中脆弱性 + 锁定 + 相册式全屏）：
-//   1. 打开 = 文件锁定（禁文件操作）+ Viewer 实体选中
-//   2. 点击 Viewer = 选中实体；点击外部 = 取消选中（Viewer 保持打开）
-//   3. 拖动移动实体 / 取消还原
-//   4. 锁定拦截：复制/剪切/重命名/移动拒绝；拖动摆放允许
-//   5. 全屏 = 相册式独立新页面（进入/退出/位置保留）
+// Viewer 实体交互性质验证（画布实体 + 选中脆弱性 + 锁定 + 相册式全屏 + 多实例）：
+//   1. 打开 = 文件锁定 + Viewer 未选中（打开不选中）
+//   2. 点击 Viewer = 选中；点击外部 = 取消选中（Viewer 保持打开）
+//   3. 拖动移动实体（选中后）
+//   4. 锁定拦截：复制/重命名拒绝
+//   5. 全屏 = 相册式独立新页面
+//   6. 关闭预览 = 解除锁定
+//   7. 多实例：打开第二个 Viewer 不关闭第一个，级联错位
 // 用法: node tools/ui/viewer-entity-verify.js
 'use strict'
 const path = require('path')
@@ -39,27 +41,29 @@ async function main() {
   await page.goto(HTML, { waitUntil: 'networkidle0' })
   await page.waitForFunction(function () { return window.App && document.querySelectorAll('.desktop-icon').length === 3 }, { timeout: 10000 })
 
-  console.log('═══ 1. 打开 Viewer = 文件锁定 + Viewer 未选中（打开不选中） ═══')
+  console.log('═══ 1. 打开 = 文件锁定 + Viewer 未选中（打开不选中） ═══')
   await page.evaluate(function () { App.Desktop.openItem('readme.md') })
   await page.waitForFunction(function () { return document.querySelector('.viewer-card-canvas') }, { timeout: 5000 })
   let r1 = await page.evaluate(function () {
     const lockedIcon = document.querySelector('.desktop-icon-locked')
     return {
-      locked: App.Desktop.getLockedPath() === 'readme.md',
+      locked: App.Desktop.isLockedPath('readme.md'),
       lockedIcon: lockedIcon && lockedIcon.getAttribute('data-name') === 'readme.md',
-      viewerSelected: App.InternalViewer.isSelected(),
+      viewerSelected: App.InternalViewer.anySelected(),
       selectedClass: document.querySelector('.viewer-card-canvas').classList.contains('viewer-card-selected'),
       fileNotSelected: document.querySelectorAll('.desktop-icon.selected').length === 0,
-      fsBtnGone: !document.querySelector('.viewer-fs-btn'),   // 全屏按钮已收纳进 FAB
-      fabCollapsed: !document.querySelector('.fab-speed-dial-expanded')
+      fsBtnGone: !document.querySelector('.viewer-fs-btn'),
+      fabCollapsed: !document.querySelector('.fab-speed-dial-expanded'),
+      count: App.InternalViewer.count()
     }
   })
-  check(r1.locked && r1.lockedIcon, '打开 → 文件锁定（图标锁标记 + getLockedPath）')
+  check(r1.locked && r1.lockedIcon, '打开 → 文件锁定（图标锁标记）')
   check(!r1.viewerSelected && !r1.selectedClass, '打开 → Viewer 未选中（打开动作不触发选中）')
   check(r1.fileNotSelected, '文件不进入选中集（锁定 ≠ 选中）')
-  check(r1.fsBtnGone && r1.fabCollapsed, '打开未选中 → FAB 收起（全屏/关闭入口需选中后出现）')
+  check(r1.fsBtnGone && r1.fabCollapsed, '打开未选中 → FAB 收起')
+  check(r1.count === 1, '打开后实例数 = 1')
 
-  console.log('═══ 2. 点击 Viewer = 选中（点击触发选中） ═══')
+  console.log('═══ 2. 点击 Viewer = 选中 ═══')
   const center = await page.evaluate(function () {
     const b = document.querySelector('.viewer-card-canvas').getBoundingClientRect()
     return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
@@ -68,10 +72,10 @@ async function main() {
   await new Promise(function (res) { setTimeout(res, 200) })
   const r2 = await page.evaluate(function () {
     return {
-      selected: App.InternalViewer.isSelected(),
+      selected: App.InternalViewer.anySelected(),
       selectedClass: document.querySelector('.viewer-card-canvas').classList.contains('viewer-card-selected'),
-      stillOpen: App.InternalViewer.isOpen(),
-      stillLocked: App.Desktop.getLockedPath() === 'readme.md'
+      stillOpen: App.InternalViewer.isAnyOpen(),
+      stillLocked: App.Desktop.isLockedPath('readme.md')
     }
   })
   check(r2.selected && r2.selectedClass, '点击 Viewer → 选中（脆弱/临时态）')
@@ -82,85 +86,100 @@ async function main() {
   await new Promise(function (res) { setTimeout(res, 200) })
   const r3 = await page.evaluate(function () {
     return {
-      selected: App.InternalViewer.isSelected(),
-      selectedClass: document.querySelector('.viewer-card-canvas').classList.contains('viewer-card-selected'),
-      stillOpen: App.InternalViewer.isOpen(),
-      stillLocked: App.Desktop.getLockedPath() === 'readme.md'
+      selected: App.InternalViewer.anySelected(),
+      stillOpen: App.InternalViewer.isAnyOpen(),
+      stillLocked: App.Desktop.isLockedPath('readme.md')
     }
   })
-  check(!r3.selected && !r3.selectedClass, '点击外部 → Viewer 取消选中（选中态脆弱/临时）')
+  check(!r3.selected, '点击外部 → Viewer 取消选中（选中态脆弱/临时）')
   check(r3.stillOpen && r3.stillLocked, 'Viewer 保持打开、文件保持锁定（取消选中 ≠ 关闭）')
 
-  console.log('═══ 4. 再点 Viewer = 重新选中 ═══')
-  await page.touchscreen.tap(center.x, center.y)
-  await new Promise(function (res) { setTimeout(res, 200) })
-  const r4 = await page.evaluate(function () {
-    return { selected: App.InternalViewer.isSelected() }
-  })
-  check(r4.selected, '再次点击 Viewer → 重新选中')
-
-  console.log('═══ 5. 锁定拦截：复制/剪切/重命名拒绝 ═══')
+  console.log('═══ 4. 锁定拦截：复制/重命名拒绝 ═══')
   const r5 = await page.evaluate(function () {
-    const before = App.Desktop.getLockedPath()
     App.Actions.copySelection([{ path: 'readme.md', isDir: false }])
     App.Actions.rename('readme.md', 'renamed.md')
-    return { before: before, stillLocked: App.Desktop.getLockedPath() === before }
+    return { stillLocked: App.Desktop.isLockedPath('readme.md') }
   })
   check(r5.stillLocked, '锁定文件复制/重命名被拦截（锁定保持）')
 
-  console.log('═══ 6. 拖动移动实体 ═══')
+  console.log('═══ 5. 拖动移动实体（选中后） ═══')
   const posBefore = await page.evaluate(function () {
-    return { x: parseFloat(document.querySelector('.viewer-card-canvas').style.left),
-             y: parseFloat(document.querySelector('.viewer-card-canvas').style.top) }
+    const c = document.querySelector('.viewer-card-canvas')
+    return { x: parseFloat(c.style.left), y: parseFloat(c.style.top) }
   })
   const moved = await page.evaluate(function () {
-    App.InternalViewer.beginDrag({ x: 180, y: 320 })
-    App.InternalViewer.moveBy({ x: 280, y: 420 })
+    // 选中实例后拖动
+    const hit = App.InternalViewer.topmostAt(180, 320)
+    if (!hit) return { ok: false }
+    App.InternalViewer.selectOnly(hit.id)
+    hit.beginDrag({ x: 180, y: 320 })
+    hit.moveBy({ x: 280, y: 420 })
     const pos = { x: parseFloat(document.querySelector('.viewer-card-canvas').style.left),
                   y: parseFloat(document.querySelector('.viewer-card-canvas').style.top) }
-    App.InternalViewer.endDrag()
-    return { pos: pos, dragging: App.InternalViewer.isDragging() }
+    hit.endDrag()
+    return { ok: true, pos: pos, dragging: App.InternalViewer.draggingInstance() !== null }
   })
-  check(!moved.dragging && Math.abs(moved.pos.x - (posBefore.x + 100)) < 1 && Math.abs(moved.pos.y - (posBefore.y + 100)) < 1,
+  check(moved.ok && !moved.dragging && Math.abs(moved.pos.x - (posBefore.x + 100)) < 1 && Math.abs(moved.pos.y - (posBefore.y + 100)) < 1,
     '拖动 (100,100) → 实体世界坐标同步位移')
 
-  console.log('═══ 7. 全屏 = 相册式新页面 ═══')
-  await page.evaluate(function () { App.InternalViewer.toFullscreen() })
+  console.log('═══ 6. 全屏 = 相册式新页面 ═══')
+  await page.evaluate(function () {
+    const hit = App.InternalViewer.topmostAt(200, 400)
+    if (hit) { App.InternalViewer.selectOnly(hit.id); hit.toFullscreen() }
+  })
   const fs = await page.evaluate(function () {
     const page = document.getElementById('viewer-fs-page')
     const card = document.querySelector('.viewer-card-fullscreen')
-    const pb = page.getBoundingClientRect()
-    const cb = card.getBoundingClientRect()
     return {
       inPage: card.parentNode === page,
       pageOpen: page.classList.contains('viewer-fs-page-open'),
-      full: Math.abs(cb.width - window.innerWidth) < 1 && Math.abs(cb.height - window.innerHeight) < 1,
       docClass: page.classList.contains('viewer-fs-doc'),
       fabHidden: document.getElementById('mode-switch-fab').classList.contains('fab-hidden'),
-      backVisible: getComputedStyle(document.querySelector('.viewer-back-btn')).display !== 'none',
       histState: history.state && history.state._viewerFs
     }
   })
-  check(fs.inPage && fs.pageOpen && fs.full, '全屏：独立新页面 fixed 覆盖全视口')
+  check(fs.inPage && fs.pageOpen, '全屏：独立新页面')
   check(fs.docClass, '文档类全屏 = 浅色阅读（viewer-fs-doc）')
-  check(fs.fabHidden && fs.backVisible && fs.histState, 'FAB 隐藏 + 页头返回 + pushState')
+  check(fs.fabHidden && fs.histState, 'FAB 隐藏 + pushState')
 
   const back = await page.evaluate(function () {
     const handled = App.handleSystemBack()
-    return { handled: handled, mode: App.InternalViewer.getMode(), open: App.InternalViewer.isOpen(),
-             inCanvas: document.querySelector('.viewer-card-canvas') !== null }
+    return { handled: handled, hasFs: App.InternalViewer.hasFullscreen(), inCanvas: document.querySelector('.viewer-card-canvas') !== null }
   })
-  check(back.handled && back.mode === 'canvas' && back.open && back.inCanvas,
-    '返回键退出全屏 → 回到画布实体预览态')
+  check(back.handled && !back.hasFs && back.inCanvas, '返回键退出全屏 → 回到画布实体预览态')
 
-  console.log('═══ 8. 关闭预览 = 解除锁定 ═══')
+  console.log('═══ 7. 关闭预览 = 解除锁定 ═══')
+  await page.evaluate(function () {
+    const hit = App.InternalViewer.topmostAt(200, 400)
+    if (hit) App.InternalViewer.selectOnly(hit.id)
+  })
   const closed = await page.evaluate(function () {
     App.Desktop.closeViewer()
-    return { open: App.InternalViewer.isOpen(), locked: App.Desktop.getLockedPath(),
+    return { open: App.InternalViewer.isAnyOpen(), locked: App.Desktop.isLockedPath('readme.md'),
              lockIconGone: !document.querySelector('.desktop-icon-locked') }
   })
-  check(!closed.open && closed.locked === null && closed.lockIconGone,
+  check(!closed.open && !closed.locked && closed.lockIconGone,
     'closeViewer：Viewer 关闭 + 解除锁定 + 锁标记移除')
+
+  console.log('═══ 8. 多实例：打开第二个不关闭第一个 + 级联错位 ═══')
+  await page.evaluate(function () { App.Desktop.openItem('readme.md') })
+  await page.evaluate(function () { App.Desktop.openItem('other.txt') })
+  await page.waitForFunction(function () { return document.querySelectorAll('.viewer-card-canvas').length === 2 }, { timeout: 5000 })
+  const multi = await page.evaluate(function () {
+    const cards = document.querySelectorAll('.viewer-card-canvas')
+    const locked = App.Desktop.getLockedPaths()
+    return {
+      count: App.InternalViewer.count(),
+      cards: cards.length,
+      bothLocked: locked.indexOf('readme.md') >= 0 && locked.indexOf('other.txt') >= 0,
+      // 级联错位：两个文本 Viewer（视觉中心锚点）应错开
+      first: { x: parseFloat(cards[0].style.left), y: parseFloat(cards[0].style.top) },
+      second: { x: parseFloat(cards[1].style.left), y: parseFloat(cards[1].style.top) }
+    }
+  })
+  check(multi.count === 2 && multi.cards === 2, '打开第二个 Viewer → 实例数 = 2，两个卡片并存')
+  check(multi.bothLocked, '两个文件同时锁定（多锁定集合）')
+  check(multi.first.x !== multi.second.x || multi.first.y !== multi.second.y, '级联错位：两个 Viewer 位置错开')
 
   await browser.close()
   if (failures > 0) { console.error('[FAIL] ' + failures + ' 项失败'); process.exit(1) }

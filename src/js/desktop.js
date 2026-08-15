@@ -52,10 +52,9 @@ App.Desktop = (function () {
   let dragStartWorld = null   // 手指起始世界坐标
   let dragStartPositions = {} // fullPath → 起始世界坐标（保持组内相对位置）
   // 文件锁定（Windows 式）：被 Viewer 打开的文件禁止复制/剪切/移动/删除/重命名，
-  // 只允许拖动摆放（桌面空间布局）；关闭 Viewer 即解除
-  let _lockedPath = null
-  // Viewer 实体选中态（脆弱/临时）：点击 Viewer = 选中，点击外部 = 取消（Viewer 保持打开）
-  let _viewerSelected = false
+  // 只允许拖动摆放（桌面空间布局）；关闭对应 Viewer 即解除。多实例：Set 存所有锁定路径
+  let _lockedPaths = new Set()
+  // Viewer 选中态由 InternalViewer 实例管理（单选：最多一个选中，脆弱/临时）
 
   // 双击窗口状态
   let _tapState = null            // App.DoubleTap 状态
@@ -199,7 +198,9 @@ App.Desktop = (function () {
 
   function syncFab() {
     if (App.fabSpeedDial && typeof App.fabSpeedDial.setSelection === 'function') {
-      App.fabSpeedDial.setSelection(selection.size > 0 || _viewerSelected)
+      const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
+        App.InternalViewer.anySelected()
+      App.fabSpeedDial.setSelection(selection.size > 0 || viewerSel)
     }
   }
 
@@ -209,13 +210,30 @@ App.Desktop = (function () {
     applySelection()
   }
 
-  // 关闭 Viewer + 解除文件锁定 + 取消 Viewer 选中（唯一出口：FAB 关闭预览 / 返回键 / 目录切换）
+  // 是否有文件选中（返回键取消选中用）
+  function hasSelection() { return selection.size > 0 }
+
+  // 关闭「选中的」Viewer + 解除其文件锁定（唯一出口：FAB 关闭预览）。目录切换走 closeAllViewers
   function closeViewer() {
-    if (App.InternalViewer && typeof App.InternalViewer.close === 'function') {
-      App.InternalViewer.close()
-    }
-    _lockedPath = null
-    _viewerSelected = false
+    const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
+      ? App.InternalViewer.selectedInstance() : null
+    if (!inst) return
+    const path = inst.getPath()
+    App.InternalViewer.closeById(inst.id)
+    if (path) _lockedPaths.delete(path)
+    updateLockedVisual()
+    syncFab()
+  }
+
+  // 关闭所有 Viewer + 解除全部锁定（目录切换：全屏态先退出）
+  function closeAllViewers() {
+    if (!App.InternalViewer) return
+    const list = App.InternalViewer.list ? App.InternalViewer.list() : []
+    App.InternalViewer.closeAll()
+    list.forEach(function (inst) {
+      const p = inst.getPath()
+      if (p) _lockedPaths.delete(p)
+    })
     updateLockedVisual()
     syncFab()
   }
@@ -225,12 +243,17 @@ App.Desktop = (function () {
     Object.keys(iconEls).forEach(function (key) {
       const node = iconEls[key]
       if (!node) return
-      if (_lockedPath === key) node.classList.add('desktop-icon-locked')
+      if (_lockedPaths.has(key)) node.classList.add('desktop-icon-locked')
       else node.classList.remove('desktop-icon-locked')
     })
   }
 
-  function getLockedPath() { return _lockedPath }
+  // 锁定判断（actions.js 用）：路径是否被任一 Viewer 锁定
+  function isLockedPath(path) {
+    return _lockedPaths.has(path)
+  }
+
+  function getLockedPaths() { return Array.from(_lockedPaths) }
 
   // 当前选中完整路径列表（复制/剪切/重命名用）
   function getSelectionNames() {
@@ -281,15 +304,14 @@ App.Desktop = (function () {
     } else if (App.FileOpener && typeof App.FileOpener.open === 'function') {
       // Windows 式锁定：文件被 Viewer 打开 = 锁定（禁复制/剪切/移动/删除/重命名，
       // 拖动摆放仍可）；文件不进入选中集——Viewer 实体自身有独立选中态（脆弱/临时）。
-      _lockedPath = full
-      selection = new Set()
-      _viewerSelected = false   // 打开不选中：选中由点击/框选触发（与文件图标一致的脆弱选中）
-      // 锚点：desktop 空间 = 文件世界坐标（Viewer 为画布实体，随画布 transform 平移缩放）；
-      // folder 容器 = 无锚点（全屏新页面）
-      const anchor = isFolderView() ? null : (positions[full] || null)
-      App.FileOpener.open({ name: item.name, path: full }, anchor, camera)
-      syncFab()
-      updateLockedVisual()
+      // 多实例：每个打开的 Viewer 各自锁定其文件。
+      const id = App.FileOpener.open({ name: item.name, path: full }, isFolderView() ? null : (positions[full] || null), camera)
+      if (id) {
+        _lockedPaths.add(full)
+        selection = new Set()
+        updateLockedVisual()
+        syncFab()
+      }
     } else if (App.toast) {
       App.toast.show('打开文件（查看器未就绪）')
     }
@@ -308,11 +330,19 @@ App.Desktop = (function () {
   //   根 = 恢复根相机（无限画布）；folder = 重置 (0,0,1)（滚动到顶）
   function applyCameraForPath() {
     cancelCameraAnim()   // 目录切换即打断 Home 动画，避免动画覆盖新路径相机
-    // 目录切换 = 回到文件列表视图，关闭查看器并解除文件锁定
-    closeViewer()
+    // 目录切换：先退出全屏态 Viewer（folder 打开的全屏预览），保留 canvas 态 Viewer（跨目录保留）
+    const fs = App.InternalViewer && App.InternalViewer.fullscreenInstance ? App.InternalViewer.fullscreenInstance() : null
+    if (fs) {
+      fs.exitFullscreen()   // folder 打开的全屏：退出 = close（见 exitFullscreen 的 from='folder' 分支）
+      if (fs.getPath && _lockedPaths.has(fs.getPath())) _lockedPaths.delete(fs.getPath())
+    }
     if (isFolderView()) {
+      // 进入 folder：隐藏 canvas 态 Viewer（保留状态，退回根目录恢复）
+      if (App.InternalViewer && App.InternalViewer.suspendCanvas) App.InternalViewer.suspendCanvas()
       camera = App.DesktopCamera.create(0, 0, 1)
     } else {
+      // 回到根目录：恢复 canvas 态 Viewer
+      if (App.InternalViewer && App.InternalViewer.resumeCanvas) App.InternalViewer.resumeCanvas()
       camera = rootCamera || App.DesktopCamera.create()
     }
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
@@ -447,20 +477,19 @@ App.Desktop = (function () {
 
   // ── 手势回调（世界坐标）──
   function handleTap(world) {
-    // Viewer 画布实体：点击 = 选中实体（脆弱/临时：点外部取消，Viewer 保持打开）
-    if (App.InternalViewer && typeof App.InternalViewer.hitTestWorld === 'function' &&
-        App.InternalViewer.hitTestWorld(world.x, world.y)) {
-      if (!_viewerSelected) {
-        _viewerSelected = true
-        App.InternalViewer.setSelected(true)
+    // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）
+    const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
+      ? App.InternalViewer.topmostAt(world.x, world.y) : null
+    if (hitInst) {
+      if (hitInst.getMode() === 'canvas') {
+        App.InternalViewer.selectOnly(hitInst.id)
         syncFab()
       }
       return
     }
     // 点击 Viewer 外部：取消 Viewer 选中（Viewer 保持打开、文件保持锁定）
-    if (_viewerSelected) {
-      _viewerSelected = false
-      App.InternalViewer.setSelected(false)
+    if (App.InternalViewer && App.InternalViewer.anySelected()) {
+      App.InternalViewer.deselectAll()
       syncFab()
     }
     const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
@@ -521,17 +550,26 @@ App.Desktop = (function () {
   function handleMarqueeEnd(start, cur) {
     hideMarquee()
     const rect = App.DesktopSelection.rectFromPoints(start.x, start.y, cur.x, cur.y)
-    selection = new Set(App.DesktopSelection.marqueeHitTest(rect, bounds))
-    // 框选命中 Viewer 实体 → 触发选中（划过未选中实体通过框选选中）；未命中 → 取消 Viewer 选中（替换选择语义）
-    if (App.InternalViewer && typeof App.InternalViewer.rectHitWorld === 'function' &&
-        App.InternalViewer.rectHitWorld(rect)) {
-      _viewerSelected = true
-      App.InternalViewer.setSelected(true)
-    } else if (_viewerSelected) {
-      _viewerSelected = false
-      App.InternalViewer.setSelected(false)
+    // 框选命中：被 Viewer 覆盖的文件图标不参与（Viewer 遮挡语义）
+    const files = App.DesktopSelection.marqueeHitTest(rect, bounds).filter(function (name) {
+      return !isCoveredByViewer(bounds[name])
+    })
+    selection = new Set(files)
+    // 框选命中 Viewer → 单选选中它；未命中 → 取消 Viewer 选中（替换选择语义）
+    const hitInst = App.InternalViewer && typeof App.InternalViewer.rectHit === 'function'
+      ? App.InternalViewer.rectHit(rect) : null
+    if (hitInst) {
+      App.InternalViewer.selectOnly(hitInst.id)
+    } else if (App.InternalViewer && App.InternalViewer.anySelected()) {
+      App.InternalViewer.deselectAll()
     }
     applySelection()
+  }
+
+  // 文件图标是否被任一 canvas 态 Viewer 覆盖（遮挡，框选跳过）
+  function isCoveredByViewer(rect) {
+    if (!rect || !App.InternalViewer || typeof App.InternalViewer.rectHit !== 'function') return false
+    return !!App.InternalViewer.rectHit(rect)
   }
 
   function setPickedUp(name, on) {
@@ -543,12 +581,13 @@ App.Desktop = (function () {
   }
 
   // 命中类型（desktop 空间）：selected=已选中（可直接拿起）/ icon=未选中图标 / empty=空白
-  // viewer-selected = Viewer 已选中（可直接拿起移动实体）；viewer = Viewer 未选中（长按/框选触发选中）
+  // viewer-selected = 命中的 Viewer 已被选中（可直接拿起移动实体）；viewer = 命中的 Viewer 未选中（长按/框选触发选中）
   // folder 容器：icon=图标（可框选，不拿起）/ empty=空白（滚动），永不 selected（禁止移动）
   function hitTest(world) {
-    if (App.InternalViewer && typeof App.InternalViewer.hitTestWorld === 'function' &&
-        App.InternalViewer.hitTestWorld(world.x, world.y)) {
-      return _viewerSelected ? 'viewer-selected' : 'viewer'
+    const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
+      ? App.InternalViewer.topmostAt(world.x, world.y) : null
+    if (hitInst) {
+      return hitInst.isSelected() ? 'viewer-selected' : 'viewer'
     }
     if (isFolderView()) {
       const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
@@ -583,15 +622,15 @@ App.Desktop = (function () {
   }
 
   function handleLongPress(world) {
-    // Viewer 画布实体：长按拿起——未选中先选中再拿（与文件图标语义一致），已选中直接拿
-    if (App.InternalViewer && typeof App.InternalViewer.beginDrag === 'function' &&
-        App.InternalViewer.hitTestWorld(world.x, world.y)) {
-      if (!_viewerSelected) {
-        _viewerSelected = true
-        App.InternalViewer.setSelected(true)
+    // Viewer 画布实体：长按拿起——单选选中该实例再拿（与文件图标语义一致），已选中直接拿
+    const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
+      ? App.InternalViewer.topmostAt(world.x, world.y) : null
+    if (hitInst) {
+      if (!hitInst.isSelected()) {
+        App.InternalViewer.selectOnly(hitInst.id)
         syncFab()
       }
-      if (App.InternalViewer.beginDrag(world)) {
+      if (hitInst.beginDrag(world)) {
         if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
       }
       return
@@ -680,9 +719,9 @@ App.Desktop = (function () {
   // hitType 由手势层 down 时确定：viewer-selected=已选中 Viewer 拿起移动实体；selected=已选中文件组拿起
   function handleDragStart(world, hitType) {
     if (hitType === 'viewer-selected') {
-      if (App.InternalViewer && typeof App.InternalViewer.beginDrag === 'function') {
-        App.InternalViewer.beginDrag(world)
-      }
+      const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
+        ? App.InternalViewer.selectedInstance() : null
+      if (inst) inst.beginDrag(world)
       return
     }
     if (isFolderView()) return
@@ -690,24 +729,26 @@ App.Desktop = (function () {
   }
 
   function handleDrag(world) {
-    if (App.InternalViewer && typeof App.InternalViewer.isDragging === 'function' &&
-        App.InternalViewer.isDragging()) {
-      App.InternalViewer.moveBy(world)
+    const dragInst = App.InternalViewer && typeof App.InternalViewer.draggingInstance === 'function'
+      ? App.InternalViewer.draggingInstance() : null
+    if (dragInst) {
+      dragInst.moveBy(world)
       return
     }
     if (dragTargets.length) applyDrag(world)
   }
 
   function handleDrop(world, moved) {
-    if (App.InternalViewer && typeof App.InternalViewer.isDragging === 'function' &&
-        App.InternalViewer.isDragging()) {
-      App.InternalViewer.endDrag()
+    const dragInst = App.InternalViewer && typeof App.InternalViewer.draggingInstance === 'function'
+      ? App.InternalViewer.draggingInstance() : null
+    if (dragInst) {
+      dragInst.endDrag()
       return
     }
     if (!dragTargets.length) return
     // Windows 式锁定：被 Viewer 打开的文件禁止移动（拖入文件夹），但拖动摆放（改布局位置）仍可
     function lockedMoveBlocked() {
-      return _lockedPath && dragTargets.indexOf(_lockedPath) >= 0
+      return dragTargets.some(function (n) { return _lockedPaths.has(n) })
     }
     // folder 容器：移入文件夹语义——命中文件夹 → moveIntoFolder；
     // 未命中 → 还原起始位（folder 位置自动排布，不吸附不落盘）
@@ -766,7 +807,7 @@ App.Desktop = (function () {
       const hit = folderHitAt(world)
       if (hit) {
         // 锁定文件（正在预览）禁止移动
-        if (_lockedPath && dragTargets.indexOf(_lockedPath) >= 0) {
+        if (lockedMoveBlocked()) {
           dragTargets.forEach(function (n) { setPickedUp(n, false) })
           dragTargets = []
           dragStartWorld = null
@@ -844,10 +885,9 @@ App.Desktop = (function () {
   function handleSingleCancel() {
     hideMarquee()
     // Viewer 实体拖动取消：还原起始位置
-    if (App.InternalViewer && typeof App.InternalViewer.isDragging === 'function' &&
-        App.InternalViewer.isDragging()) {
-      App.InternalViewer.cancelDrag()
-    }
+    const dragInst = App.InternalViewer && typeof App.InternalViewer.draggingInstance === 'function'
+      ? App.InternalViewer.draggingInstance() : null
+    if (dragInst) dragInst.cancelDrag()
     if (App.Loading && typeof App.Loading.hideTag === 'function') {
       App.Loading.hideTag()
     }
@@ -1045,6 +1085,7 @@ App.Desktop = (function () {
     render: render,
     initGesture: initGesture,
     clearSelection: clearSelection,
+    hasSelection: hasSelection,
     getSelectionNames: getSelectionNames,
     getSelectionEntries: getSelectionEntries,
     applyRename: applyRename,
@@ -1057,7 +1098,8 @@ App.Desktop = (function () {
     canGoForward: canGoForward,
     canGoUp: canGoUp,
     getCurPath: getCurPath,
-    getLockedPath: getLockedPath,
+    getLockedPaths: getLockedPaths,
+    isLockedPath: isLockedPath,
     closeViewer: closeViewer,
     viewMode: viewMode,
     isFolderView: isFolderView,

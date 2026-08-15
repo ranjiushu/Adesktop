@@ -82,9 +82,9 @@ async function main() {
       inCanvas: card.parentNode === canvas,
       left: parseFloat(card.style.left), top: parseFloat(card.style.top),
       w: parseFloat(card.style.width), h: parseFloat(card.style.height),
-      locked: App.Desktop.getLockedPath() === 'readme.md',
+      locked: App.Desktop.isLockedPath('readme.md'),
       lockIcon: document.querySelector('.desktop-icon-locked') !== null,
-      viewerSelected: App.InternalViewer.isSelected(),
+      viewerSelected: App.InternalViewer.anySelected(),
       fsBtnGone: !document.querySelector('.viewer-fs-btn'),
       h1: md.querySelector('h1') && md.querySelector('h1').textContent
     }
@@ -129,15 +129,17 @@ async function main() {
   })
   const tapCheck = await page.evaluate(function () {
     // 世界坐标命中 Viewer 实体矩形（打开未选中，命中测试不改变选中态）
-    const hit = App.InternalViewer.hitTestWorld(200, 400)
-    return { hit: hit, selected: App.InternalViewer.isSelected() }
+    const hit = App.InternalViewer.topmostAt(200, 400) !== null
+    return { hit: hit, selected: App.InternalViewer.anySelected() }
   })
   check(tapCheck.hit, '世界点命中 Viewer 实体矩形')
   check(!tapCheck.selected, '打开未选中 → 命中测试不触发选中（需真实点击）')
 
   console.log('═══ 4. 全屏预览 ═══')
   await page.evaluate(function () {
-    App.InternalViewer.toFullscreen()
+    // 全屏需要先选中实例（FAB「全屏预览」作用于选中实例）
+    const hit = App.InternalViewer.topmostAt(200, 400)
+    if (hit) { App.InternalViewer.selectOnly(hit.id); hit.toFullscreen() }
   })
   const fs = await page.evaluate(function () {
     const page = document.getElementById('viewer-fs-page')
@@ -148,38 +150,52 @@ async function main() {
       inPage: card.parentNode === page,
       pageOpen: page.classList.contains('viewer-fs-page-open'),
       full: Math.abs(cb.width - window.innerWidth) < 1 && Math.abs(cb.height - window.innerHeight) < 1,
-      mode: App.InternalViewer.getMode()
+      mode: App.InternalViewer.hasFullscreen()
     }
   })
   check(fs.inPage && fs.pageOpen && fs.full, '全屏：独立新页面 fixed 覆盖全视口')
-  check(fs.mode === 'fullscreen', '全屏态：模式切换')
+  check(fs.mode === true, '全屏态：模式切换')
 
   console.log('═══ 5. 关闭：FAB「关闭预览」═══')
-  // 模拟点击选中态操作栏的 close-preview 按钮
+  // 点击选中态操作栏的 close-preview 按钮（作用于选中的实例）
   const closed = await page.evaluate(function () {
+    // 全屏态下没有选中实例，先退出全屏
+    const fs = App.InternalViewer.fullscreenInstance()
+    if (fs) fs.exitFullscreen()
+    return true
+  })
+  check(closed, '退出全屏准备关闭')
+  await page.evaluate(function () {
+    // 选中实例后点 FAB 关闭
+    const hit = App.InternalViewer.topmostAt(200, 400)
+    if (hit) App.InternalViewer.selectOnly(hit.id)
+  })
+  const closed2 = await page.evaluate(function () {
     const btn = document.querySelector('[data-action="close-preview"]')
     if (btn) btn.click()
-    const layer = document.getElementById('viewer-layer')
     return {
-      open: App.InternalViewer.isOpen(),
-      layerOpen: layer.classList.contains('viewer-layer-open'),
+      open: App.InternalViewer.isAnyOpen(),
       cardGone: !document.querySelector('.viewer-card'),
-      unlocked: App.Desktop.getLockedPath() === null
+      unlocked: !App.Desktop.isLockedPath('readme.md')
     }
   })
-  check(!closed.open && !closed.layerOpen && closed.cardGone && closed.unlocked,
-    'FAB 关闭预览：Viewer 关闭 + layer 还原 + 解除锁定')
+  check(!closed2.open && closed2.cardGone && closed2.unlocked,
+    'FAB 关闭预览：Viewer 关闭 + 解除锁定')
 
-  console.log('═══ 6. 返回键关闭 ═══')
+  console.log('═══ 6. 返回键取消选中（不关闭 Viewer）═══')
   await page.evaluate(function () {
     App.Desktop.openItem('note.txt')
   })
   await page.waitForFunction(function () { return document.querySelector('.viewer-pre') }, { timeout: 5000 })
   const back = await page.evaluate(function () {
+    // 先选中 Viewer，返回键应取消选中而非关闭
+    const hit = App.InternalViewer.topmostAt(200, 400)
+    if (hit) App.InternalViewer.selectOnly(hit.id)
     const handled = App.handleSystemBack()
-    return { handled: handled, open: App.InternalViewer.isOpen() }
+    return { handled: handled, selected: App.InternalViewer.anySelected(), open: App.InternalViewer.isAnyOpen() }
   })
-  check(back.handled === true && back.open === false, '返回键关闭 Viewer（优先于导航）')
+  check(back.handled === true && back.selected === false && back.open === true,
+    '返回键取消 Viewer 选中（不关闭 Viewer，Viewer 保持打开）')
 
   console.log('═══ 7. HTML 隔离 Java Bridge ═══')
   await page.evaluate(function () {
@@ -202,7 +218,7 @@ async function main() {
 
   if (SHOT) {
     await page.evaluate(function () {
-      App.InternalViewer.close()
+      App.InternalViewer.closeAll()
       App.Desktop.openItem('readme.md')
     })
     await new Promise(function (res) { setTimeout(res, 400) })

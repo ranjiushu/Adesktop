@@ -45,18 +45,17 @@ App.fabSpeedDial = (function () {
         collapse()
         return
       case 'close-preview':
-        // 关闭预览：关闭 Viewer + 解除文件锁定（唯一出口之一，Desktop 统一管理）
+        // 关闭预览：关闭「选中的」Viewer + 解除文件锁定（Desktop 统一管理）
         if (App.Desktop && typeof App.Desktop.closeViewer === 'function') {
           App.Desktop.closeViewer()
-        } else if (App.InternalViewer && typeof App.InternalViewer.close === 'function') {
-          App.InternalViewer.close()
         }
         collapse()
         return
       case 'fullscreen-preview':
-        // 全屏预览（相册式独立新页面；返回/退出回到原页面状态）
-        if (App.InternalViewer && typeof App.InternalViewer.toFullscreen === 'function') {
-          App.InternalViewer.toFullscreen()
+        // 全屏预览：选中实例进入完整预览（相册式独立新页面）
+        if (App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function') {
+          const inst = App.InternalViewer.selectedInstance()
+          if (inst && typeof inst.toFullscreen === 'function') inst.toFullscreen()
         }
         collapse()
         return
@@ -172,8 +171,8 @@ App.fabSpeedDial = (function () {
       _expanded = true
       _mode = 'selection'
       sd.setAttribute('data-mode', 'selection')
-      const viewerSel = App.InternalViewer && typeof App.InternalViewer.isSelected === 'function' &&
-        App.InternalViewer.isSelected()
+      const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
+        App.InternalViewer.anySelected()
       _setBtnVisible(sd, 'open', !viewerSel)
       _setBtnVisible(sd, 'fullscreen-preview', viewerSel)
       _setBtnVisible(sd, 'close-preview', viewerSel)

@@ -77,10 +77,13 @@ async function main() {
     '视觉中心 = 相机中心世界点，卡片中心对齐该锚点')
 
   console.log('═══ 3. 文本完整预览态 = reader 工具条 + 缩放 + 换行 ═══')
-  await page.evaluate(function () { App.Desktop.closeViewer() })
+  await page.evaluate(function () { App.InternalViewer.closeAll() })
   await page.evaluate(function () { App.Desktop.openItem('note.txt') })
   await page.waitForFunction(function () { return document.querySelector('.viewer-pre') }, { timeout: 5000 })
-  await page.evaluate(function () { App.InternalViewer.toFullscreen() })
+  await page.evaluate(function () {
+    const hit = App.InternalViewer.topmostAt(200, 400)
+    if (hit) { App.InternalViewer.selectOnly(hit.id); hit.toFullscreen() }
+  })
   await page.waitForFunction(function () { return document.querySelector('.viewer-card-fullscreen .viewer-pre') }, { timeout: 5000 })
   const r3 = await page.evaluate(function () {
     const tools = document.querySelectorAll('.viewer-tool')
@@ -102,7 +105,7 @@ async function main() {
 
   console.log('═══ 4. 音频模块 Viewer 态 = 3:4 封面卡片 ═══')
   await page.evaluate(function () { App.handleSystemBack() })  // 退出文本全屏
-  await page.evaluate(function () { App.Desktop.closeViewer() })
+  await page.evaluate(function () { App.InternalViewer.closeAll() })
   await page.evaluate(function () { App.Desktop.openItem('song.mp3') })
   await page.waitForFunction(function () { return document.querySelector('.viewer-audio') }, { timeout: 5000 })
   const r4 = await page.evaluate(function () {
@@ -120,7 +123,7 @@ async function main() {
   check(r4.hasCover && r4.hasIcon && r4.hasName && r4.hasControls, '音频封面卡片：占位封面(音乐图标+文件名) + 原生播放控制')
 
   console.log('═══ 5. media 图片 Viewer 态 = 原始比例 ═══')
-  await page.evaluate(function () { App.Desktop.closeViewer() })
+  await page.evaluate(function () { App.InternalViewer.closeAll() })
   await page.evaluate(function () { App.Desktop.openItem('photo.png') })
   await page.waitForFunction(function () { return document.querySelector('.viewer-media-img') }, { timeout: 5000 })
   await new Promise(function (res) { setTimeout(res, 300) })  // 等 load 事件 + fitAspectRect
@@ -131,7 +134,7 @@ async function main() {
   check(Math.abs(rImg.ratio - 320 / 180) < 0.03, '图片 Viewer 态 = 原始比例（320:180 ≈ 1.78，实测 ' + rImg.ratio.toFixed(3) + '）')
 
   console.log('═══ 6. 框选划过未选中 Viewer → 触发选中 ═══')
-  await page.evaluate(function () { App.Desktop.closeViewer() })
+  await page.evaluate(function () { App.InternalViewer.closeAll() })
   await page.evaluate(function () { App.Desktop.openItem('note.txt') })
   await page.waitForFunction(function () { return document.querySelector('.viewer-card-canvas') }, { timeout: 5000 })
   await new Promise(function (res) { setTimeout(res, 200) })
@@ -139,7 +142,7 @@ async function main() {
     const b = document.querySelector('.viewer-card-canvas').getBoundingClientRect()
     return { left: b.left, top: b.top, w: b.width, h: b.height, right: b.right }
   })
-  const before = await page.evaluate(function () { return App.InternalViewer.isSelected() })
+  const before = await page.evaluate(function () { return App.InternalViewer.anySelected() })
   const client = await page.target().createCDPSession()
   const sy = card.top + card.h / 2
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: Math.max(0, card.left - 40), y: sy, id: 1 }] })
@@ -147,7 +150,7 @@ async function main() {
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: card.right + 40, y: sy, id: 1 }] })
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await new Promise(function (res) { setTimeout(res, 200) })
-  const after = await page.evaluate(function () { return App.InternalViewer.isSelected() })
+  const after = await page.evaluate(function () { return App.InternalViewer.anySelected() })
   check(!before && after, '框选划过未选中 Viewer → 触发选中（' + before + ' → ' + after + '）')
 
   console.log('═══ 7. 纯函数三模块映射 ═══')

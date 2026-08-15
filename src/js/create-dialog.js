@@ -15,7 +15,7 @@ App.CreateDialog = (function () {
 
   function open() {
     if (_open) return
-    _open = App.Dialog.open(OVERLAY_ID)
+    _open = App.Dialog.open(OVERLAY_ID, close)
     let input = _getEl(INPUT_ID)
     if (input) {
       input.value = ''
@@ -57,8 +57,6 @@ App.CreateDialog = (function () {
     if (fileBtn) App.utils.bindPress(fileBtn, function () { _submit(false) })
     let folderBtn = document.getElementById('create-folder')
     if (folderBtn) App.utils.bindPress(folderBtn, function () { _submit(true) })
-    let cancel = document.getElementById('create-cancel')
-    if (cancel) App.utils.bindPress(cancel, close)
     let overlay = _getEl(OVERLAY_ID)
     if (overlay) App.utils.bindPress(overlay, function (e) {
       // 仅点击遮罩空白（非对话框本体）时关闭

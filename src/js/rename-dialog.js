@@ -18,7 +18,7 @@ App.RenameDialog = (function () {
     if (_open || !name) return
     _open = true
     _target = name
-    App.Dialog.open(OVERLAY_ID)
+    App.Dialog.open(OVERLAY_ID, close)
     let input = _getEl(INPUT_ID)
     if (input) {
       input.value = name
@@ -67,8 +67,6 @@ App.RenameDialog = (function () {
   function init() {
     let confirmBtn = document.getElementById('rename-confirm')
     if (confirmBtn) App.utils.bindPress(confirmBtn, _submit)
-    let cancel = document.getElementById('rename-cancel')
-    if (cancel) App.utils.bindPress(cancel, close)
     let overlay = _getEl(OVERLAY_ID)
     if (overlay) App.utils.bindPress(overlay, function (e) {
       if (e.target === overlay) close()

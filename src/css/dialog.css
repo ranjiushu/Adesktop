@@ -19,13 +19,16 @@
 }
 
 .dialog {
-  /* 统一弹窗宽：占屏幕 70%~80%（取 76vw），矩形卡片（小圆角） */
+  /* 统一弹窗宽：占屏幕 70%~80%（取 76vw），矩形（直角，模块约定） */
   width: 76vw;
   max-width: 420px;
   background: var(--color-surface);
-  border-radius: 4px;
+  border-radius: 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
   padding: var(--space-lg);
+  /* 弹窗正文可长按选择复制（模块约定：文字可复制） */
+  user-select: text;
+  -webkit-user-select: text;
   transform: scale(0.92);
   transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -69,10 +72,10 @@
   gap: var(--space-sm);
   margin-top: var(--space-md);
 }
-/* 三按钮布局：取消（弱）+ 文件（主）+ 文件夹（次强调） */
-.dialog-actions-triple {
+/* 双按钮布局：文件（主）+ 文件夹（次强调）；取消已移除（返回键/点空白关闭） */
+.dialog-actions-pair {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-sm);
 }
 .dialog-btn {

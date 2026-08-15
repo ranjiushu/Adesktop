@@ -1,0 +1,100 @@
+/* Loading Feedback：居中对话框（进度条）+ 实时标签（拖入文件夹提示） */
+
+/* ── 对话框：复用 dialog-overlay / dialog 结构（dialog.css 定义矩形 76vw），
+     这里只补进度条专属样式 ── */
+.loading-dialog {
+  /* overlay 布局/遮罩由 .dialog-overlay 提供；此 ID 仅作语义锚点 */
+}
+.loading-dialog-card {
+  /* 卡片尺寸由 .dialog 提供（76vw 矩形）；此处补进度区留白 */
+  padding-top: 8px;
+}
+.loading-dialog-title {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 10px;
+  text-align: center;
+}
+/* 阶段/总进度条容器：未激活时隐藏 */
+.loading-phase, .loading-total {
+  margin-top: 8px;
+}
+.loading-phase.loading-visible, .loading-total.loading-visible {
+  display: block;
+}
+.loading-phase:not(.loading-visible), .loading-total:not(.loading-visible) {
+  display: none;
+}
+.loading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.loading-row-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.loading-row-count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.loading-track {
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.loading-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--color-accent);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+/* 不确定进度（目录切换/刷新）：条纹滑动 */
+.loading-bar.loading-indeterminate {
+  width: 100% !important;
+  background-image: linear-gradient(
+    90deg,
+    var(--color-accent) 0%,
+    var(--color-accent) 40%,
+    var(--color-border) 40%,
+    var(--color-border) 60%,
+    var(--color-accent) 60%,
+    var(--color-accent) 100%
+  );
+  background-size: 60px 100%;
+  animation: loading-slide 0.8s linear infinite;
+}
+@keyframes loading-slide {
+  from { background-position: 0 0; }
+  to { background-position: 60px 0; }
+}
+
+/* ── 实时标签（拖入文件夹提示）：顶栏靠下一点的位置 ── */
+.drop-tag {
+  position: fixed;
+  top: calc(var(--header-height) + var(--safe-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.78);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 6px 14px;
+  border-radius: 16px;
+  max-width: 80vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 2100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.drop-tag.loading-visible {
+  opacity: 1;
+}

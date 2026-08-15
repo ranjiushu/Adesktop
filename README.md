@@ -33,7 +33,7 @@ dist/                    构建产物（不入库）
 ```bash
 bash tools/build-web.sh        # 1. src/ → dist/desktop.bundle.html
 node tools/minify-bundle.js    # 2. → dist/desktop.bundle.min.html
-bash android/build-local.sh    # 3. 打包 APK 并归档到 /workspace/AAA 安装包/
+bash android/build-local.sh    # 3. 打包 APK 并归档到 /workspace/AAA 安装包/（滚动保留最新 10 个）
 bash tools/verify.sh           # 提交前门禁
 ```
 

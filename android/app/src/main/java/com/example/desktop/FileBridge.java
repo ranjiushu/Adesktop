@@ -6,7 +6,17 @@
 package com.example.desktop;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
 import android.os.VibrationEffect;
@@ -20,12 +30,16 @@ import androidx.documentfile.provider.DocumentFile;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -33,6 +47,12 @@ public class FileBridge {
 
     /** 单次 read 上限：防止大文件整读导致 OOM（预览/编辑功能上线前先做护栏） */
     private static final long MAX_READ_BYTES = 10L * 1024 * 1024;
+
+    /** 回收站文件夹名：根目录下的隐藏文件夹，删除 = 移入回收站（安全删除，不做彻底删除） */
+    private static final String TRASH_NAME = ".trash";
+
+    /** 缩略图最长边（px）：图片采样解码 / 视频帧缩放的目标尺寸，控制内存与缓存体积 */
+    private static final int THUMB_MAX_DIM = 256;
 
     private final Activity activity;
     private final WebView webView;
@@ -203,11 +223,36 @@ public class FileBridge {
                     o.put("mode", "private");
                     o.put("displayPath", privateRoot.getAbsolutePath());
                 }
+                // 幂等确保回收站存在（桌面初始化即出现回收站图标）；失败不阻断 rootInfo——
+                // 删除时 copy 会自动创建目录，降级为「回收站图标延迟到首次删除后出现」
+                try {
+                    ensureTrash();
+                } catch (Exception ignored) {
+                }
+                o.put("trashName", TRASH_NAME);
                 resolveOk(cbId, o);
             } catch (Exception e) {
                 resolveErr(cbId, e.getMessage());
             }
         });
+    }
+
+    /** 幂等确保回收站文件夹存在（SAF 模式 findFile→createDirectory / 私有模式 mkdirs） */
+    private void ensureTrash() throws IOException {
+        if (rootUri != null) {
+            DocumentFile dir = DocumentFile.fromTreeUri(activity, rootUri);
+            if (dir == null) throw new IOException("根目录不可用");
+            DocumentFile trash = dir.findFile(TRASH_NAME);
+            if (trash == null) {
+                trash = dir.createDirectory(TRASH_NAME);
+                if (trash == null) throw new IOException("无法创建回收站: " + TRASH_NAME);
+            }
+        } else {
+            File trash = new File(privateRoot, TRASH_NAME);
+            if (!trash.exists() && !trash.mkdirs()) {
+                throw new IOException("无法创建回收站: " + TRASH_NAME);
+            }
+        }
     }
 
     /* SAF tree uri → 可显示路径：tree/primary%3ADesktop → "内部存储/Desktop" */
@@ -432,5 +477,397 @@ public class FileBridge {
                 resolveErr(cbId, e.getMessage());
             }
         });
+    }
+
+    /* 复制：文件/目录递归拷贝（粘贴的基础操作；剪切 = copy + delete）。
+     * srcPath/dstPath 均为相对根目录路径；目标已存在则覆盖（重名由前端规划防冲突）。 */
+    @JavascriptInterface
+    public void copy(String srcPath, String dstPath, String cbId) {
+        executor.execute(() -> {
+            try {
+                if (!isSafeRelPath(srcPath) || !isSafeRelPath(dstPath)) {
+                    throw new IOException("非法路径");
+                }
+                Object resolved = resolve(srcPath);
+                if (rootUri != null) {
+                    copySaf((DocumentFile) resolved, dstPath);
+                } else {
+                    copyPrivate((File) resolved, dstPath);
+                }
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /* SAF 递归拷贝：dstPath 逐级解析/创建目录，文件流拷贝 */
+    private void copySaf(DocumentFile src, String dstPath) throws IOException {
+        DocumentFile root = DocumentFile.fromTreeUri(activity, rootUri);
+        if (root == null) throw new IOException("根目录不可用");
+        String[] parts = dstPath.split("/");
+        DocumentFile cur = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            if (parts[i].isEmpty()) continue;
+            DocumentFile next = cur.findFile(parts[i]);
+            if (next == null) next = cur.createDirectory(parts[i]);
+            if (next == null || !next.isDirectory()) throw new IOException("无法进入目录: " + parts[i]);
+            cur = next;
+        }
+        String name = parts[parts.length - 1];
+        if (name.isEmpty()) throw new IOException("非法目标名: " + dstPath);
+        if (src.isDirectory()) {
+            DocumentFile dstDir = cur.findFile(name);
+            if (dstDir == null) dstDir = cur.createDirectory(name);
+            if (dstDir == null || !dstDir.isDirectory()) throw new IOException("无法创建目录: " + name);
+            DocumentFile[] children = src.listFiles();
+            if (children != null) {
+                for (DocumentFile c : children) {
+                    copySaf(c, dstPath + "/" + c.getName());
+                }
+            }
+        } else {
+            DocumentFile dst = cur.findFile(name);
+            if (dst == null) dst = cur.createFile(mimeFor(name), name);
+            if (dst == null) throw new IOException("无法创建文件: " + name);
+            java.io.InputStream is = activity.getContentResolver().openInputStream(src.getUri());
+            if (is == null) throw new IOException("无法读取源文件");
+            java.io.OutputStream os = activity.getContentResolver().openOutputStream(dst.getUri(), "wt");
+            if (os == null) {
+                is.close();
+                throw new IOException("无法写入: " + dstPath);
+            }
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) != -1) os.write(buf, 0, n);
+            os.flush();
+            os.close();
+            is.close();
+        }
+    }
+
+    /* 私有模式递归拷贝 */
+    private void copyPrivate(File src, String dstPath) throws IOException {
+        File dst = new File(privateRoot, dstPath);
+        if (!isUnderPrivateRoot(dst)) throw new IOException("非法路径: " + dstPath);
+        if (src.isDirectory()) {
+            if (!dst.mkdirs() && !dst.isDirectory()) throw new IOException("无法创建目录: " + dstPath);
+            File[] children = src.listFiles();
+            if (children != null) {
+                for (File c : children) {
+                    copyPrivate(c, dstPath + "/" + c.getName());
+                }
+            }
+        } else {
+            File parent = dst.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                throw new IOException("无法创建目录: " + parent);
+            }
+            try (FileInputStream fis = new FileInputStream(src);
+                 FileOutputStream fos = new FileOutputStream(dst)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = fis.read(buf)) != -1) fos.write(buf, 0, n);
+            }
+        }
+    }
+
+    /* 文件 → WebView 可直接加载的 URI：SAF = content://，私有 = file://。
+     * 供前端 <img>/<video>/<audio>/iframe 流式访问媒体，避免大文件经 read 搬入 JS 内存。
+     * 仅限文件（目录拒绝）；路径校验与 resolve 一致。 */
+    @JavascriptInterface
+    public void resolveUri(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(path);
+                String uri;
+                if (resolved instanceof DocumentFile) {
+                    DocumentFile df = (DocumentFile) resolved;
+                    if (!df.isFile()) throw new IOException("非文件: " + path);
+                    uri = df.getUri().toString();
+                } else {
+                    File f = (File) resolved;
+                    if (!f.isFile()) throw new IOException("非文件: " + path);
+                    uri = Uri.fromFile(f).toString();
+                }
+                resolveOk(cbId, uri);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /* 交外部应用打开：ACTION_VIEW + 按扩展名推断 MIME + 读权限授权。
+     * 无可用应用时回调错误（前端 toast 提示）；必须 UI 线程 startActivity。 */
+    @JavascriptInterface
+    public void openExternal(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(path);
+                final Intent intent;
+                String name;
+                if (resolved instanceof DocumentFile) {
+                    DocumentFile df = (DocumentFile) resolved;
+                    if (!df.isFile()) throw new IOException("非文件: " + path);
+                    name = df.getName() == null ? "" : df.getName();
+                    intent = new Intent(Intent.ACTION_VIEW, df.getUri());
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } else {
+                    File f = (File) resolved;
+                    if (!f.isFile()) throw new IOException("非文件: " + path);
+                    name = f.getName();
+                    intent = new Intent(Intent.ACTION_VIEW, Uri.fromFile(f));
+                }
+                String mime = mimeFor(name);
+                if (mime != null && !mime.isEmpty()) {
+                    intent.setType(mime);
+                }
+                activity.runOnUiThread(() -> {
+                    try {
+                        activity.startActivity(intent);
+                        resolveOk(cbId, true);
+                    } catch (ActivityNotFoundException e) {
+                        resolveErr(cbId, "没有可打开该文件的应用");
+                    } catch (Exception e) {
+                        resolveErr(cbId, "无法打开: " + e.getMessage());
+                    }
+                });
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /* ── 已安装应用 ──
+     * listApps：PackageManager 查询 launcher 应用（第三方 + 系统），返回 [{package,label,isSystem}]。
+     * launchApp：getLaunchIntentForPackage + startActivity 拉起指定应用。
+     * Android 11+ 需 manifest 声明 <queries>（MAIN+LAUNCHER），否则列表为空。 */
+
+    @JavascriptInterface
+    public void listApps(String cbId) {
+        executor.execute(() -> {
+            try {
+                PackageManager pm = activity.getPackageManager();
+                Intent intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+                List<ResolveInfo> resolved = pm.queryIntentActivities(intent, 0);
+                JSONArray arr = new JSONArray();
+                Set<String> seen = new HashSet<>();
+                for (ResolveInfo ri : resolved) {
+                    if (ri == null || ri.activityInfo == null) continue;
+                    String pkg = ri.activityInfo.packageName;
+                    if (pkg == null || seen.contains(pkg)) continue;
+                    seen.add(pkg);
+                    try {
+                        JSONObject o = new JSONObject();
+                        o.put("package", pkg);
+                        o.put("label", String.valueOf(ri.loadLabel(pm)));
+                        ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
+                        boolean sys = (ai.flags & (ApplicationInfo.FLAG_SYSTEM
+                            | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0;
+                        o.put("isSystem", sys);
+                        arr.put(o);
+                    } catch (Exception ignored) {
+                    }
+                }
+                resolveOk(cbId, arr);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void launchApp(String pkg, String cbId) {
+        if (pkg == null || pkg.trim().isEmpty()) {
+            resolveErr(cbId, "应用包名无效");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                Intent intent = activity.getPackageManager().getLaunchIntentForPackage(pkg);
+                if (intent == null) {
+                    resolveErr(cbId, "无法启动应用（无启动入口）: " + pkg);
+                    return;
+                }
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(intent);
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, "无法启动应用: " + (e.getMessage() == null ? pkg : e.getMessage()));
+            }
+        });
+    }
+
+    /* 获取应用图标：PackageManager 加载 Drawable → 缩放到 48dp → PNG → base64 data URI。
+     * 供前端列表渐进式展示 + 写入快捷方式 JSON（自包含，可随文件迁移）。 */
+    @JavascriptInterface
+    public void appIcon(String pkg, String cbId) {
+        if (pkg == null || pkg.trim().isEmpty()) {
+            resolveErr(cbId, "应用包名无效");
+            return;
+        }
+        executor.execute(() -> {
+            try {
+                Drawable d = activity.getPackageManager().getApplicationIcon(pkg);
+                Bitmap bmp;
+                if (d instanceof BitmapDrawable) {
+                    bmp = ((BitmapDrawable) d).getBitmap();
+                } else {
+                    bmp = drawableToBitmap(d);
+                }
+                Bitmap scaled = scaleToIcon(bmp);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                scaled.compress(Bitmap.CompressFormat.PNG, 100, baos);
+                String b64 = android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP);
+                resolveOk(cbId, "data:image/png;base64," + b64);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /** 非 BitmapDrawable 的 Drawable（如 AdaptiveIconDrawable/矢量）→ 绘制到位图 */
+    private Bitmap drawableToBitmap(Drawable d) {
+        int w = d.getIntrinsicWidth(), h = d.getIntrinsicHeight();
+        if (w <= 0) w = 96;
+        if (h <= 0) h = 96;
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+        d.setBounds(0, 0, w, h);
+        d.draw(canvas);
+        return bmp;
+    }
+
+    /** 缩放到 48dp（应用图标标准尺寸），控制 base64 体积；已达标原样返回 */
+    private Bitmap scaleToIcon(Bitmap src) {
+        float density = activity.getResources().getDisplayMetrics().density;
+        int target = Math.max(1, Math.round(48 * density));
+        int w = src.getWidth(), h = src.getHeight();
+        if (w == target && h == target) return src;
+        return Bitmap.createScaledBitmap(src, target, target, true);
+    }
+
+    /* ── 缩略图 ──
+     * 图片采样解码 / 视频首帧提取 → 缩放到 256px 最长边 → JPEG 写磁盘缓存 → 返回 file:// URI。
+     * 缓存 key = path@mtime@size（文件修改后自然失效）；缓存位于 cacheDir/thumbs（系统可清理）。
+     * 采样解码控制内存（大图不全量加载）；解码失败回调错误（前端回退类型图标）。 */
+
+    @JavascriptInterface
+    public void thumb(String path, String cbId) {
+        executor.execute(() -> {
+            try {
+                Object resolved = resolve(path);
+                long mtime, size;
+                if (resolved instanceof DocumentFile) {
+                    DocumentFile df = (DocumentFile) resolved;
+                    if (!df.isFile()) throw new IOException("非文件: " + path);
+                    mtime = df.lastModified();
+                    size = df.length();
+                } else {
+                    File f = (File) resolved;
+                    if (!f.isFile()) throw new IOException("非文件: " + path);
+                    mtime = f.lastModified();
+                    size = f.length();
+                }
+                File cacheFile = thumbCacheFile(path, mtime, size);
+                if (cacheFile.exists() && cacheFile.length() > 0) {
+                    resolveOk(cbId, Uri.fromFile(cacheFile).toString());
+                    return;
+                }
+                Bitmap bmp = isVideoPath(path) ? decodeVideoFrame(resolved) : decodeImageThumb(resolved);
+                if (bmp == null) throw new IOException("无法生成缩略图: " + path);
+                Bitmap thumb = scaleToThumb(bmp);
+                File dir = cacheFile.getParentFile();
+                if (dir != null && !dir.exists() && !dir.mkdirs()) {
+                    throw new IOException("无法创建缩略图缓存目录");
+                }
+                try (FileOutputStream fos = new FileOutputStream(cacheFile)) {
+                    thumb.compress(Bitmap.CompressFormat.JPEG, 82, fos);
+                    fos.flush();
+                }
+                resolveOk(cbId, Uri.fromFile(cacheFile).toString());
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /** 缩略图缓存文件：key = 相对路径 + mtime + size 的 hash（文件修改后自然失效） */
+    private File thumbCacheFile(String relPath, long mtime, long size) {
+        String key = relPath + "@" + mtime + "@" + size;
+        String hash = Integer.toHexString(key.hashCode());
+        File dir = new File(activity.getCacheDir(), "thumbs");
+        return new File(dir, hash + ".jpg");
+    }
+
+    private java.io.InputStream openThumbStream(Object resolved) throws IOException {
+        if (resolved instanceof DocumentFile) {
+            DocumentFile df = (DocumentFile) resolved;
+            java.io.InputStream is = activity.getContentResolver().openInputStream(df.getUri());
+            if (is == null) throw new IOException("无法打开: " + df.getName());
+            return is;
+        }
+        return new FileInputStream((File) resolved);
+    }
+
+    /** 图片采样解码：先探测尺寸，再按 THUMB_MAX_DIM*2 采样（大图不全量加载，控制内存） */
+    private Bitmap decodeImageThumb(Object resolved) throws IOException {
+        java.io.InputStream is1 = openThumbStream(resolved);
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeStream(is1, null, bounds);
+        is1.close();
+        int w = bounds.outWidth, h = bounds.outHeight;
+        if (w <= 0 || h <= 0) return null;
+        int sample = 1;
+        while (Math.max(w, h) / sample > THUMB_MAX_DIM * 2) sample *= 2;
+        java.io.InputStream is2 = openThumbStream(resolved);
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inSampleSize = sample;
+        Bitmap bmp = BitmapFactory.decodeStream(is2, null, opts);
+        is2.close();
+        return bmp;
+    }
+
+    /** 视频首帧提取（MediaMetadataRetriever，系统原生）；失败返回 null（前端回退类型图标） */
+    private Bitmap decodeVideoFrame(Object resolved) {
+        MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+        try {
+            if (resolved instanceof DocumentFile) {
+                DocumentFile df = (DocumentFile) resolved;
+                mmr.setDataSource(activity, df.getUri());
+            } else {
+                mmr.setDataSource(((File) resolved).getAbsolutePath());
+            }
+            return mmr.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+        } catch (Exception e) {
+            return null;
+        } finally {
+            try { mmr.release(); } catch (Exception ignored) {}
+        }
+    }
+
+    /** 缩放到 THUMB_MAX_DIM 最长边（双线性过滤）；已达标则原样返回 */
+    private Bitmap scaleToThumb(Bitmap src) {
+        int w = src.getWidth(), h = src.getHeight();
+        int maxDim = Math.max(w, h);
+        if (maxDim <= THUMB_MAX_DIM) return src;
+        float scale = (float) THUMB_MAX_DIM / maxDim;
+        int tw = Math.max(1, Math.round(w * scale));
+        int th = Math.max(1, Math.round(h * scale));
+        return Bitmap.createScaledBitmap(src, tw, th, true);
+    }
+
+    private boolean isVideoPath(String path) {
+        String ext = extOf(path);
+        return ext.equals("mp4") || ext.equals("webm") || ext.equals("mkv") || ext.equals("mov")
+            || ext.equals("3gp") || ext.equals("m4v") || ext.equals("avi") || ext.equals("flv")
+            || ext.equals("mpg") || ext.equals("mpeg") || ext.equals("wmv");
+    }
+
+    private String extOf(String name) {
+        int i = name.lastIndexOf('.');
+        if (i <= 0 || i >= name.length() - 1) return "";
+        return name.substring(i + 1).toLowerCase(Locale.US);
     }
 }

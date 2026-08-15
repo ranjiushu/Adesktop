@@ -1,7 +1,7 @@
 // 底部工具栏 E2E 门禁：CDP 真实触摸序列验证
 // ═══════════════════════════════════════════════════════════════
 //  场景：无头 Chromium（注入 FileBridge 内存桩）：
-//    1. 底栏渲染：5 个按钮、高度 = 屏高 1/8、加号居中
+//    1. 底栏渲染：5 个按钮、高度 = 屏高 1/10（10vh）、加号居中
 //    2. 点加号 → 新建对话框打开（遮罩 + 输入框聚焦）
 //    3. 输入名称 + 选文件/文件夹 + 确定 → 创建成功（toast）+ 对话框关闭
 //    4. 点遮罩空白 → 对话框关闭
@@ -104,8 +104,8 @@ async function main() {
   pass('底栏渲染可见')
   if (bar.btnCount === 5) pass('底栏 5 个按钮')
   else fail('底栏按钮数 = ' + bar.btnCount + '（期望 5）')
-  const expectH = Math.round(915 / 8)
-  if (Math.abs(Math.round(bar.height) - expectH) <= 2) pass('底栏高度 ≈ 屏高 1/8 (' + expectH + 'px, 实测 ' + Math.round(bar.height) + ')')
+  const expectH = Math.round(915 / 10)
+  if (Math.abs(Math.round(bar.height) - expectH) <= 2) pass('底栏高度 ≈ 屏高 1/10 (' + expectH + 'px, 实测 ' + Math.round(bar.height) + ')')
   else fail('底栏高度 ' + Math.round(bar.height) + 'px，期望 ≈' + expectH)
   if (bar.addInfo && Math.abs(bar.addInfo.x - 206) <= 30) pass('加号居中 (x=' + Math.round(bar.addInfo.x) + ')')
   else fail('加号未居中 x=' + (bar.addInfo && Math.round(bar.addInfo.x)))
@@ -247,7 +247,9 @@ async function main() {
   else fail('底栏右划未打开 Drawer')
 
   // ── 6. Drawer 左滑 → 跟手关闭 ──
-  await swipe(client, 250, 450, 80, 450, 12, 12)
+  // 起点避开 drawer 操作项区域（y=520 为 item 之下的空白区；drawer-swipe 设计上
+  // 触摸按钮不启动关闭手势，6 个操作项占满 y=165..441，y=450 已是按钮区）
+  await swipe(client, 250, 520, 80, 520, 12, 12)
   await sleep(450)
   const swipedClosed = await page.evaluate(() => {
     const d = document.getElementById('drawer')

@@ -7,8 +7,26 @@
 ```
 1. bash tools/build-web.sh        src/ → dist/desktop.bundle.html
 2. node tools/minify-bundle.js    → dist/desktop.bundle.min.html
-3. bash android/build-local.sh    复制 min 产物 → assets/index.html → gradlew assembleDebug → 归档 APK
+3. bash android/build-local.sh    复制 min 产物 → assets/index.html → gradlew assembleRelease（R8 混淆）→ 归档 APK
 ```
+
+## 安装包归档（滚动保留）
+
+- `android/build-local.sh` 步骤 5 调用 `tools/collect-apk.sh`
+- 归档到 `/workspace/AAA 安装包/`，命名 `Desktop_v<版本>_<时间戳>.apk`（时间戳精确到秒）
+- **滚动保留最新 10 个**（按 mtime，仅清理本脚本命名模式，手动放入的文件不受影响）
+- release 构建同步归档 R8 `mapping.txt` 到 `<归档目录>/mapping/`（同样保留 10 个）
+
+## COS bundle 周期备份（每 25 提交）
+
+- `android/build-local.sh` 步骤 6 调用 `tools/cos-bundle-check.sh`
+- 触发标准：当前提交总数 − 上次上传时提交总数 ≥ 25（状态记录在 `.git/cos-bundle-count`，
+  与构建频率解耦：无论何时构建，只要距上次上传累计满 25 个提交就补传一次）
+- 产物：`git bundle create --all` → `cos://backup-data/desktop-git/desktop-<时间戳>.bundle`，
+  COS 上保留最近 50 个
+- 幂等：状态文件保证同一周期只上传一次；coscli 缺失/上传失败时仅告警不阻断构建，
+  且不更新状态（下个周期自动重试，不丢备份窗口）
+- 与 LexiCull 同款方案（`tools/cos-bundle-check.sh`），Desktop 独立 bucket 路径
 
 ## 拼接清单（JS_ORDER / CSS_ORDER）
 
@@ -43,6 +61,9 @@ build-web.sh 每次构建注入到 JS 尾部（`var` 声明，避免被 minify m
 
 ## Android 壳
 
-- 最小壳：`android.app.Activity` + WebView，零第三方运行时依赖（不依赖 androidx）
+- 最小壳：`android.app.Activity` + WebView
+- 依赖策略：最小化（理念，非绝对零依赖）——androidx.documentfile（SAF 文件访问）、
+  androidx.core（edge-to-edge WindowInsets 安全区注入，与 LexiCull 同款）；
+  避免引入重框架/UI 库，前端保持零第三方依赖
 - 包名占位 `com.example.desktop`，发布前确认后全局替换
 - APK 构建在 ARM64 环境需 QEMU 转发（aapt2/aapt/zipalign 包装器），见 android/build-local.sh

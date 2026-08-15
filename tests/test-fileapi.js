@@ -39,7 +39,8 @@ sandbox.window.FileBridge = {
   list: function (p, cbId) { bridgeCalls.push(['list', p]); sandbox.window.__fbResolve(cbId, { ok: true, data: [{ name: 'a.txt', isDir: false }] }) },
   read: function (p, cbId) { bridgeCalls.push(['read', p]); sandbox.window.__fbResolve(cbId, { ok: true, data: 'hello' }) },
   write: function (p, c, cbId) { bridgeCalls.push(['write', p]); sandbox.window.__fbResolve(cbId, { ok: true, data: true }) },
-  delete: function (p, cbId) { bridgeCalls.push(['delete', p]); sandbox.window.__fbResolve(cbId, { ok: false, error: '模拟失败' }) }
+  delete: function (p, cbId) { bridgeCalls.push(['delete', p]); sandbox.window.__fbResolve(cbId, { ok: false, error: '模拟失败' }) },
+  copy: function (s, d, cbId) { bridgeCalls.push(['copy', s, d]); sandbox.window.__fbResolve(cbId, { ok: true, data: true }) }
 }
 
 vm.createContext(sandbox)
@@ -82,6 +83,13 @@ const FileAPI = sandbox.window.App.FileAPI
     check(/FileBridge 不可用/.test(e.message), '无桥环境明确报错')
   }
   check(bridgeRejected, '无桥环境 reject')
+
+  // 5. copy 桥调用（阶段 C 粘贴基础操作）
+  const copyResult = await FileAPI.copy('a.txt', 'a 2.txt')
+  check(copyResult === true, 'copy 返回 true')
+  const copyCall = bridgeCalls.filter(function (c) { return c[0] === 'copy' })
+  check(copyCall.length === 1 && copyCall[0][1] === 'a.txt' && copyCall[0][2] === 'a 2.txt',
+    'copy 桥参数 (src, dst) 正确')
 
   if (failures > 0) {
     console.error('[fail] FileAPI 测试失败 ' + failures + ' 项')

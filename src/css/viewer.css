@@ -1,0 +1,458 @@
+/* 文件查看器（InternalViewer）样式：三模块 × 两状态（Viewer 态画布实体 + 完整预览态全屏） */
+
+/* Layer：位于 desktop-viewport 内、画布之上；默认穿透（不拦手势）。
+   fullscreen 态卡片在 layer 内，class 打开后接管触摸（内容滚动/媒体控制）；
+   canvas 态卡片在 desktop-canvas 内，不经过 layer，桌面手势照常。 */
+.viewer-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 8;   /* 高于框选矩形(4)与拿起图标(6) */
+}
+
+.viewer-layer.viewer-layer-open {
+  pointer-events: auto;
+}
+
+/* 卡片：flex 纵向面板（canvas 态世界坐标定位 / fullscreen 态占满内容区） */
+.viewer-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+/* 画布实体：世界坐标（left/top/width/height 由 JS 设置），随画布 transform 平移缩放，
+   位于 #desktop-canvas 内 grid 之后（DOM 顺序遮挡其背后的文件） */
+.viewer-card-canvas {
+  position: absolute;
+  z-index: 5;
+}
+
+/* 顶栏：文件名 + 全屏预览按钮 */
+.viewer-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-sm) 0 var(--space-md);
+  height: 44px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.viewer-title {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 内容区：滚动容器，各类型内容在其中排版 */
+.viewer-body {
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--color-surface);
+}
+
+/* ── 文本（TXT） ── */
+.viewer-pre {
+  margin: 0;
+  padding: var(--space-md);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  /* 主流换行：英文单词在边界换行，超长单词/长行才在容器边缘断开（不拆散单词） */
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+/* ── Markdown ── */
+.viewer-md {
+  padding: var(--space-md);
+  font-size: var(--font-size-md);
+  line-height: 1.7;
+  color: var(--color-text);
+}
+
+.viewer-md h1, .viewer-md h2, .viewer-md h3, .viewer-md h4, .viewer-md h5, .viewer-md h6 {
+  margin: 0.8em 0 0.4em;
+  line-height: 1.3;
+}
+
+.viewer-md h1 { font-size: 1.5em; }
+.viewer-md h2 { font-size: 1.3em; }
+.viewer-md h3 { font-size: 1.15em; }
+.viewer-md h4, .viewer-md h5, .viewer-md h6 { font-size: 1em; }
+
+.viewer-md p { margin: 0.5em 0; }
+
+.viewer-md ul, .viewer-md ol {
+  margin: 0.5em 0;
+  padding-left: 1.6em;
+}
+
+.viewer-md li { margin: 0.2em 0; }
+
+.viewer-md pre {
+  margin: 0.6em 0;
+  padding: var(--space-sm) var(--space-md);
+  background: #f3f4f6;
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-sm);
+}
+
+.viewer-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.viewer-md pre code {
+  background: none;
+  padding: 0;
+}
+
+.viewer-md blockquote {
+  margin: 0.6em 0;
+  padding: 0.2em 0 0.2em var(--space-md);
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-text-secondary);
+}
+
+.viewer-md hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1em 0;
+}
+
+.viewer-md a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* ── JSON 树 ── */
+.viewer-json {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+}
+
+.viewer-json ul {
+  list-style: none;
+  padding-left: 1.2em;
+}
+
+.viewer-json details > summary {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  color: var(--color-text);
+}
+
+.viewer-json-key {
+  color: var(--color-accent);
+}
+
+.viewer-json-string { color: #059669; }
+.viewer-json-number { color: #d97706; }
+.viewer-json-boolean { color: #7c3aed; }
+.viewer-json-null { color: var(--color-text-secondary); font-style: italic; }
+
+/* ── 媒体（图片/SVG） ── */
+.viewer-media-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+/* ── 视频 ── */
+.viewer-media-video {
+  display: block;
+  width: 100%;
+  max-height: 100%;
+  background: #000;
+}
+
+/* ── 音频（3:4 封面卡片：占位封面 + 原生播放控制）── */
+.viewer-audio {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.viewer-audio-cover {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: linear-gradient(160deg, #1f2937 0%, #111827 100%);
+  color: #fff;
+}
+
+.viewer-audio-icon {
+  opacity: 0.9;
+}
+
+.viewer-audio-name {
+  max-width: 100%;
+  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.viewer-audio-controls {
+  display: block;
+  width: 100%;
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+
+/* 全屏媒体态：音频封面卡片居中，控制条居底 */
+.viewer-fs-page.viewer-fs-media .viewer-audio {
+  width: 78%;
+  max-width: 360px;
+  margin: 0 auto;
+  justify-content: center;
+}
+
+.viewer-fs-page.viewer-fs-media .viewer-audio-cover {
+  flex: 1;
+  border-radius: var(--radius-md);
+}
+
+/* ── 文本 reader 工具条（完整预览态：字号缩放 + 自动换行）── */
+.viewer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.viewer-tool {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viewer-tool:active {
+  background: var(--hover-dim);
+}
+
+.viewer-tool.viewer-tool-on {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+/* 媒体态黑底下的工具条（仅文本不适用，防御） */
+.viewer-fs-page.viewer-fs-media .viewer-tool {
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+/* ── HTML（iframe） ── */
+.viewer-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+
+/* ── 加载 / 错误态 ── */
+.viewer-loading {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.viewer-error {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.viewer-error-actions {
+  padding: 0 var(--space-lg) var(--space-lg);
+  text-align: center;
+}
+
+.viewer-fallback-btn {
+  padding: 8px 20px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font-size: var(--font-size-md);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viewer-fallback-btn:active {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+/* ── 全屏新页面（#viewer-fs-page）：fixed 覆盖整个视口，独立简洁页面 ── */
+.viewer-fs-page {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;   /* 覆盖 header(10)/底栏；FAB(1500) 全屏时隐藏 */
+  background: var(--color-bg);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  /* 状态栏/导航栏安全区（沉浸式由 Java 注入 --safe-top/--safe-bottom）：
+     整页让出顶部状态栏与底部导航栏，卡片内容不顶到刘海/手势条 */
+  padding-top: var(--safe-top, 0px);
+  padding-bottom: var(--safe-bottom, 0px);
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer-fs-page.viewer-fs-page-open {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+/* 全屏态卡片：占满新页面（flex 填充，避开安全区 padding） */
+.viewer-card-fullscreen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* ── 画布实体选中视觉（与文件选中态绑定）── */
+.viewer-card-selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18), inset 0 0 0 1px var(--color-accent);
+}
+
+/* 拖动中：加深阴影（实体拿起反馈） */
+.viewer-card-dragging {
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28), inset 0 0 0 1px var(--color-accent);
+}
+
+/* ── 顶栏返回按钮（全屏态显示）── */
+.viewer-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+.viewer-back-btn:active {
+  background: var(--hover-dim);
+}
+
+/* ── 文件锁定标记（Windows 式：被 Viewer 打开的文件，禁复制/剪切/移动/删除/重命名） ── */
+.desktop-icon-locked {
+  position: relative;
+}
+
+.desktop-icon-locked::after {
+  content: '\1F512';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ── 相册式全屏（#viewer-fs-page）：媒体黑底 contain 居中；文档浅色阅读 ── */
+
+/* 媒体类（图片/视频/音频/SVG）：沉浸黑底 + 内容居中自适应 */
+.viewer-fs-page.viewer-fs-media {
+  background: #000;
+}
+
+.viewer-fs-page.viewer-fs-media .viewer-header {
+  background: rgba(0, 0, 0, 0.55);
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+.viewer-fs-page.viewer-fs-media .viewer-title {
+  color: #fff;
+}
+
+.viewer-fs-page.viewer-fs-media .viewer-back-btn {
+  color: #fff;
+}
+
+.viewer-fs-page.viewer-fs-media .viewer-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+}
+
+.viewer-fs-page.viewer-fs-media .viewer-media-img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.viewer-fs-page.viewer-fs-media .viewer-media-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* 文档类（TXT/MD/JSON/HTML）：浅色阅读 */
+.viewer-fs-page.viewer-fs-doc {
+  background: var(--color-bg);
+}
+
+.viewer-fs-page.viewer-fs-doc .viewer-header {
+  background: var(--color-surface);
+  border-bottom-color: var(--color-border);
+}
+
+.viewer-fs-page.viewer-fs-doc .viewer-title {
+  color: var(--color-text);
+}
+
+.viewer-fs-page.viewer-fs-doc .viewer-back-btn {
+  color: var(--color-text-secondary);
+}

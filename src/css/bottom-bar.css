@@ -1,13 +1,14 @@
-/* 底部工具栏：高度占屏幕 1/8，5 个矢量图标按钮（中间加号弹新建对话框，其余 UI 占位）
+/* 底部工具栏：高度占屏幕 1/10，5 个矢量图标按钮（中间加号弹新建对话框，
+   右 1 Home = 空间锚点：点按回快照/默认视角，长按记录位置快照；最右向上箭头 = 退回到上级目录）。
    底栏区域右滑跟手呼出左侧 Drawer（drawer-swipe.js 监听 touch 事件）。 */
 .bottom-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  /* 屏高 1/8 = 12.5vh；底部安全区内衬（总高不变） */
-  height: 12.5vh;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* 屏高 1/10 = 10vh；底部安全区内衬（总高不变），沉浸式下由 Java 注入 --safe-bottom */
+  height: 10vh;
+  padding-bottom: var(--safe-bottom, 0px);
   z-index: 600;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
@@ -16,6 +17,9 @@
   justify-content: space-around;
   /* 手势全权交给 JS（右滑呼出 Drawer），禁用浏览器默认触摸行为 */
   touch-action: none;
+  /* 长按 Home 记录快照时防 WebView 文本选择弹出 */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .bottom-bar-btn {
@@ -38,6 +42,17 @@
 .bottom-bar-btn:active {
   color: var(--color-text);
   background: var(--color-bg);
+}
+
+/* 禁用态（后退/前进/上级/Home 在对应场景下不可用） */
+.bottom-bar-btn[disabled] {
+  color: var(--color-text-secondary);
+  opacity: 0.4;
+}
+
+/* Home 已记录位置快照：图标强调色，提示「快照存在，点按即回」 */
+.bottom-bar-btn.home-has-snapshot {
+  color: var(--color-accent);
 }
 
 /* 中间加号：强调色，视觉突出 */

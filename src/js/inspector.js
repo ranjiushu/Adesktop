@@ -164,8 +164,8 @@ App.inspector = (function () {
 
   function positionToolbar(tb) {
     tb.style.top = ''; tb.style.bottom = ''
-    if (_scope.toolbarAtTop) tb.style.top = 'max(12px,env(safe-area-inset-top))'
-    else tb.style.bottom = 'max(12px,env(safe-area-inset-bottom))'
+    if (_scope.toolbarAtTop) tb.style.top = 'max(12px,var(--safe-top,0px))'
+    else tb.style.bottom = 'max(12px,var(--safe-bottom,0px))'
   }
 
   // ==================== 工具栏操作 ====================

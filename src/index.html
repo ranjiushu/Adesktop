@@ -16,30 +16,44 @@
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <h1 id="app-title">Desktop</h1>
+    <button id="btn-view-menu" class="btn-view-menu" aria-label="排列与视图" aria-expanded="false">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+    </button>
   </header>
   <section class="app-content">
-    <p id="status-text">初始化中...</p>
-    <div id="desktop-grid" class="desktop-grid"></div>
+    <div id="desktop-viewport" class="desktop-viewport">
+      <div id="desktop-canvas" class="desktop-canvas">
+        <div id="desktop-grid" class="desktop-grid"></div>
+      </div>
+      <div id="desktop-marquee" class="desktop-marquee"></div>
+      <!-- 文件查看器 Overlay Layer：canvas 态实体位于 desktop-canvas 内；
+           全屏态进入 #viewer-fs-page（独立新页面，见 viewer.js / viewer.css） -->
+      <div id="viewer-layer" class="viewer-layer" aria-hidden="true"></div>
+    </div>
   </section>
+
+<!-- ===== 文件查看器全屏页（Viewer 的全屏状态 = 简洁新页面，退出回到原页面状态） ===== -->
+<div id="viewer-fs-page" class="viewer-fs-page" aria-hidden="true"></div>
 </main>
 
-<!-- ===== 底部工具栏：5 个矢量图标按钮，中间加号弹新建对话框，其余 UI 占位 =====
-     底栏区域右滑可跟手呼出左侧 Drawer（见 drawer-swipe.js） -->
+<!-- ===== 底部工具栏：5 个矢量图标按钮，中间加号弹新建对话框 =====
+     左1 后退 / 左2 前进 / 中间加号 新建 / 右1 Home（点按回空间锚点视角，长按记录位置快照）
+     / 右2 上级目录。底栏区域右滑可跟手呼出左侧 Drawer（见 drawer-swipe.js） -->
 <nav id="bottom-bar" class="bottom-bar" aria-label="底部工具栏">
-  <button class="bottom-bar-btn" aria-label="占位按钮 1">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+  <button id="bb-btn-back" class="bottom-bar-btn" aria-label="后退" aria-disabled="true" disabled>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   </button>
-  <button class="bottom-bar-btn" aria-label="占位按钮 2">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+  <button id="bb-btn-forward" class="bottom-bar-btn" aria-label="前进" aria-disabled="true" disabled>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
   </button>
   <button id="bb-btn-add" class="bottom-bar-btn bottom-bar-add" aria-label="新建">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
-  <button class="bottom-bar-btn" aria-label="占位按钮 4">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+  <button id="bb-btn-home" class="bottom-bar-btn" aria-label="Home" aria-disabled="true" disabled>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
   </button>
-  <button class="bottom-bar-btn" aria-label="占位按钮 5">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  <button id="bb-btn-up" class="bottom-bar-btn" aria-label="上级目录" aria-disabled="true" disabled>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
   </button>
 </nav>
 
@@ -55,6 +69,38 @@
     </div>
   </div>
 </div>
+
+
+<!-- ===== 重命名对话框（选中态操作栏「重命名」弹出）：预填原名，确认后执行 ===== -->
+<div id="rename-dialog-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-dialog-title">
+    <h2 id="rename-dialog-title" class="dialog-title">重命名</h2>
+    <input id="rename-name" class="dialog-input" type="text" autocomplete="off" enterkeyhint="done" aria-label="新名称">
+    <div class="dialog-actions">
+      <button id="rename-cancel" class="dialog-btn">取消</button>
+      <button id="rename-confirm" class="dialog-btn dialog-btn-primary">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 顶栏排列/视图菜单（子文件夹容器模式可用，根目录空间置灰） ===== -->
+<div id="view-menu-overlay" class="view-menu-overlay" aria-hidden="true"></div>
+<nav id="view-menu" class="view-menu" aria-hidden="true">
+  <div class="view-menu-section">
+    <div class="view-menu-label">排列方式</div>
+    <button class="view-menu-item" data-sort="name">按名称<i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="mtime">按修改日期<i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="type">按类型<i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="size">按大小<i class="view-menu-dir"></i></button>
+  </div>
+  <div class="view-menu-sep"></div>
+  <div class="view-menu-section">
+    <div class="view-menu-label">视图</div>
+    <button class="view-menu-item" data-view="grid">网格<i class="view-menu-check">✓</i></button>
+    <button class="view-menu-item" data-view="list">列表<i class="view-menu-check">✓</i></button>
+  </div>
+  <div class="view-menu-hint">打开文件夹后可用</div>
+</nav>
 
 <!-- ===== 左侧 Drawer 工具栏（汉堡呼出） ===== -->
 <div id="drawer-overlay" class="drawer-overlay"></div>
@@ -82,8 +128,14 @@
       <button class="drawer-item" data-action="refresh">
         <span class="drawer-item-icon">🔄</span><span>刷新</span>
       </button>
+      <button class="drawer-item" data-action="set-default-view">
+        <span class="drawer-item-icon">📷</span><span>设为默认视角</span>
+      </button>
       <button class="drawer-item" data-action="switch-root">
         <span class="drawer-item-icon">🗂️</span><span>切换根目录</span>
+      </button>
+      <button class="drawer-item" data-action="installed-apps">
+        <span class="drawer-item-icon">📱</span><span>已安装应用</span>
       </button>
       <button class="drawer-item" id="btn-build-info">
         <span class="drawer-item-icon">🔨</span><span>提交与构建</span>
@@ -102,6 +154,33 @@
     <span class="buildinfo-header-spacer"></span>
   </header>
   <div class="buildinfo-body" id="buildinfo-body"></div>
+</div>
+
+<!-- ===== 已安装应用面板（Drawer「已安装应用」工具）：搜索 + 点按确认生成应用快捷方式 ===== -->
+<div id="app-list" class="app-list" role="dialog" aria-hidden="true">
+  <header class="app-list-header">
+    <button id="app-list-back" class="app-list-back" aria-label="返回">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <span class="app-list-title">已安装应用</span>
+    <span class="app-list-header-spacer"></span>
+  </header>
+  <div class="app-list-search">
+    <input id="app-list-search-input" class="app-list-search-input" type="text" placeholder="搜索应用" autocomplete="off" enterkeyhint="search" aria-label="搜索应用">
+  </div>
+  <div class="app-list-body" id="app-list-body"></div>
+</div>
+
+<!-- ===== 添加应用快捷方式确认框（复用 dialog-overlay 结构） ===== -->
+<div id="app-list-confirm-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="app-list-confirm-title">
+    <h2 id="app-list-confirm-title" class="dialog-title">添加快捷方式</h2>
+    <p id="app-list-confirm-desc" class="app-list-confirm-desc"></p>
+    <div class="dialog-actions">
+      <button id="app-list-confirm-cancel" class="dialog-btn">取消</button>
+      <button id="app-list-confirm-ok" class="dialog-btn dialog-btn-primary">添加</button>
+    </div>
+  </div>
 </div>
 
 <!-- ===== Morph FAB + Speed Dial（短按展开菜单 / 长按 800ms 激活取景器） ===== -->
@@ -132,8 +211,72 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
       <span class="fab-child-label">切换根目录</span>
     </button>
+    <button class="fab-child fab-child-up" data-action="paste">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span class="fab-child-label">粘贴</span>
+    </button>
+  </div>
+  <!-- 选中态操作栏按钮集（selection 非空时自动展开）：
+       Viewer 打开时仅显示 全屏预览 / 关闭预览（2、3 位），文件操作隐藏；
+       Viewer 关闭时显示 打开/复制/剪切/重命名/取消选择 -->
+  <div class="fab-btn-set fab-set-selection">
+    <button class="fab-child fab-child-up" data-action="open">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="fab-child-label">打开</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="fullscreen-preview">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      <span class="fab-child-label">全屏预览</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="close-preview">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      <span class="fab-child-label">关闭预览</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="copy">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span class="fab-child-label">复制</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="cut">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+      <span class="fab-child-label">剪切</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="rename">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+      <span class="fab-child-label">重命名</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="delete">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      <span class="fab-child-label">删除</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="clear-selection">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      <span class="fab-child-label">取消选择</span>
+    </button>
   </div>
 </div>
+
+<!-- ===== Loading Feedback：居中对话框（进度条）+ 实时标签（拖入文件夹提示） ===== -->
+<!-- 复用 dialog-overlay / dialog 结构（矩形 76vw），显隐经 App.Dialog 管理 -->
+<div id="loading-dialog" class="dialog-overlay loading-dialog" aria-hidden="true">
+  <div class="dialog loading-dialog-card">
+    <div id="loading-dialog-title" class="loading-dialog-title"></div>
+    <div id="loading-phase" class="loading-phase">
+      <div class="loading-row">
+        <span id="loading-phase-label" class="loading-row-label"></span>
+        <span id="loading-phase-count" class="loading-row-count"></span>
+      </div>
+      <div class="loading-track"><div id="loading-phase-bar" class="loading-bar"></div></div>
+    </div>
+    <div id="loading-total" class="loading-total">
+      <div class="loading-row">
+        <span id="loading-total-label" class="loading-row-label"></span>
+        <span id="loading-total-count" class="loading-row-count"></span>
+      </div>
+      <div class="loading-track"><div id="loading-total-bar" class="loading-bar"></div></div>
+    </div>
+  </div>
+</div>
+<div id="drop-tag" class="drop-tag" aria-hidden="true"></div>
 
 <script>
 // __JS_PLACEHOLDER__

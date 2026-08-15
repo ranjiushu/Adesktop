@@ -41,6 +41,12 @@ check(utils.escapeHtml('你好 Desktop') === '你好 Desktop', 'escapeHtml 中�
 // 4. bindPress 存在（DOM 依赖，仅验证接口）
 check(typeof utils.bindPress === 'function', 'bindPress 接口存在')
 
+// 5. bindPressSplit 存在（长短按分流，DOM 依赖，仅验证接口）
+check(typeof utils.bindPressSplit === 'function', 'bindPressSplit 接口存在')
+
+// 5. bindPressSplit 存在（长短按分流，DOM 依赖，仅验证接口）
+check(typeof utils.bindPressSplit === 'function', 'bindPressSplit 接口存在')
+
 if (failures > 0) {
   console.error('[fail] utils 测试失败 ' + failures + ' 项')
   process.exit(1)

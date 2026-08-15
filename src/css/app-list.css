@@ -1,0 +1,167 @@
+/* 已安装应用面板：全屏覆盖，底部滑入（系统返回键/返回按钮退出）。
+   层级 1200：与 buildinfo 同级；确认框复用 dialog-overlay（1300）。 */
+.app-list {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: var(--color-bg);
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-top, 0px);
+  padding-bottom: var(--safe-bottom, 0px);
+}
+.app-list.app-list-open {
+  transform: translateY(0);
+}
+
+.app-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 var(--space-sm);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.app-list-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+.app-list-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  border-radius: var(--radius-sm);
+}
+.app-list-back:active {
+  background: var(--color-bg);
+}
+.app-list-header-spacer {
+  width: 40px;
+}
+
+.app-list-search {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.app-list-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background: var(--color-bg);
+  outline: none;
+  -webkit-appearance: none;
+}
+.app-list-search-input:focus {
+  border-color: var(--color-accent);
+}
+
+.app-list-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-md) var(--space-lg);
+}
+.app-list-section-title {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-md) 0 var(--space-xs);
+}
+.app-list-section-title:first-child {
+  margin-top: var(--space-xs);
+}
+
+.app-list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px var(--space-sm);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-xs);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-list-row:active {
+  background: var(--color-bg);
+}
+.app-list-avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+/* 应用真实图标（懒加载替换字母头像） */
+.app-list-avatar .app-list-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+.app-list-meta {
+  flex: 1;
+  min-width: 0;
+}
+.app-list-name {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-list-pkg {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-list-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.app-list-empty {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* 确认框描述文案（复用 dialog.css 的 dialog 结构） */
+.app-list-confirm-desc {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+  word-break: break-all;
+}

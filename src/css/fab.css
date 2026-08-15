@@ -1,13 +1,15 @@
 /* Morph FAB + Speed Dial（移植自 LexiCull，适配 Desktop tokens）
-   位置参照 LexiCull：距右 28px；距底 = 底栏（屏高 1/8）顶部 + 16px 间隙
+   位置参照 LexiCull：距右 28px；距底 = 底栏（屏高 1/10 = 10vh）顶部 + 16px 间隙
    （LexiCull 悬浮胶囊底栏顶 ≈ panel+84，FAB bottom = panel+100，间隙 16px）。
+   底栏总高 10vh（安全区内衬已含在底栏 padding 内），故 FAB 只抬 10vh + 16px，
+   不重复叠加 --safe-bottom——否则底栏缩短后 FAB 会悬在底栏上方过远。
    层级参照 LexiCull：FAB 为页面层最顶（1500，高于 Dialog 1300 / buildinfo 1200 /
    Drawer 1100），任意面板打开时始终可见可点；仅瞬态 toast(2000) 与
    取景器调试层(9998+)在其上。 */
 .mode-switch-fab {
   --fab-radius: 50%;
   position: fixed;
-  bottom: calc(12.5vh + 16px);
+  bottom: calc(10vh + 16px);
   right: 28px;
   z-index: 1500;
   width: 36px;
@@ -68,7 +70,7 @@
 /* ===== Speed Dial 容器（中心与 FAB 同心，子按钮从 FAB 正上方展开） ===== */
 .fab-speed-dial {
   position: fixed;
-  bottom: calc(12.5vh + 16px);
+  bottom: calc(10vh + 16px);
   right: 28px;
   width: 36px;
   height: 36px;
@@ -79,6 +81,7 @@
 /* 按钮组：data-mode 显隐 */
 .fab-btn-set { display: none; }
 [data-mode="desktop"] .fab-set-preview { display: contents; }
+[data-mode="selection"] .fab-set-selection { display: contents; }
 
 /* ===== Speed Dial 子按钮 ===== */
 .fab-child {
@@ -116,11 +119,14 @@
   pointer-events: auto;
 }
 
-/* 向上展开：第 1-4 个按钮 */
+/* 向上展开：第 1-7 个按钮 */
 .fab-speed-dial-expanded .fab-child-up:nth-child(1) { transform: translateY(-48px) scale(1); }
 .fab-speed-dial-expanded .fab-child-up:nth-child(2) { transform: translateY(-92px) scale(1); }
 .fab-speed-dial-expanded .fab-child-up:nth-child(3) { transform: translateY(-136px) scale(1); }
 .fab-speed-dial-expanded .fab-child-up:nth-child(4) { transform: translateY(-180px) scale(1); }
+.fab-speed-dial-expanded .fab-child-up:nth-child(5) { transform: translateY(-224px) scale(1); }
+.fab-speed-dial-expanded .fab-child-up:nth-child(6) { transform: translateY(-268px) scale(1); }
+.fab-speed-dial-expanded .fab-child-up:nth-child(7) { transform: translateY(-312px) scale(1); }
 
 /* ===== 子按钮标签 ===== */
 .fab-child-label {

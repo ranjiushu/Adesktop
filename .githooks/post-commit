@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# post-commit hook — 领先 main 差异预警
+# 开发分支（非 main）每次提交后检查与 main 的差距，≥50 提交时提醒及时同步。
+# 治理移植自 LexiCull（因地制宜：Desktop 的 COS bundle 备份在构建管线触发，
+# 此处不做周期备份，仅保留领先预警）。
+# ============================================================================
+set -uo pipefail
+
+BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+[ -z "$BRANCH" ] && exit 0
+[ "$BRANCH" = "main" ] && exit 0
+
+# 本地 main 可能尚未建立（初始状态）：跳过
+if ! git rev-parse --verify main >/dev/null 2>&1; then
+  exit 0
+fi
+
+AHEAD_MAIN=$(git rev-list --count main..HEAD 2>/dev/null || echo 0)
+if [ "$AHEAD_MAIN" -ge 50 ]; then
+  echo "⚠️  [hook] 开发分支 ${BRANCH} 已领先 main ${AHEAD_MAIN} 个提交（≥50）" >&2
+  echo "⚠️  [hook] main 与开发分支差异过大，请及时向用户确认是否需要合流 main 同步" >&2
+fi
+exit 0

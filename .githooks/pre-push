@@ -1,13 +1,34 @@
 #!/usr/bin/env bash
-# 防线: 分支命名校验（main 为唯一允许的非 feat/fix 分支）
+# 防线 1: 分支命名校验（main 为唯一允许的非 feat/fix/exp 分支）
+# 防线 2: 墓地分支复活拦截
+# 防线 3: main 非 merge commit 拦截（稳定发布分支只接受 merge --no-ff 推送）
 set -uo pipefail
 
 _branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+
+# ── 防线 1: 命名 ──
 case "$_branch" in
-  main) exit 0 ;;
-  feat/*|fix/*|exp/*) exit 0 ;;
+  main) ;;
+  feat/*|fix/*|exp/*) ;;
   *)
     echo "[pre-push] 分支 '$_branch' 命名违规，允许: feat/ fix/ exp/（或 main）" >&2
     exit 1
     ;;
 esac
+
+# ── 防线 2: 墓地复活拦截 ──
+_graveyard="$(git rev-parse --git-dir)/branch-graveyard"
+if [ -n "$_branch" ] && [ -f "$_graveyard" ] && grep -qxF "$_branch" "$_graveyard"; then
+  echo "[pre-push] 分支 '$_branch' 已废弃（branch-graveyard），禁止推送复活" >&2
+  exit 1
+fi
+
+# ── 防线 3: main 只接受 merge commit ──
+if [ "$_branch" = "main" ]; then
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    echo "[pre-push] main 是稳定发布分支，只接受 merge --no-ff 合入（非直提推送）" >&2
+    exit 1
+  fi
+fi
+
+exit 0

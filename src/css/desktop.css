@@ -1,12 +1,47 @@
-/* 桌面样式：图标网格（第一阶段：固定网格，后续支持自由摆放） */
-.desktop-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: var(--space-md);
-  padding: var(--space-md);
+/* 桌面样式：无限画布（viewport/canvas 两层 + 图标世界坐标绝对定位 + 背景点阵） */
+
+.app-content {
+  position: relative;   /* viewport 绝对定位的参考 */
+  padding: 0;           /* 覆盖 shell.css 的 padding，边距改由画布世界坐标控制 */
+  overflow: hidden;     /* 桌面区域裁剪 */
 }
 
+/* 视口：手势监听层，填满 app-content，裁剪溢出 */
+.desktop-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 画布：唯一动 transform 的层（合成层变换，GPU 加速，不触发布局） */
+.desktop-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* 图标层容器：绝对定位，承载世界坐标图标 */
+.desktop-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* 图标：绝对定位（left/top = 世界坐标，由 JS 设置），固定宽度 */
 .desktop-icon {
+  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -15,6 +50,7 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  width: 84px;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -33,6 +69,11 @@
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
 }
 
+/* 回收站：根目录锚定的特殊文件夹（🗑️ 图标 + 次色名字区分系统对象） */
+.desktop-icon.is-trash .desktop-icon-name {
+  color: var(--color-text-secondary);
+}
+
 .desktop-icon-name {
   width: 100%;
   font-size: var(--font-size-sm);
@@ -47,4 +88,84 @@
   padding: var(--space-lg);
   text-align: center;
   color: var(--color-text-secondary);
+}
+
+/* 选中态：高亮边框 + 浅色底 */
+.desktop-icon.selected {
+  border-color: var(--color-accent);
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+/* 剪切源标记：半透明（Windows 式视觉反馈，文件仍真实存在，刷新不穿帮） */
+.desktop-icon.clip-cut {
+  opacity: 0.45;
+  border-style: dashed;
+}
+.desktop-icon.clip-cut .desktop-icon-name {
+  text-decoration: line-through;
+}
+
+/* 长按拿起态：放大 + 阴影（120ms 过渡，主屏隐喻） */
+.desktop-icon.picked-up {
+  transform: scale(1.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  border-color: var(--color-accent);
+  z-index: 6;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+/* 框选矩形：屏幕空间 overlay（不随画布缩放），pointer-events 穿透 */
+.desktop-marquee {
+  position: absolute;
+  display: none;
+  border: 1px solid var(--color-accent);
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* ── folder 容器（子文件夹视图）：无卡片视觉，直接浮在应用背景上 ── */
+
+/* 画布：folder 模式隐藏无限点阵背景（folder 是容器不是空间，无背景网格） */
+.desktop-canvas.folder-canvas {
+  background-image: none;
+}
+
+/* 列表视图行：横向布局（glyph + 名称 + meta），行高固定 56px */
+.desktop-icon.desktop-list-row {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  height: 56px;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--space-md);
+  box-sizing: border-box;
+}
+
+.desktop-icon.desktop-list-row .desktop-icon-glyph {
+  font-size: 24px;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.desktop-icon.desktop-list-row .desktop-icon-name {
+  flex: 1;
+  text-align: left;
+}
+
+.desktop-icon.desktop-list-row .desktop-list-meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  margin-left: var(--space-sm);
+}
+
+.desktop-icon.desktop-list-row.selected {
+  border-bottom-color: var(--color-accent);
+  background: rgba(59, 130, 246, 0.08);
 }

@@ -1,5 +1,195 @@
 # Desktop 更新日志
 
+## Unreleased
+
+### 工程（治理移植，2026-08-15）
+
+- 分支治理升级为三级模型 `main ← feat/dev ← topic`：`feat/infinite-canvas` 并入
+  成为首个开发基线并退休；`tools/branch-retire.sh` + `.git/branch-graveyard` 墓地
+  机制（复活被 pre-commit/pre-push 拦截）
+- 钩子三防线扩展：pre-commit 墓地拦截、pre-push 墓地复活 + main 非 merge 直推拦截、
+  post-commit 领先 main ≥50 预警
+- 提交前门禁升级 `tools/verify.sh`：env-check → build --strict → minify → lint →
+  测试套件 → E2E×5（home/drawer/bottom-bar/buildinfo/fab-inspector 既有资产接入），
+  机器可读 PASS/FAIL 摘要
+- 新增 `tools/lint.sh`：构建一致性 / 文档链接 / CHANGELOG（结构 + 禁 emoji）/
+  头部注释 / var 纪律
+- AGENTS.md 治理升级（P1 纪律补齐、决策触发清单细化）；新增数据纪律文档
+  `docs/data-integrity.md`（文件即真相：元数据统一出口防幽灵 positions、桥层契约）
+- 探针 `probe-repo.sh` 参数化，自动识别 LexiCull / Desktop
+
+### 已安装应用（Application Shortcut）
+
+- **Shortcut File 契约**（`shortcut.js`）：快捷方式 = 真实文件（`.desktop` 扩展名 + JSON 内容），
+  `type` 字段区分 `application`（应用快捷方式，`package` 稳定引用）与 `file`（文件快捷方式，
+  持久化 SAF URI，预留）；文件即真相——可复制/移动/删除、随 Desktop 文件夹一起迁移
+- **已安装应用工具**（`app-list.js/css`）：Drawer「已安装应用」→ 全屏搜索面板（第三方/系统分段 +
+  确认框）→ 点按生成 `<应用名>.desktop` 快捷方式文件，重名自动加序号
+- **桥层**：`FileBridge.listApps`（PackageManager 查询 launcher 应用）/ `launchApp`
+  （getLaunchIntentForPackage 拉起，UI 线程 startActivity）；AndroidManifest 声明
+  `<queries>` MAIN+LAUNCHER（Android 11+ 包可见性，比 QUERY_ALL_PACKAGES 更受限）
+- **双击拉起**：`FileOpener` 分派 `.desktop` → 读 JSON → `type=application` 时 `launchApp`；
+  解析/启动失败 toast 提示不崩溃
+- **应用图标**：`FileBridge.appIcon`（Drawable→48dp PNG→base64 data URI，自适应图标 draw 兜底）
+  内嵌进快捷方式 JSON（自包含可迁移）；桌面经 `Thumbnail.requestShortcutIcon` 渐进替换类型图标；
+  列表 IntersectionObserver 懒加载（仅可视区 +300px，数百应用不一次性传输）
+- **类型图标**：`.desktop` → `shortcut` 类型（四宫格 SVG），图标显示名剥离扩展名
+- **修复**：外部文件打开后不再永久锁定（返回契约区分 Viewer 实例 / 外部分派）；快捷方式图标失败
+  可重试（不再永久缓存 failed）；回收站显示为「回收站」且可重定位（禁止移入文件夹）；子文件夹
+  幽灵 positions 导致的拖动崩溃
+- 测试：`test-shortcut` / `test-app-list` / `test-desktop-drop-stale-positions` 新增，
+  `test-file-opener` / `test-type-icons` 扩展
+
+### 类型图标系统 + 缩略图服务（Type Icons & ThumbnailService）
+
+- **类型图标系统**（`type-icons.js` + `type-icons.css`）：按文件名/目录判定 18 类语义
+  （folder/trash/text/markdown/json/html/code/image/video/audio/archive/pdf/word/excel/
+  ppt/font/executable/unknown），返回内联 SVG（stroke=currentColor，Feather 风格零依赖），
+  替换原 emoji 图标（文件夹/文档/回收站）
+- **类型语义色**：同一形态（如 fileText）下靠颜色区分相近类型（text 蓝 / md 紫 / json 橙 /
+  code 青 / image 绿 / pdf 红 / archive 黄褐 …），`.type-icon.type-{kind}` 控制 currentColor
+- **缩略图服务（ThumbnailService，`thumbnail.js`）**：与 Desktop 核心引擎解耦——File 对象
+  不含缩略图状态，desktop.js / selection / layout-store 只关心 name/path/type/position；
+  「能否缩略图 + 获取 + 缓存 + 请求去重」全部收敛在 `App.Thumbnail`
+- **桥层缩略图（`FileBridge.thumb`）**：图片采样解码（BitmapFactory inSampleSize，大图不全量加载、
+  内存可控）/ 视频首帧提取（MediaMetadataRetriever）→ 缩放到 256px 最长边 → JPEG 写磁盘缓存
+  （cacheDir/thumbs，key = path@mtime@size，文件修改后自然失效）→ 返回 file:// URI
+- **渐进式获取**：render 先画类型图标（fallback 基线）→ `Thumbnail.request` 异步命中/生成
+  → 成功替换为真缩略图；命中缓存（ready）立即回调、失败缓存（failed）立即回退、同路径
+  并发请求合并（pending 去重，避免重复 thumb/解码）
+- **缩略图范围**：图片（image 类型，含 SVG 渲染预览 / GIF 首帧）+ 视频（video 类型，首帧提取）；
+  `canThumbnail(kind)` 基于类型判定放行 image + video
+- **失败回退**：桥层 thumb 失败（reject，解码失败）或 img 加载失败（onerror）均回退类型图标
+- 测试：`test-type-icons`（类型判定/SVG 生成）、`test-thumbnail`（可缩略图判定/缓存命中/
+  请求去重/失败回退/视频路径），无头 E2E `tools/ui/type-icons-verify.js`（类型 SVG + 图片/视频
+  缩略图 + 失败回退）
+
+### 回收站（安全删除）
+
+- **回收站 = 根目录下的真实隐藏文件夹 `.trash`**（文件即真相）：桥层 `rootInfo` 幂等
+  ensure 存在并返回 `trashName`，前端不硬编码名字；数据永远落在文件系统，用户在
+  其他文件管理器也能直接看到/取回
+- **删除 = 移入回收站**（安全删除，不做彻底删除）：`actions.deleteSelection` 复用移动
+  管道（copy+del 源，SAF 无跨目录 rename），重名自动加序号、两阶段进度、复制失败保留源
+- **回收站图标渲染**：根目录特判回收站图标 + `is-trash` 次色名（区别于普通文件夹图标），
+  子文件夹视图不渲染（回收站只锚定根目录）
+- **拖入回收站**：复用拖入文件夹命中逻辑，实时标签显示「将移入回收站」（而非
+  「移入 XXX 文件夹」）
+- **回收站守卫**：回收站自身不可删除/重命名/复制/剪切/拖动（锚定根目录）；进入
+  回收站视图后删除/剪切/重命名入口整体禁用（只读，防二次删除嵌套）；选中含回收站时
+  FAB 文件操作隐藏只留「打开」
+- **进入回收站查看**：双击回收站 = 作为普通 Folder 容器查看被删文件
+- 测试：`test-actions` 补 `deleteSelection` 用例（回收站守卫/未授权拒绝/混入过滤），
+  无头 E2E `tools/ui/recycle-verify.js` 验证渲染 + 删除闭环 + 进入回收站
+
+### 文件查看器（File Viewer）
+
+- **FileOpener 分派**（`file-opener.js`）：按扩展名选择 InternalViewer（内部查看）或
+  ExternalIntent（外部应用）；FileBridge 边界不变，只新增两个文件系统方法：
+  `resolveUri`（文件 → WebView 可直接加载的 URI，媒体流式访问，不搬入 JS 内存）+
+  `openExternal`（ACTION_VIEW 交外部应用，无可用应用报错提示）
+- **InternalViewer 通用组件**（`viewer.js` + `viewer.css`）：TXT 纯文本 / MD 基础渲染 /
+  JSON 可折叠树 / HTML 沙箱渲染 / SVG / 图片 / 视频 / 音频；内部预览失败提供
+  「用其他应用打开」兜底
+- **HTML 查看隔离 Java Bridge**：iframe srcdoc + sandbox（无 allow-same-origin → opaque
+  origin），脚本跨源访问 window.FileBridge 抛 SecurityError，无头实测 BRIDGE_BLOCKED
+- **Desktop 空间画布实体模式**：Viewer 是放置在画布上的世界坐标实体（不属于网格，
+  不参与布局/排序/框选/碰撞），随画布 transform 平移/缩放，无需相机同步；
+  桌面手指依旧有效（不拦截触摸，不创作独立交互模型），DOM 遮挡使其背后的文件点不到
+- **实体基本性质**：点击 Viewer = 选中实体（脆弱/临时：点外部取消选中，Viewer 保持打开）；
+  长按/拖动 = 移动实体位置（世界坐标位移，取消还原）；点击不穿透
+- **文件锁定（Windows 式）**：被 Viewer 打开的文件锁定——禁止复制/剪切/重命名/
+  移动（拖入文件夹），拖动摆放（改布局位置）仍可；关闭 Viewer 即解除
+- **全屏 = 相册式独立新页面**（#viewer-fs-page：媒体黑底 contain 居中 / 文档浅色阅读，
+  不绑定 Viewer 概念）；退出回到原页面状态——桌面空间回画布实体（内容与位置保留），
+  folder 容器关闭回目录；pushState 支持系统返回键
+- **媒体自适应比例**：图片/视频/SVG 打开后按固有宽高比调整实体尺寸（fitAspectRect，
+  约束视口内、中心点不变），非固定比例
+- **Morph FAB 预览焦点模式**：Viewer 实体选中时操作栏只显示「全屏预览」「关闭预览」
+  （全屏按钮已从 Viewer 顶栏收纳进 FAB）；文件选中时显示文件操作
+- **Markdown mini 渲染器**（`markdown.js`，纯函数零依赖）：标题/列表/代码块/粗斜体/链接/引用，
+  先整体转义再行内标记（防注入），javascript: 等危险协议链接拒绝
+- 返回键链路：查看器打开时返回键 = 关闭查看器（最优先），目录上下文保持
+
+### 交互层
+
+- **Loading Feedback 系统**（独立组件 `App.Loading`，`loading.js` + `loading.css`）：
+  - 目录切换/刷新 → 居中对话框 + 不确定进度（条纹滑动），弱化「先切视图再变目录」的中间态突兀感
+  - 粘贴/移动多文件 → 对话框 + 双进度条：阶段进度（复制/删除源）+ 总进度（分阶段整体）
+  - 拖入文件夹 → 顶栏靠下实时标签「文件将移入 XXX 文件夹」（跟手提示，不弹对话框）
+  - 对话框统一矩形卡片（border-radius 4px）+ 宽 76vw（占屏幕 70%~80%）
+- **拖入文件夹**（桌面空间 + 子文件夹容器）：
+  - 拖动图标命中文件夹 → 实时标签提示目标；松手 = 移入（copy+del 源，移动语义，目标名自动加序号）
+  - 未命中文件夹 → 桌面空间吸附排布 / folder 容器还原原位
+  - 拖动取消（1→2 指 / touchcancel）→ 标签同步回收（无残留）
+- **refresh 竞态守卫**：目录切换/刷新加代际守卫（发起时路径快照 + seq 丢弃过期响应），
+  修复快速连续导航时旧 list 结果迟到覆盖新路径状态——「退到最外层位置乱（布局像初次启动）」+
+  「先切视图再变目录」的时序错乱
+- **重命名重名预检**：先查后改，目标目录存在同名项即拒绝（统一 SAF/私有模式行为，
+  防止私有模式 renameTo 静默覆盖）
+- **系统返回键驱动文件后退**：Drawer/ViewMenu/BuildInfo 均未打开时，子目录内返回键 =
+  后退一级（历史栈），根目录才交还壳退出
+- **弹窗显隐独立模块** `App.Dialog`（`dialog.js`）：CreateDialog / RenameDialog / Loading
+  三处弹窗显隐 + aria 状态单点管理（原各自操作 classList/aria 重复实现）
+
+- 选中态生命周期对齐 Windows 原则（选中态临时/脆弱，动作后即失效）：
+  移动完成（drop moved=true）→ 清空选中 + 收起 FAB 操作栏；剪切/复制粘贴完成后 →
+  清空选中（源路径已失效，杜绝「幽灵选中」残留）；原地放下与拖动取消保留选中。
+- 单指手势状态机补齐强制终结路径（生命周期完整性）：1→2 指切换或 touchcancel 时
+  派发 single-cancel 语义事件——回收 picked-up 视觉（放大+阴影）与框选矩形、
+  拖起图标还原起始位、不落盘（取消 = 什么都没发生）。修复拖动中第二指落下 /
+  touchcancel 后「悬浮阴影」滞留的泄漏（此前仅 drop 终结拖动，cancel 路径无收尾）。
+- 底栏高度缩短（12.5vh → 10vh）后的残留布局对齐：FAB / Speed Dial / toast 的
+  距底公式从 calc(12.5vh + 16px) 同步为 calc(10vh + 16px)，并移除多余的
+  --safe-bottom 叠加（底栏总高已含安全区内衬，重复叠加会让 FAB 悬高 2.5vh +
+  安全区高度）；app-shell 底部留白改为纯 10vh——修复沉浸式设备上
+  底栏与视口之间 24px 级的空白缝隙。
+- Home 位置快照（底栏右 1 按钮，utils 新增 bindPressSplit 长短按分流）：长按记录当前
+  桌面相机为快照，点按回到快照状态；无快照时回默认视角（Drawer「设为默认视角」可设置），
+  均未设置时回出厂视角 (0,0,1)。Home 仅桌面空间可用（子文件夹容器内禁用）；已记录快照时
+  Home 图标强调色提示。重启启动相机优先级：Home 快照 > 默认视角 > 上次布局视角 > 出厂，
+  根目录相机基准 = 启动视角。修复：设置快照后重启图标位置丢失回默认——initLayout 中
+  图标恢复误入「无快照」分支，改为无条件恢复（Home 快照只决定相机，不决定图标位置）；
+  test-desktop-nav-dom 补 HomeStore stub + 防回归断言，verify-home 补拖动持久化 E2E
+- Home 复位平滑飞行动画（van Wijk & Nuij 飞行曲线，Leaflet flyTo 同款数学）：单一连续
+  cosh/tanh 路径（先 zoom-out 后 zoom-in），无分段（不断续）、无骤停（不震）、数学上
+  屏幕内图标全程不出界（全量扫描 0px）；lerpCentered 锚定屏幕中心世界点 + 接收真实
+  时间比例 k（内部统一缓动），zoom 不变退化为 lerp；easeInOutCubic 起步/收尾斜率 0
+  （无弹射）；动画中手势/目录切换即打断（onGestureStart 回调），手势直控优先。
+  演进说明：曾用缓出曲线（起步弹射）、三段式（段切换断续）均被单一飞行曲线取代。
+  test-desktop-camera 补防出界复现案例 + 飞行均匀性断言，verify-home 补 zoom 变化 E2E
+- 沉浸式状态栏/导航栏（参考 LexiCull 方案）：edge-to-edge 内容延伸，状态栏/导航栏
+  透明，安全区经 WindowInsets 注入 CSS 变量（safe-top / safe-bottom / panel-bottom）
+- 系统栏图标明暗由壳层统一控制（浅色主题 → 深色图标），手势临时栏
+- 新建/重命名对话框：键盘弹出时自动上移到键盘上方（ime-open）
+
+### 修复
+
+- 修复 API 30 以下设备启动闪退（VerifyError：直接引用 API 30 的
+  WindowInsetsController，已统一改走 androidx 兼容类）
+
+### 构建与体积
+
+- release 开启 R8 裁剪 + shrinkResources：APK 1.49MB → 149KB（-89.7%）
+- build-local.sh 归档 release 产物（dev keystore 临时签名，发布前换正式）
+- 安装包归档滚动保留最新 10 个（tools/collect-apk.sh）：按时间戳命名 + 自动清理旧包，
+  手动放入目录的文件不受影响；release 构建同步归档 R8 mapping 到 mapping/ 子目录
+- COS bundle 周期备份（tools/cos-bundle-check.sh）：每累计 25 个提交自动上传 git bundle
+  到 cos://backup-data/desktop-git/，构建管线步骤 6 触发，上传失败不阻断构建且不丢周期
+
+## 0.2.0（2026-08-14）
+
+### 交互层
+
+- 视图模式（阶段 D）：根目录 = Desktop 空间（无限画布现状不变）；打开文件夹后 = Folder 容器
+- 顶栏右上新增排列/视图菜单：根目录下置灰，子文件夹中可选
+- 排列方式：按名称/修改日期/类型/大小 + 升降序切换（folder-sort 纯函数）
+- 视图切换：网格（4 列自适应视口）/ 列表（单列行 + 大小/文件夹元信息）
+- 容器画布：zoom 锁 1、x 锁 0、y 钳制边界，只能上下滚动（clampToBounds + gesture 层 onClamp 每帧钳制）
+- 手势沿用 Desktop：单指 tap/双击/框选一致；双指 = 滚动（有界）；长按图标 = 选中 + 移动文件占位吐司
+- 相机策略：进文件夹重置到顶，返回根恢复根相机；容器布局不持久化
+- 视图/排序偏好持久化（view-store，全局）
+
 ## 0.1.0（2026-08-13）
 
 ### 初始化与文件系统核心

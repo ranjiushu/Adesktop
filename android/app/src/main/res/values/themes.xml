@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 最小壳主题：纯 WebView 场景无需 ActionBar，Material 浅色无操作栏 -->
+    <!-- 透明栏 + edge-to-edge 架构（参考 LexiCull）：
+         状态栏/导航栏一次性设为透明，页面内容经 WebView 延伸至系统栏下方。
+         顶部/底部安全区由 Java 侧 WindowInsets 注入 CSS 变量
+         safe-top / safe-bottom（Header / 底栏 / Drawer 等 padding 占位自适应）。
+         图标明暗由 Java 侧 WindowInsetsControllerCompat 单独控制（浅色主题 → 深色图标）。 -->
     <style name="Theme.Desktop" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- windowBackground 与 CSS :root 背景色 #f5f6f8 同步，防启动/过渡白闪 -->
+        <item name="android:windowBackground">#f5f6f8</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

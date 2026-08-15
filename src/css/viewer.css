@@ -74,7 +74,9 @@
   line-height: 1.6;
   color: var(--color-text);
   white-space: pre-wrap;
-  word-break: break-all;
+  /* 主流换行：英文单词在边界换行，超长单词/长行才在容器边缘断开（不拆散单词） */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 /* ── Markdown ── */

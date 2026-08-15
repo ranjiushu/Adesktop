@@ -154,4 +154,6 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 - 视频播放依赖系统内核支持的编解码 + WebView 硬件加速
   （manifest 已加 `android:hardwareAccelerated="true"`；失败走外部应用兜底）
 - 音频封面为占位图标（不解码内嵌封面，符合「不自行实现媒体解码器」原则）
+- 文本自动换行为主流单词边界换行（`overflow-wrap: break-word` + `word-break: normal`），
+  长单词不拆散、超长行在容器边缘断开
 - 画布实体在低 zoom 下内容随实体缩小（实体行为）；需要阅读时点「全屏预览」

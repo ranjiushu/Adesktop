@@ -41,8 +41,8 @@ App.FileOpener = (function () {
 
   // 打开：item = { name, path }（path 为完整相对路径），anchor = 桌面空间世界坐标或 null
   // camera = 打开瞬间相机快照（canvas 实体锚点不可见时居中用）
-  // 返回：内部查看 = 实例 id（数字，truthy → 桌面层据此锁定文件）；
-  //       外部应用 / 应用快捷方式 = false（已分派，但不锁定文件）；
+  // 返回：内部查看 = 实例 id（数字 → 桌面层锁定文件）；
+  //       外部应用 / 应用快捷方式 = true（已分派，桌面层不锁定文件）；
   //       分派失败 = null
   function open(item, anchor, camera) {
     if (!item || !item.path) return null
@@ -100,7 +100,7 @@ App.FileOpener = (function () {
         App.toast.show('启动失败: ' + (err && err.message || '未知错误'))
       }
     })
-    return false   // 非 Viewer 打开，桌面层不锁定快捷方式文件
+    return true   // 非 Viewer 打开（桌面层据 typeof 判定：true 不锁定文件）
   }
 
   return {

@@ -1,7 +1,6 @@
 /* 类型图标系统：按文件名/目录判定类型 → 返回内联 SVG 图标（stroke currentColor）。
  * 纯函数，零依赖（仅 namespace）。类型颜色经 CSS class `.type-icon.type-{kind}` 控制。
- * 缩略图判定：canThumbnail(name) 只对「稳定可解码」的位图图片扩展名返回 true；
- * 渲染层据此走 resolveUri → <img>，加载失败/获取失败回退本模块的类型图标。
+ * 本模块只负责「类型图标」（缩略图 fallback 基线）；缩略图判定与获取在 thumbnail.js（ThumbnailService）。
  * 导出: App.TypeIcons
  */
 'use strict'
@@ -25,9 +24,6 @@ App.TypeIcons = (function () {
     font: ['ttf', 'otf', 'woff', 'woff2', 'eot'],
     executable: ['apk', 'exe', 'deb', 'msi', 'dmg', 'bin', 'jar']
   }
-
-  // 可缩略图的位图扩展名（svg 为矢量，用类型图标；heic/heif/avif 依 WebView 内核能力，失败回退）
-  const THUMB_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'ico', 'heic', 'heif', 'avif']
 
   // 类型 → 形态（同一形态 + 不同颜色可区分相近类型，如 text/md/json/pdf 共用 fileText）
   const KIND_SHAPE = {
@@ -85,11 +81,6 @@ App.TypeIcons = (function () {
     return 'unknown'
   }
 
-  // 是否可尝试缩略图（位图图片；svg/其他类型返回 false）
-  function canThumbnail(name) {
-    return THUMB_EXTS.indexOf(extOf(name)) >= 0
-  }
-
   // 类型 → 内联 SVG 字符串（含 type-{kind} class，颜色由 CSS 控制）
   function svgFor(kind) {
     const shape = KIND_SHAPE[kind] || 'file'
@@ -99,7 +90,6 @@ App.TypeIcons = (function () {
 
   return {
     kindFor: kindFor,
-    canThumbnail: canThumbnail,
     svgFor: svgFor,
     extOf: extOf
   }

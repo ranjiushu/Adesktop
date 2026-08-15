@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### 类型图标系统（Type Icons）
+### 类型图标系统 + 缩略图服务（Type Icons & ThumbnailService）
 
 - **类型图标系统**（`type-icons.js` + `type-icons.css`）：按文件名/目录判定 18 类语义
   （folder/trash/text/markdown/json/html/code/image/video/audio/archive/pdf/word/excel/
@@ -10,13 +10,17 @@
   替换原 emoji 📁/📄/🗑️
 - **类型语义色**：同一形态（如 fileText）下靠颜色区分相近类型（text 蓝 / md 紫 / json 橙 /
   code 青 / image 绿 / pdf 红 / archive 黄褐 …），`.type-icon.type-{kind}` 控制 currentColor
-- **位图缩略图**：`canThumbnail` 只对位图图片（jpg/png/webp/gif/bmp/ico/heic/heif/avif）
-  返回 true，渲染层 `resolveUri` → `<img class="desktop-icon-thumb">`（object-fit: cover）；
-  SVG 矢量用类型图标（不缩略图）
-- **失败回退**：resolveUri 失败（reject）或 img 加载失败（onerror）均回退类型图标；
-  URI 结果缓存（uriCache）避免每次 refresh 重复桥调用
-- 测试：`test-type-icons`（类型判定/缩略图判定/SVG 生成），无头 E2E
-  `tools/ui/type-icons-verify.js`（类型 SVG + 缩略图三路径：成功/reject 回退/onerror 回退）
+- **缩略图服务（ThumbnailService，`thumbnail.js`）**：与 Desktop 核心引擎解耦——File 对象
+  不含缩略图状态，desktop.js / selection / layout-store 只关心 name/path/type/position；
+  「能否缩略图 + 获取 + 缓存 + 请求去重」全部收敛在 `App.Thumbnail`
+- **渐进式获取**：render 先画类型图标（fallback 基线）→ `Thumbnail.request` 异步命中/生成
+  → 成功替换为真缩略图；命中缓存（ready）立即回调、失败缓存（failed）立即回退、同路径
+  并发请求合并（pending 去重，避免重复 resolveUri/解码）
+- **本次缩略图范围**：图片（image 类型，含 SVG 渲染预览 / GIF 首帧）；`canThumbnail(kind)`
+  基于类型判定，视频（video）预留接口，待桥层 MediaMetadataRetriever 提取帧后放行
+- **失败回退**：resolveUri 失败（reject）或解码失败（Image onerror）均回退类型图标
+- 测试：`test-type-icons`（类型判定/SVG 生成）、`test-thumbnail`（可缩略图判定/缓存命中/
+  请求去重/失败回退），无头 E2E `tools/ui/type-icons-verify.js`（类型 SVG + 缩略图三路径）
 
 ### 回收站（安全删除）
 

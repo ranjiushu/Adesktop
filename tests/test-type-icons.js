@@ -60,14 +60,6 @@ check(T.kindFor('noext', false) === 'unknown', '无扩展名 → unknown')
 check(T.kindFor('file.xyzzy', false) === 'unknown', '未知扩展名 → unknown')
 check(T.kindFor('', false) === 'unknown', '空名 → unknown')
 
-// ── 缩略图判定（位图 true / 矢量与其余 false）──
-check(T.canThumbnail('photo.jpg') === true, 'jpg 可缩略图')
-check(T.canThumbnail('photo.png') === true, 'png 可缩略图')
-check(T.canThumbnail('photo.webp') === true, 'webp 可缩略图')
-check(T.canThumbnail('icon.svg') === false, 'svg 不可缩略图（用类型图标）')
-check(T.canThumbnail('a.txt') === false, 'txt 不可缩略图')
-check(T.canThumbnail('clip.mp4') === false, 'mp4 不可缩略图')
-
 // ── SVG 生成 ──
 const svgText = T.svgFor('text')
 check(svgText.indexOf('<svg') === 0, 'svgFor 返回 <svg>')

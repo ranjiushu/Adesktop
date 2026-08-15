@@ -129,7 +129,7 @@ verify_js_syntax() {
 # 变量与 LexiCull 同名（GIT_COMMIT_COUNT/GIT_AHEAD_MAIN/GIT_BRANCH 等），
 # 便于移植其构建信息页；非 git 仓库时降级默认值。
 # 扩展数据（RECENT_COMMITS 增强/CONTRIBUTION_GRID/SOURCE_STATS/FILE_STATS/
-# NON_SOURCE_STATS/CHANGELOG_HTML）由 tools/build-stats.sh 追加注入。
+# NON_SOURCE_STATS/CHANGELOG_MD）由 tools/build-stats.sh 追加注入。
 inject_vars() {
   local js_file="$1"
   local count=1
@@ -173,7 +173,7 @@ verify_injections() {
   local js_file="$1"
   for var in BUILD_COUNT BUILD_TIMESTAMP GIT_COMMIT_COUNT GIT_AHEAD_MAIN GIT_BRANCH \
     FIRST_BUILD_TIMESTAMP RECENT_COMMITS CONTRIBUTION_GRID SOURCE_STATS FILE_STATS \
-    NON_SOURCE_STATS CHANGELOG_HTML; do
+    NON_SOURCE_STATS CHANGELOG_MD; do
     grep -q "var ${var}=" "$js_file" || fail "注入变量缺失: ${var}"
   done
   ok "注入变量均已存在于产物中"
@@ -244,7 +244,7 @@ check_consistency() {
     -I 'var GIT_COMMIT_COUNT=' -I 'var GIT_AHEAD_MAIN=' -I 'var GIT_BRANCH=' \
     -I 'var RECENT_COMMITS=' -I 'var FIRST_BUILD_TIMESTAMP=' \
     -I 'var CONTRIBUTION_GRID=' -I 'var SOURCE_STATS=' -I 'var FILE_STATS=' \
-    -I 'var NON_SOURCE_STATS=' -I 'var CHANGELOG_HTML=' \
+    -I 'var NON_SOURCE_STATS=' -I 'var CHANGELOG_MD=' \
     -q "$tmp_output" "$OUTPUT" &>/dev/null; then
     echo "[check] src/ 与 dist/desktop.bundle.html 一致"
     rm -f "$tmp_js" "$tmp_output"

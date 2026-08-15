@@ -455,7 +455,7 @@ App.BuildInfo = (function () {
     let sourceStats = _safe(function () { return typeof SOURCE_STATS !== 'undefined' ? SOURCE_STATS : null }, null)
     let fileStats = _safe(function () { return (typeof FILE_STATS !== 'undefined' && Array.isArray(FILE_STATS)) ? FILE_STATS : [] }, [])
     let nsStats = _safe(function () { return (typeof NON_SOURCE_STATS !== 'undefined' && Array.isArray(NON_SOURCE_STATS)) ? NON_SOURCE_STATS : [] }, [])
-    let changelogHtml = _safe(function () { return (typeof CHANGELOG_HTML !== 'undefined' && CHANGELOG_HTML) ? CHANGELOG_HTML : null }, null)
+    let changelogMd = _safe(function () { return (typeof CHANGELOG_MD !== 'undefined' && CHANGELOG_MD) ? CHANGELOG_MD : null }, null)
 
     // 区块组装
     if (contribGrid) {
@@ -527,10 +527,13 @@ App.BuildInfo = (function () {
     if (recentCommits.length > 0) {
       sections.push(wrapSection('提交动态', renderCommitList(recentCommits, 10), { secId: 'build-commit-section' }))
     }
-    if (changelogHtml) {
+    if (changelogMd) {
+      // 更新日志：注入原文（CHANGELOG_MD），运行时用 App.Markdown 渲染——
+      // 与仓库内其他 markdown 共用同一渲染器（h1-h6/多行列表/有序列表/引用/代码等），
+      // 避免构建期 python 迷你渲染器语法覆盖不全（### 标题/列表续行被拆段）
       sections.push(wrapSection(
         '<span class="mcp-guide-arrow" id="build-guide-arrow">▶</span> 更新日志',
-        '<div class="changelog-container" id="build-guide-content" style="display:none">' + changelogHtml + '</div>',
+        '<div class="changelog-container" id="build-guide-content" style="display:none">' + App.Markdown.render(changelogMd) + '</div>',
         { secCls: 'changelog-section', titleCls: 'mcp-guide-toggle', titleId: 'build-guide-toggle' }
       ))
     }

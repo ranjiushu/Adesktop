@@ -553,159 +553,32 @@ print(f'{count} 个文件')
 PYEOF
 )"
 
-# ── 10. 更新日志（从 CHANGELOG.md 读取，Markdown → HTML 注入） ──
+# ── 10. 更新日志（注入 CHANGELOG.md 原文，前端 App.Markdown 运行时渲染） ──
+# 渲染统一交给 src/js/markdown.js（h1-h6/多行列表/有序列表/引用/代码/链接），
+# 避免构建期 python 迷你渲染器语法覆盖不全（### 标题被当段落、列表续行被拆段）。
 python3 << 'PYEOF' >> "$TMP_JS" 2>/dev/null || true
-import os, re
-
+import os
 SCRIPT_DIR = os.environ['SCRIPT_DIR']
 CHANGELOG_PATH = os.path.join(SCRIPT_DIR, 'CHANGELOG.md')
-
-_ph = {}
-_phc = [0]
-def _s(html_content):
-    k = f'__X_{_phc[0]}__'
-    _phc[0] += 1
-    _ph[k] = html_content
-    return k
-
-def _h(text):
-    return text.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
-
-def _r(text):
-    _ph.clear(); _phc[0] = 0
-    text = re.sub(r'`([^`]+)`', lambda m: _s('<code>' + _h(m.group(1)) + '</code>'), text)
-    text = re.sub(r'\*\*([^*]+)\*\*', lambda m: _s('<strong>' + _h(m.group(1)) + '</strong>'), text)
-    text = re.sub(r'\*([^*]+)\*', lambda m: _s('<em>' + _h(m.group(1)) + '</em>'), text)
-    text = _h(text)
-    for k, v in _ph.items():
-        text = text.replace(k, v)
-    return text
-
 try:
     if not os.path.isfile(CHANGELOG_PATH):
         raise FileNotFoundError('no CHANGELOG.md')
     with open(CHANGELOG_PATH) as f:
-        raw = f.read().split('\n')
-    out = []
-    in_ul = False; in_bq = False; in_tb = False; tb_rows = []
-    h2_first = True; entry_n = 0
-
-    for line in raw:
-        s = line.strip()
-        if re.match(r'^---+$', s):
-            if in_bq: out.append('</div>'); in_bq = False
-            if in_ul: out.append('</ul>'); in_ul = False
-            if in_tb and tb_rows:
-                out.append('<table class="changelog-table">')
-                for ri,row in enumerate(tb_rows):
-                    tg = 'th' if ri == 0 else 'td'
-                    out.append('<tr>' + ''.join(f'<{tg}>{c}</{tg}>' for c in row) + '</tr>')
-                out.append('</table>')
-                tb_rows = []; in_tb = False
-            out.append('<div class="changelog-hr"></div>')
-            continue
-        if not s:
-            if in_bq: out.append('</div>'); in_bq = False
-            if in_ul: out.append('</ul>'); in_ul = False
-            if in_tb and tb_rows:
-                out.append('<table class="changelog-table">')
-                for ri,row in enumerate(tb_rows):
-                    tg = 'th' if ri == 0 else 'td'
-                    out.append('<tr>' + ''.join(f'<{tg}>{c}</{tg}>' for c in row) + '</tr>')
-                out.append('</table>')
-                tb_rows = []; in_tb = False
-            continue
-        if s.startswith('# ') and not s.startswith('## '):
-            if in_bq: out.append('</div>'); in_bq = False
-            if in_ul: out.append('</ul>'); in_ul = False
-            if in_tb and tb_rows:
-                out.append('<table class="changelog-table">')
-                for ri,row in enumerate(tb_rows):
-                    tg = 'th' if ri == 0 else 'td'
-                    out.append('<tr>' + ''.join(f'<{tg}>{c}</{tg}>' for c in row) + '</tr>')
-                out.append('</table>')
-                tb_rows = []; in_tb = False
-            out.append(f'<h1 class="changelog-h1">{_r(s[2:])}</h1>')
-            continue
-        if s.startswith('## '):
-            if in_bq: out.append('</div>'); in_bq = False
-            if in_ul: out.append('</ul>'); in_ul = False
-            if in_tb and tb_rows:
-                out.append('<table class="changelog-table">')
-                for ri,row in enumerate(tb_rows):
-                    tg = 'th' if ri == 0 else 'td'
-                    out.append('<tr>' + ''.join(f'<{tg}>{c}</{tg}>' for c in row) + '</tr>')
-                out.append('</table>')
-                tb_rows = []; in_tb = False
-            out.append(f'<h2 class="changelog-h2">{_r(s[3:])}</h2>')
-            if h2_first: h2_first = False
-            else: entry_n += 1
-            continue
-        if s.startswith('> '):
-            if in_ul: out.append('</ul>'); in_ul = False
-            if in_tb and tb_rows:
-                out.append('<table class="changelog-table">')
-                for ri,row in enumerate(tb_rows):
-                    tg = 'th' if ri == 0 else 'td'
-                    out.append('<tr>' + ''.join(f'<{tg}>{c}</{tg}>' for c in row) + '</tr>')
-                out.append('</table>')
-                tb_rows = []; in_tb = False
-            if not in_bq:
-                out.append('<div class="changelog-blockquote">')
-                in_bq = True
-            out.append(f'<p class="changelog-p">{_r(s[2:])}</p>')
-            continue
-        if s.startswith('|') and s.endswith('|'):
-            if in_bq: out.append('</div>'); in_bq = False
-            if in_ul: out.append('</ul>'); in_ul = False
-            in_tb = True
-            cells = [_r(c.strip()) for c in s[1:-1].split('|')]
-            if not re.match(r'^[:\s\-|]+$', s):
-                tb_rows.append(cells)
-            continue
-        if s.startswith('- ') or s.startswith('* '):
-            if in_bq: out.append('</div>'); in_bq = False
-            if in_tb and tb_rows:
-                out.append('<table class="changelog-table">')
-                for ri,row in enumerate(tb_rows):
-                    tg = 'th' if ri == 0 else 'td'
-                    out.append('<tr>' + ''.join(f'<{tg}>{c}</{tg}>' for c in row) + '</tr>')
-                out.append('</table>')
-                tb_rows = []; in_tb = False
-            if not in_ul:
-                out.append('<ul class="changelog-ul">')
-                in_ul = True
-            out.append(f'<li>{_r(s[2:])}</li>')
-            continue
-        if in_bq: out.append('</div>'); in_bq = False
-        if in_ul: out.append('</ul>'); in_ul = False
-        if in_tb and tb_rows:
-            out.append('<table class="changelog-table">')
-            for ri,row in enumerate(tb_rows):
-                tg = 'th' if ri == 0 else 'td'
-                out.append('<tr>' + ''.join(f'<{tg}>{c}</{tg}>' for c in row) + '</tr>')
-            out.append('</table>')
-            tb_rows = []; in_tb = False
-        out.append(f'<p class="changelog-p">{_r(s)}</p>')
-
-    if in_bq: out.append('</div>')
-    if in_ul: out.append('</ul>')
-    if in_tb and tb_rows:
-        out.append('<table class="changelog-table">')
-        for ri,row in enumerate(tb_rows):
-            tg = 'th' if ri == 0 else 'td'
-            out.append('<tr>' + ''.join(f'<{tg}>{c}</{tg}>' for c in row) + '</tr>')
-        out.append('</table>')
-
-    html = ''.join(out)
-    escaped = html.replace("'", "\\'").replace('<', '\\u003c').replace('\n', '')
-    print(f"var CHANGELOG_HTML='{escaped}';")
+        raw = f.read()
+    # JS 单引号字符串转义：反斜杠 / 单引号 / 换行 / </ 防脚本闭合
+    esc = (raw
+        .replace('\\', '\\\\')
+        .replace("'", "\\'")
+        .replace('\r', '')
+        .replace('\n', '\\n')
+        .replace('</', '<\\/'))
+    print("var CHANGELOG_MD='" + esc + "';")
 except Exception:
-    print("var CHANGELOG_HTML='<p class=\\\"changelog-p\\\">更新日志加载失败</p>';")
+    print("var CHANGELOG_MD='';")
 PYEOF
-if ! grep -q 'var CHANGELOG_HTML=' "$TMP_JS" 2>/dev/null; then
-  echo "var CHANGELOG_HTML='<p class=\\\"changelog-p\\\">更新日志加载失败</p>';" >> "$TMP_JS"
-  echo "  [WARN] CHANGELOG_HTML 注入失败"
+if ! grep -q 'var CHANGELOG_MD=' "$TMP_JS" 2>/dev/null; then
+  echo "var CHANGELOG_MD='';" >> "$TMP_JS"
+  echo "  [WARN] CHANGELOG_MD 注入失败，注入空字符串"
 fi
 CHANGELOG_STATUS=$(python3 -c "
 import os

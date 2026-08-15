@@ -173,13 +173,15 @@ App.InternalViewer = (function () {
     let reader = { scale: 1, wrap: true }   // 文本完整预览态：字号缩放 + 自动换行
     let state = {
       open: false, mode: null, fsFrom: null, selected: false,
-      path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null,
+      path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null,
       uri: null, rect: null, canvasRect: null
     }
 
     // ── 关闭本实例（不触碰其他实例）──
     function close() {
       if (!state.open) { detachCard(); return }
+      const savedPath = state.path
+      const savedOnClose = state.onClose
       const v = card.querySelector('video')
       if (v) { try { v.pause() } catch (e) { /* 忽略 */ } }
       const a = card.querySelector('audio')
@@ -198,10 +200,12 @@ App.InternalViewer = (function () {
       }
       drag = null
       reader = { scale: 1, wrap: true }
-      state = { open: false, mode: null, fsFrom: null, selected: false, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, uri: null, rect: null, canvasRect: null }
+      state = { open: false, mode: null, fsFrom: null, selected: false, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null, uri: null, rect: null, canvasRect: null }
       // 从管理器实例集合移除自己（exitFullscreen 的 from='folder' 分支也走这里，保证 isAnyOpen 正确）
       const i = indexOf(id)
       if (i >= 0) _instances.splice(i, 1)
+      // 通知调用方：文件已关闭（用于桌面层解除锁定）
+      if (typeof savedOnClose === 'function') savedOnClose(savedPath)
     }
 
     function detachCard() {
@@ -611,6 +615,7 @@ App.InternalViewer = (function () {
         anchor: opts.anchor || null,
         camera: opts.camera || null,
         onFallback: typeof opts.onFallback === 'function' ? opts.onFallback : null,
+        onClose: typeof opts.onClose === 'function' ? opts.onClose : null,
         uri: null,
         rect: null,
         canvasRect: null

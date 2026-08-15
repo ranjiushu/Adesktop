@@ -371,7 +371,10 @@ App.Desktop = (function () {
       // 拖动摆放仍可）；文件不进入选中集——Viewer 实体自身有独立选中态（脆弱/临时）。
       // 多实例：每个打开的 Viewer 各自锁定其文件。
       // FileOpener.open 返回实例 id（数字）→ 锁定；true（外部/快捷方式）→ 只清选中不锁定。
-      const result = App.FileOpener.open({ name: item.name, path: full }, isFolderView() ? null : (positions[full] || null), camera)
+      const result = App.FileOpener.open({ name: item.name, path: full }, isFolderView() ? null : (positions[full] || null), camera, function onClose(path) {
+        if (path) _lockedPaths.delete(path)
+        updateLockedVisual()
+      })
       if (typeof result === 'number') {
         _lockedPaths.add(full)
         clearSelection()

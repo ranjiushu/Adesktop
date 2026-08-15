@@ -44,7 +44,7 @@ App.FileOpener = (function () {
   // 返回：内部查看 = 实例 id（数字 → 桌面层锁定文件）；
   //       外部应用 / 应用快捷方式 = true（已分派，桌面层不锁定文件）；
   //       分派失败 = null
-  function open(item, anchor, camera) {
+  function open(item, anchor, camera, onClose) {
     if (!item || !item.path) return null
     const kind = kindFor(item.name || '')
     if (kind === 'shortcut') {
@@ -73,7 +73,8 @@ App.FileOpener = (function () {
         camera: camera || null,
         onFallback: function () {   // 内部预览失败 → 交外部应用
           App.FileAPI.openExternal(item.path).catch(function () {})
-        }
+        },
+        onClose: typeof onClose === 'function' ? onClose : null
       })
     }
     return null

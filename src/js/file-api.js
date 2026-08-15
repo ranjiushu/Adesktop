@@ -60,6 +60,10 @@ App.FileAPI = (function () {
     thumb: function (path) { return call('thumb', [path]) },
     // 交外部应用打开（ACTION_VIEW；无可用应用时 reject）
     openExternal: function (path) { return call('openExternal', [path]) },
+    // 已安装应用：查询 launcher 应用列表（[{package,label,isSystem}]）
+    listApps: function () { return call('listApps', []) },
+    // 启动指定包名应用（getLaunchIntentForPackage + startActivity）
+    launchApp: function (pkg) { return call('launchApp', [pkg]) },
     hasBridge: function () { return !!window.FileBridge }
   }
 })()

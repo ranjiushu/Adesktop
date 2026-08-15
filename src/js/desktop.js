@@ -203,7 +203,12 @@ App.Desktop = (function () {
       } else {
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor(kind) : (p.item.isDir ? '📁' : '📄')
       }
-      let name = el('div', 'desktop-icon-name', p.item.name)
+      // 应用快捷方式（.desktop）：显示名剥离扩展名（文件即真相，标签更干净）
+      let displayName = p.item.name
+      if (!p.item.isDir && App.Shortcut && App.Shortcut.isShortcutName(p.item.name)) {
+        displayName = p.item.name.slice(0, p.item.name.lastIndexOf('.'))
+      }
+      let name = el('div', 'desktop-icon-name', displayName)
       card.appendChild(icon)
       card.appendChild(name)
       // 列表视图：右侧元信息（文件夹 / 文件大小）

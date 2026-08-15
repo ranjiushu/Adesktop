@@ -8,6 +8,9 @@ package com.example.desktop;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
@@ -29,7 +32,10 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -624,6 +630,66 @@ public class FileBridge {
                 });
             } catch (Exception e) {
                 resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /* ── 已安装应用 ──
+     * listApps：PackageManager 查询 launcher 应用（第三方 + 系统），返回 [{package,label,isSystem}]。
+     * launchApp：getLaunchIntentForPackage + startActivity 拉起指定应用。
+     * Android 11+ 需 manifest 声明 <queries>（MAIN+LAUNCHER），否则列表为空。 */
+
+    @JavascriptInterface
+    public void listApps(String cbId) {
+        executor.execute(() -> {
+            try {
+                PackageManager pm = activity.getPackageManager();
+                Intent intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+                List<ResolveInfo> resolved = pm.queryIntentActivities(intent, 0);
+                JSONArray arr = new JSONArray();
+                Set<String> seen = new HashSet<>();
+                for (ResolveInfo ri : resolved) {
+                    if (ri == null || ri.activityInfo == null) continue;
+                    String pkg = ri.activityInfo.packageName;
+                    if (pkg == null || seen.contains(pkg)) continue;
+                    seen.add(pkg);
+                    try {
+                        JSONObject o = new JSONObject();
+                        o.put("package", pkg);
+                        o.put("label", String.valueOf(ri.loadLabel(pm)));
+                        ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
+                        boolean sys = (ai.flags & (ApplicationInfo.FLAG_SYSTEM
+                            | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0;
+                        o.put("isSystem", sys);
+                        arr.put(o);
+                    } catch (Exception ignored) {
+                    }
+                }
+                resolveOk(cbId, arr);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void launchApp(String pkg, String cbId) {
+        if (pkg == null || pkg.trim().isEmpty()) {
+            resolveErr(cbId, "应用包名无效");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                Intent intent = activity.getPackageManager().getLaunchIntentForPackage(pkg);
+                if (intent == null) {
+                    resolveErr(cbId, "无法启动应用（无启动入口）: " + pkg);
+                    return;
+                }
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(intent);
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, "无法启动应用: " + (e.getMessage() == null ? pkg : e.getMessage()));
             }
         });
     }

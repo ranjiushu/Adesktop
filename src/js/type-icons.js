@@ -22,7 +22,8 @@ App.TypeIcons = (function () {
     excel: ['xls', 'xlsx', 'ods'],
     ppt: ['ppt', 'pptx', 'odp', 'key'],
     font: ['ttf', 'otf', 'woff', 'woff2', 'eot'],
-    executable: ['apk', 'exe', 'deb', 'msi', 'dmg', 'bin', 'jar']
+    executable: ['apk', 'exe', 'deb', 'msi', 'dmg', 'bin', 'jar'],
+    shortcut: ['desktop']
   }
 
   // 类型 → 形态（同一形态 + 不同颜色可区分相近类型，如 text/md/json/pdf 共用 fileText）
@@ -44,6 +45,7 @@ App.TypeIcons = (function () {
     ppt: 'fileText',
     font: 'type',
     executable: 'terminal',
+    shortcut: 'appGrid',
     unknown: 'file'
   }
 
@@ -59,7 +61,8 @@ App.TypeIcons = (function () {
     music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
     archive: '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>',
     terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
-    type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>'
+    type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
+    appGrid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'
   }
 
   function extOf(name) {

@@ -33,6 +33,7 @@
 .type-icon.type-ppt { color: #f97316; }
 .type-icon.type-font { color: #64748b; }
 .type-icon.type-executable { color: #334155; }
+.type-icon.type-shortcut { color: #0ea5e9; }
 .type-icon.type-unknown { color: #94a3b8; }
 
 /* 缩略图（位图图片）：方形圆角 + 裁剪居中，替换类型图标 */

@@ -55,6 +55,9 @@ check(T.kindFor('slides.pptx', false) === 'ppt', 'pptx → ppt')
 check(T.kindFor('font.ttf', false) === 'font', 'ttf → font')
 check(T.kindFor('app.apk', false) === 'executable', 'apk → executable')
 
+// ── 快捷方式 ──
+check(T.kindFor('微信.desktop', false) === 'shortcut', 'desktop → shortcut')
+
 // ── 未知/无扩展名 ──
 check(T.kindFor('noext', false) === 'unknown', '无扩展名 → unknown')
 check(T.kindFor('file.xyzzy', false) === 'unknown', '未知扩展名 → unknown')

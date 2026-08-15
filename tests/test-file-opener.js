@@ -49,6 +49,10 @@ check(F.kindFor('a.mp4') === 'video' && F.kindFor('a.webm') === 'video', 'mp4/we
 check(F.kindFor('a.mp3') === 'audio' && F.kindFor('a.m4a') === 'audio', 'mp3/m4a → audio')
 check(F.kindFor('a.wav') === 'audio', 'wav → audio')
 
+// ── 快捷方式 (.desktop) ──
+check(F.kindFor('微信.desktop') === 'shortcut', '微信.desktop → shortcut')
+check(F.kindFor('a.DESKTOP') === 'shortcut', '大写 .DESKTOP → shortcut')
+
 // ── 外部 ──
 check(F.kindFor('a.pdf') === 'external', 'pdf → external（Intent）')
 check(F.kindFor('a.docx') === 'external', 'docx → external')

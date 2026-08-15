@@ -53,6 +53,10 @@ App.boot = function boot() {
   if (App.BuildInfo && typeof App.BuildInfo.init === 'function') {
     App.BuildInfo.init()
   }
+  // 已安装应用工具（Drawer「已安装应用」入口）
+  if (App.AppList && typeof App.AppList.init === 'function') {
+    App.AppList.init()
+  }
   // 桌面：启动无限画布手势（双指 pan/zoom）+ 以文件系统为数据源渲染
   if (App.Desktop) {
     if (typeof App.Desktop.initGesture === 'function') App.Desktop.initGesture()
@@ -104,6 +108,19 @@ if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()
     // 清掉 pushState 残留条目（popstate → _onPopState 幂等，安全）
     try {
       if (history.state && history.state._buildInfoOpen) history.back()
+    } catch (e) { /* 忽略 */ }
+    return true
+  }
+  // 已安装应用确认框优先（dialog-overlay 1300 > 面板 1200）
+  if (App.AppList && typeof App.AppList.isConfirmOpen === 'function' && App.AppList.isConfirmOpen()) {
+    App.AppList.closeConfirm()
+    return true
+  }
+  if (App.AppList && typeof App.AppList.isOpen === 'function' && App.AppList.isOpen()) {
+    App.AppList.close()
+    // 清掉 pushState 残留条目（popstate → _onPopState 幂等，安全）
+    try {
+      if (history.state && history.state._appListOpen) history.back()
     } catch (e) { /* 忽略 */ }
     return true
   }

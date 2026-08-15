@@ -97,3 +97,8 @@
   color: var(--color-text-secondary);
   padding: var(--space-xs) var(--space-md);
 }
+
+/* 高级浏览模式切换：始终可用（不受 setEnabled 置灰控制） */
+.view-menu-browse {
+  /* 与普通 item 相同样式基线，无需额外覆盖 */
+}

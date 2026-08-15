@@ -1,6 +1,8 @@
 /* 桌面手势模块：viewport 上的 touch 三件套 → 手势识别。
  * 阶段 A：双指 panzoom（平移 + 缩放并行，不做二选一）。
  * 单指 tap/框选/长按拿起留待阶段 B 扩展（状态机已预留 single/dead 路径）。
+ * 阶段 E：高级浏览模式——单指拖动（任意位置）→ 平移画布（桌面）/ 滚动目录（文件夹），
+ *         由 _browseMode 标志控制；空位命中进入 pan 相位而非 marquee。
  * 关键：指数突变处理——1→2 取消单指意图；2→1 剩指进 dead 直到抬起，
  *       绝不误触发 tap/框选（这是触摸手势最易出 bug 的地方）。
  * 依赖: namespace.js, desktop-camera.js
@@ -63,10 +65,15 @@ App.DesktopGesture = (function () {
   // move：按 phase 与位移分派（返回新状态 + 语义效果）
   function singleMove(sg, x, y, opts) {
     const th = _threshold(opts)
+    const browse = opts && opts.browseMode
     const next = { phase: sg.phase, hitType: sg.hitType, startX: sg.startX, startY: sg.startY, startT: sg.startT, lastX: x, lastY: y }
     if (sg.phase === 'pending') {
       const d = distance({ x: sg.startX, y: sg.startY }, { x: x, y: y })
       if (d > th) {
+        // 高级浏览模式：empty/icon 命中 → 平移画布（pan），而非框选
+        if (browse && (sg.hitType === 'empty' || sg.hitType === 'icon')) {
+          return { sg: Object.assign({}, next, { phase: 'pan' }), effect: { type: 'pan-start' } }
+        }
         // 已选中（文件 selected / Viewer viewer-selected）→ 直接拿起移动（不必长按）；
         // 其余（未选中图标 icon / 未选中 Viewer viewer / 空白 empty）→ 框选（划过触发选中）
         if (sg.hitType === 'selected' || sg.hitType === 'viewer-selected') {
@@ -75,6 +82,9 @@ App.DesktopGesture = (function () {
         return { sg: Object.assign({}, next, { phase: 'marquee' }), effect: { type: 'marquee-start', x: sg.startX, y: sg.startY } }
       }
       return { sg: next, effect: { type: 'none' } }
+    }
+    if (sg.phase === 'pan') {
+      return { sg: next, effect: { type: 'pan', dx: x - sg.lastX, dy: y - sg.lastY } }
     }
     if (sg.phase === 'marquee') {
       return { sg: next, effect: { type: 'marquee-live', startX: sg.startX, startY: sg.startY, x: x, y: y } }
@@ -95,17 +105,17 @@ App.DesktopGesture = (function () {
   }
 
   // 单指意图取消（1→2 指切换 / touchcancel，状态机强制终结路径）：
-  // 有未完成意图（框选/拿起/拖动）→ 派发 single-cancel 语义事件并复位状态；
+  // 有未完成意图（框选/拿起/拖动/平移）→ 派发 single-cancel 语义事件并复位状态；
   // 否则原样返回（无意图可取消）。保证拖动生命周期必有收尾——否则 picked-up
   // 视觉（放大+阴影）与框选矩形会滞留成「悬浮残影」。
   function singleCancel(sg) {
-    if (sg.phase === 'marquee' || sg.phase === 'pickedup' || sg.phase === 'dragmove') {
+    if (sg.phase === 'marquee' || sg.phase === 'pickedup' || sg.phase === 'dragmove' || sg.phase === 'pan') {
       return { sg: createSingle(), effect: { type: 'single-cancel' } }
     }
     return { sg: sg, effect: { type: 'none' } }
   }
 
-  // up：按 phase 收尾（tap / 框选结束 / 放下）
+  // up：按 phase 收尾（tap / 框选结束 / 放下 / 平移结束）
   function singleUp(sg, x, y, opts) {
     const th = _threshold(opts)
     if (sg.phase === 'pending') {
@@ -114,6 +124,9 @@ App.DesktopGesture = (function () {
         return { sg: createSingle(), effect: { type: 'tap', x: x, y: y } }
       }
       return { sg: createSingle(), effect: { type: 'marquee-end', startX: sg.startX, startY: sg.startY, x: x, y: y } }
+    }
+    if (sg.phase === 'pan') {
+      return { sg: createSingle(), effect: { type: 'pan-end' } }
     }
     if (sg.phase === 'marquee') {
       return { sg: createSingle(), effect: { type: 'marquee-end', startX: sg.startX, startY: sg.startY, x: x, y: y } }
@@ -141,6 +154,7 @@ App.DesktopGesture = (function () {
   let _longPressTimer = null
   let _cb = null         // 语义事件回调集合
   let _opts = null       // 阈值配置 {tapThreshold, longPressMs}
+  let _browseMode = false  // 高级浏览模式标志（Desktop.setBrowseMode 驱动）
 
   function toLocal(t) {
     if (!_rect) _rect = _viewport.getBoundingClientRect()
@@ -292,6 +306,11 @@ App.DesktopGesture = (function () {
       const r = singleMove(_single, c.x, c.y, _opts)
       _single = r.sg
       if (r.effect.type === 'marquee-start') cancelLongPressTimer()
+      // 单指平移（高级浏览模式）：相机直接更新，与双指 pan 共用钳制+提交路径
+      if (r.effect.type === 'pan') {
+        _camera = _applyClamp(CAM.panBy(_camera, r.effect.dx, r.effect.dy))
+        commit()
+      }
       handleEffect(r.effect)
     }
   }
@@ -331,6 +350,12 @@ App.DesktopGesture = (function () {
     if (!c) return
     _camera = _applyClamp(c)
     commit()
+  }
+
+  // 高级浏览模式开关：Desktop 调用，同步到手势层内部标志 + opts（singleMove 读取）
+  function setBrowseMode(on) {
+    _browseMode = !!on
+    if (_opts) _opts.browseMode = _browseMode
   }
 
   function init(opts) {
@@ -373,6 +398,7 @@ App.DesktopGesture = (function () {
   return {
     init: init,
     setCamera: setCamera,
+    setBrowseMode: setBrowseMode,
     distance: distance,
     centroid: centroid,
     modeAfter: modeAfter,

@@ -62,6 +62,11 @@ App.Desktop = (function () {
   let _pendingDeselect = null     // { name } 待反选（双击窗口确认）
   let _deselectTimer = null
 
+  // 高级浏览模式 + 临时操作模式
+  let _advancedBrowse = false     // 高级浏览模式开关（持久化）
+  let _tempNormalMode = false     // 临时操作模式（双击空白进入，打断退出）
+  let _emptyTapTime = 0           // 空白区域双击窗口计时
+
   function el(tag, className, text) {
     let node = document.createElement(tag)
     if (className) node.className = className
@@ -381,6 +386,7 @@ App.Desktop = (function () {
 
   // 进入子目录：压栈历史 + 切换视图（folder 容器相机重置到顶）
   function enterFolder(full) {
+    exitTempMode()   // 进入文件夹 → 退出临时操作模式
     if (!isFolderView()) rootCamera = camera   // 从根进入：快照根视角，返回时恢复
     nav = App.DesktopNav.enter(nav, full)
     state.curPath = full
@@ -417,6 +423,7 @@ App.Desktop = (function () {
 
   // 退回到上级目录（父目录，压栈导航——与历史后退区分；Windows「向上」语义）
   function goUp() {
+    exitTempMode()
     if (!isFolderView()) return false
     const target = App.DesktopNav.parent(state.curPath)
     nav = App.DesktopNav.enter(nav, target)
@@ -427,7 +434,9 @@ App.Desktop = (function () {
   }
 
   // 后退 / 前进（底栏按钮驱动）
+  // 后退：临时操作模式下消费此次按键退出临时模式（不导航）
   function goBack() {
+    if (_tempNormalMode) { exitTempMode(); return true }
     if (!App.DesktopNav.canBack(nav)) return false
     nav = App.DesktopNav.back(nav)
     state.curPath = App.DesktopNav.current(nav)
@@ -437,6 +446,7 @@ App.Desktop = (function () {
   }
 
   function goForward() {
+    exitTempMode()
     if (!App.DesktopNav.canForward(nav)) return false
     nav = App.DesktopNav.forward(nav)
     state.curPath = App.DesktopNav.current(nav)
@@ -537,6 +547,40 @@ App.Desktop = (function () {
     _animRaf = _raf(frame)
   }
 
+  // ── 高级浏览模式 + 临时操作模式 ──
+
+  // 同步浏览模式到手势层：effective = 高级浏览 ON 且非临时操作模式
+  function syncBrowseMode() {
+    const effective = _advancedBrowse && !_tempNormalMode
+    if (App.DesktopGesture && typeof App.DesktopGesture.setBrowseMode === 'function') {
+      App.DesktopGesture.setBrowseMode(effective)
+    }
+  }
+
+  // 退出临时操作模式（打断条件：返回/Drawer/目录导航/再次双击空白）
+  function exitTempMode() {
+    if (!_tempNormalMode) return
+    _tempNormalMode = false
+    syncBrowseMode()
+    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已退出临时操作模式')
+  }
+
+  // 设置高级浏览模式（ViewMenu 切换驱动）
+  function setAdvancedBrowse(on) {
+    _advancedBrowse = !!on
+    _tempNormalMode = false   // 切换模式时清空临时态
+    syncBrowseMode()
+    // 持久化：合并到 ViewStore 现有偏好
+    const prefs = App.ViewStore.load()
+    prefs.advancedBrowse = _advancedBrowse
+    if (!App.ViewStore.save(prefs)) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('浏览模式保存失败')
+    }
+  }
+
+  function isAdvancedBrowse() { return _advancedBrowse }
+
   // ── 手势回调（世界坐标）──
   function handleTap(world) {
     // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）
@@ -556,6 +600,24 @@ App.Desktop = (function () {
     }
     const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
     const now = Date.now()
+
+    // 双击空白区域：高级浏览模式下切换临时操作模式（进入/退出）
+    if (!name && _advancedBrowse) {
+      if (now - _emptyTapTime <= DOUBLE_TAP_MS) {
+        _emptyTapTime = 0
+        if (_tempNormalMode) {
+          exitTempMode()
+        } else {
+          _tempNormalMode = true
+          syncBrowseMode()
+          if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+          if (App.toast && typeof App.toast.show === 'function') App.toast.show('临时操作模式')
+        }
+        return
+      }
+      _emptyTapTime = now
+    }
+
     const r = App.DoubleTap.hit(_tapState, name, now, DOUBLE_TAP_MS)
     _tapState = r.state
     if (r.double) {
@@ -1083,6 +1145,7 @@ App.Desktop = (function () {
     state.viewStyle = prefs.viewStyle
     state.sortBy = prefs.sortBy
     state.sortDir = prefs.sortDir
+    _advancedBrowse = !!prefs.advancedBrowse
   }
 
   // 视图/排序偏好变更（顶栏菜单驱动）：保存 + 重渲染
@@ -1153,6 +1216,8 @@ App.Desktop = (function () {
     })
     // 同步手势层相机 + 模式标志 + 菜单可用态（根目录初始 = desktop 空间）
     applyCameraForPath()
+    // 同步高级浏览模式到手势层（initLayout 已从 ViewStore 加载偏好）
+    syncBrowseMode()
   }
 
   return {
@@ -1185,6 +1250,9 @@ App.Desktop = (function () {
     getViewPrefs: getViewPrefs,
     captureHome: captureHome,
     captureDefaultView: captureDefaultView,
-    goHome: goHome
+    goHome: goHome,
+    setAdvancedBrowse: setAdvancedBrowse,
+    isAdvancedBrowse: isAdvancedBrowse,
+    exitTempMode: exitTempMode
   }
 })()

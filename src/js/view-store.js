@@ -8,7 +8,7 @@
 
 App.ViewStore = (function () {
   const KEY = 'desktop.view.v1'
-  const DEFAULT = { viewStyle: 'grid', sortBy: 'name', sortDir: 1 }
+  const DEFAULT = { viewStyle: 'grid', sortBy: 'name', sortDir: 1, advancedBrowse: false }
 
   function valid(data) {
     if (!data || typeof data !== 'object') return false
@@ -16,6 +16,7 @@ App.ViewStore = (function () {
     const sortBy = ['name', 'mtime', 'type', 'size'].indexOf(data.sortBy) >= 0
     if (!sortBy) return false
     if (data.sortDir !== 1 && data.sortDir !== -1) return false
+    // advancedBrowse 缺失或非法时回退 false（向后兼容旧数据）
     return true
   }
 

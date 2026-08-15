@@ -11,6 +11,10 @@ App.Drawer = (function () {
   function open() {
     if (_open) return
     _open = true
+    // 打开 Drawer → 退出临时操作模式（高级浏览模式打断条件）
+    if (App.Desktop && typeof App.Desktop.exitTempMode === 'function') {
+      App.Desktop.exitTempMode()
+    }
     let d = _getEl(DRAWER_ID), o = _getEl(OVERLAY_ID)
     if (d) {
       d.classList.add('drawer-open')

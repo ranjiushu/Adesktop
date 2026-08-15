@@ -186,6 +186,12 @@
   （无弹射）；动画中手势/目录切换即打断（onGestureStart 回调），手势直控优先。
   演进说明：曾用缓出曲线（起步弹射）、三段式（段切换断续）均被单一飞行曲线取代。
   test-desktop-camera 补防出界复现案例 + 飞行均匀性断言，verify-home 补 zoom 变化 E2E
+- 高级浏览模式（阶段 E）：顶栏「排列与视图」菜单底部新增「高级浏览模式」勾选项
+  （view-menu，始终可用不受根目录置灰控制）——单指拖动空白/未选中图标从「框选」切换为
+  平移画布（桌面）/ 滚动目录（文件夹），手势层 `_browseMode` 控制 empty/icon 命中进入
+  pan 相位而非 marquee；已选中文件仍走拿起移动。双击空白进入/退出「临时操作模式」
+  （effective = 高级浏览 ON && 非临时模式），临时切回框选/拿起语义便于精细操作；偏好经
+  view-store `advancedBrowse` 持久化。docs/interaction.md 补 §7.6 定稿 + 阶段表 E 行
 - 沉浸式状态栏/导航栏（参考 LexiCull 方案）：edge-to-edge 内容延伸，状态栏/导航栏
   透明，安全区经 WindowInsets 注入 CSS 变量（safe-top / safe-bottom / panel-bottom）
 - 系统栏图标明暗由壳层统一控制（浅色主题 → 深色图标），手势临时栏

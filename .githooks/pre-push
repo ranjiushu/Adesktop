@@ -2,33 +2,42 @@
 # 防线 1: 分支命名校验（main 为唯一允许的非 feat/fix/exp 分支）
 # 防线 2: 墓地分支复活拦截
 # 防线 3: main 非 merge commit 拦截（稳定发布分支只接受 merge --no-ff 推送）
+#         沿 --first-parent 检查 main 自身提交链，被 merge 的分支历史不算非 merge
 set -uo pipefail
 
-_branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+# 逐 ref 检查（支持一次推送多分支）
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_ref" = "$remote_ref" ] || continue  # 仅处理同名 ref
+  branch=${local_ref#refs/heads/}
+  [ "$branch" = "$local_ref" ] && continue
 
-# ── 防线 1: 命名 ──
-case "$_branch" in
-  main) ;;
-  feat/*|fix/*|exp/*) ;;
-  *)
-    echo "[pre-push] 分支 '$_branch' 命名违规，允许: feat/ fix/ exp/（或 main）" >&2
-    exit 1
-    ;;
-esac
+  # ── 防线 1: 命名 ──
+  case "$branch" in
+    main) ;;
+    feat/*|fix/*|exp/*) ;;
+    *)
+      echo "[pre-push] 分支 '$branch' 命名违规，允许: feat/ fix/ exp/（或 main）" >&2
+      exit 1
+      ;;
+  esac
 
-# ── 防线 2: 墓地复活拦截 ──
-_graveyard="$(git rev-parse --git-dir)/branch-graveyard"
-if [ -n "$_branch" ] && [ -f "$_graveyard" ] && grep -qxF "$_branch" "$_graveyard"; then
-  echo "[pre-push] 分支 '$_branch' 已废弃（branch-graveyard），禁止推送复活" >&2
-  exit 1
-fi
-
-# ── 防线 3: main 只接受 merge commit ──
-if [ "$_branch" = "main" ]; then
-  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
-    echo "[pre-push] main 是稳定发布分支，只接受 merge --no-ff 合入（非直提推送）" >&2
+  # ── 防线 2: 墓地复活拦截 ──
+  _graveyard="$(git rev-parse --git-dir)/branch-graveyard"
+  if [ -n "$branch" ] && [ -f "$_graveyard" ] && grep -qxF "$branch" "$_graveyard"; then
+    echo "[pre-push] 分支 '$branch' 已废弃（branch-graveyard），禁止推送复活" >&2
     exit 1
   fi
-fi
 
+  # ── 防线 3: main 只接受 merge commit ──
+  # 沿第一父级链检查：main 自身提交必须全是 merge commit（直提会被拦截）
+  if [ "$branch" = "main" ] && [ -n "${remote_sha:-}" ] && [ "$remote_sha" != "0000000000000000000000000000000000000000" ]; then
+    non_merge=$(git log --oneline --first-parent --no-merges "${remote_sha}..${local_sha}" 2>/dev/null || true)
+    if [ -n "$non_merge" ]; then
+      echo "[pre-push] main 是稳定发布分支，禁止推送非 merge commit（共 $(echo "$non_merge" | wc -l) 个）" >&2
+      echo "[pre-push] 请在 feat/dev 上开发，稳定后通过 merge --no-ff 合入 main" >&2
+      echo "$non_merge" | head -5 >&2
+      exit 1
+    fi
+  fi
+done
 exit 0

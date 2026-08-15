@@ -203,6 +203,17 @@ down ─────────────────────────
 - **边界**：Home 不覆盖 `rootCamera`——从文件夹返回仍恢复进文件夹前的视角，Home 只负责「现在」的空间锚点。
 - **切换动画**：视角切换为平滑飞行——`lerpCentered` 单一连续飞行曲线（van Wijk & Nuij 平滑 zoom-pan 算法，Leaflet `flyTo` 同款数学：tanh 曲线走 center + cosh 曲线走 zoom；远距离放大时先 zoom-out 让路再 zoom-in，近距离放大/缩放下 zoom 单调），400ms RAF 驱动。zoom 变化走 easeOut 弧长参数化（起步轻快、收尾平滑，Leaflet 同款手感），zoom 不变退化为 easeInOutCubic 与 `lerp` 一致（纯平移，缓入缓出）。无分段（不断续）、无骤停（不震）、数学上屏幕内图标**中心点**全程不出界。动画中开始手势（`onGestureStart`）或目录切换（`applyCameraForPath`）即打断，手势直控优先，动画永不与手势抢相机。
 
+## 7.6 高级浏览模式（阶段 E 定稿）
+
+**定位**：一种「浏览优先」的相机操控模式——把单指拖动从「框选/拿起」切换为「平移画布（桌面）/ 滚动目录（文件夹）」，适合查看大量文件时单手浏览；需要精细操作（框选、拖移）时可临时切回普通语义，不必反复开关。
+
+- **开关**：顶栏「排列与视图」菜单底部「高级浏览模式」勾选项（`.view-menu-browse`，`data-browse="advanced"`）。**始终可用**——根目录下其余菜单项置灰（`setEnabled(false)`）时，本项走独立处理器 `_onBrowseToggle`，不受 `_enabled` 限制。
+- **生效条件（effective）**：`effective = 高级浏览 ON && 非临时操作模式`。`syncBrowseMode()` 同步到手势层 `App.DesktopGesture.setBrowseMode(effective)`。任一条件不满足 → 手势回退普通语义。
+- **单指拖动 → pan 而非框选**：`_browseMode` 为真时，单指 move 超阈值（`> 6px`）且命中 `empty`（空白）或 `icon`（未选中图标）→ 进入 `pan` 相位（`pan-start` / `pan`），而非 `marquee` 框选。桌面空间 = 平移画布（world 坐标）；文件夹容器 = 滚动目录（沿用 §7.4 的 y 钳制 + x/zoom 锁）。命中 `selected`（已选中文件）仍走 `dragmove` 拿起移动——浏览模式不改变「拖已选中项」的移动语义。
+- **双击空白 → 临时操作模式**：高级浏览 ON 时，双击空白（300ms 双击窗口内二击无图标位置）→ 切换 `_tempNormalMode` 进入/退出「临时操作模式」（toast + 震动反馈）。进入临时模式时 `effective = false`，单指拖动恢复框选/拿起语义，方便临时做选择；再次双击空白退出，回到纯浏览 pan。打断条件（`exitTempMode`）：返回 / 打开 Drawer / 目录导航 / 再次双击空白。
+- **偏好持久化**：`view-store.js` 的 `advancedBrowse`（默认 `false`，缺失/非法回退 false）。`setAdvancedBrowse(on)` 切换时合并写入 `ViewStore.save`，写入失败 toast「浏览模式保存失败」；启动时 `initLayout` 读回 `_advancedBrowse = !!prefs.advancedBrowse` 并同步到手势层。
+- **与阶段 D 的关系**：浏览模式只改手势语义，不触碰位置持久化；进入/退出浏览模式不改变相机与图标世界坐标。
+
 ## 8. 位置持久化（当前：localStorage 临时方案）
 
 - 存 `localStorage['desktop.layout.v1']`（模块 `layout-store.js`）：
@@ -227,6 +238,7 @@ down ─────────────────────────
 | B 选择+移动 | 单击选中/反选 + 框选 + 长按拿起拖移 + FAB 自动展开操作栏 | 单选/框选/拖移正常 |
 | C 打开+操作 | 双击打开 + 操作栏动作（重命名/复制/剪切/粘贴，桥 `copy` 新增） | 双击开、操作栏可用、粘贴落盘 |
 | D 持久化 | `.desktop-layout.json` 读写 | 重启恢复视角与摆放 |
+| E 高级浏览 | view-menu 勾选开关 + 单指拖动任意位置平移/滚动 + 双击空白临时操作模式 + 偏好持久化（`view-store.js` `advancedBrowse`） | 开关生效、单指拖动平移、双击空白切换临时模式、重启记忆偏好 |
 
 ## 10. 手势冲突边界
 

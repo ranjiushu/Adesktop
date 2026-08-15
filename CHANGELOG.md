@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### 工程（治理移植，2026-08-15）
+
+- 分支治理升级为三级模型 `main ← feat/dev ← topic`：`feat/infinite-canvas` 并入
+  成为首个开发基线并退休；`tools/branch-retire.sh` + `.git/branch-graveyard` 墓地
+  机制（复活被 pre-commit/pre-push 拦截）
+- 钩子三防线扩展：pre-commit 墓地拦截、pre-push 墓地复活 + main 非 merge 直推拦截、
+  post-commit 领先 main ≥50 预警
+- 提交前门禁升级 `tools/verify.sh`：env-check → build --strict → minify → lint →
+  测试套件 → E2E×5（home/drawer/bottom-bar/buildinfo/fab-inspector 既有资产接入），
+  机器可读 PASS/FAIL 摘要
+- 新增 `tools/lint.sh`：构建一致性 / 文档链接 / CHANGELOG（结构 + 禁 emoji）/
+  头部注释 / var 纪律
+- AGENTS.md 治理升级（P1 纪律补齐、决策触发清单细化）；新增数据纪律文档
+  `docs/data-integrity.md`（文件即真相：元数据统一出口防幽灵 positions、桥层契约）
+- 探针 `probe-repo.sh` 参数化，自动识别 LexiCull / Desktop
+
 ### 已安装应用（Application Shortcut）
 
 - **Shortcut File 契约**（`shortcut.js`）：快捷方式 = 真实文件（`.desktop` 扩展名 + JSON 内容），

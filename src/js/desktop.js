@@ -124,6 +124,11 @@ App.Desktop = (function () {
     return !!state.trashName && state.curPath === state.trashName
   }
 
+  // 拖动组是否包含回收站（允许重定位，禁止移入其他文件夹）
+  function dragIncludesTrash() {
+    return !!state.trashName && dragTargets.indexOf(state.trashName) >= 0
+  }
+
   // 自动排布：
   //   desktop 空间：世界坐标按网格铺开（已有位置优先，位置来自 LayoutStore 持久化）
   //   folder 容器：排序后固定排布（网格 4 列自适应 / 列表单列），不读持久化位置
@@ -209,9 +214,11 @@ App.Desktop = (function () {
       } else {
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor(kind) : (p.item.isDir ? '📁' : '📄')
       }
-      // 应用快捷方式（.desktop）：显示名剥离扩展名（文件即真相，标签更干净）
+      // 应用快捷方式（.desktop）：显示名剥离扩展名；回收站：显示「回收站」（真实名 .trash 隐藏）
       let displayName = p.item.name
-      if (!p.item.isDir && App.Shortcut && App.Shortcut.isShortcutName(p.item.name)) {
+      if (isTrashItem) {
+        displayName = '回收站'
+      } else if (!p.item.isDir && App.Shortcut && App.Shortcut.isShortcutName(p.item.name)) {
         displayName = p.item.name.slice(0, p.item.name.lastIndexOf('.'))
       }
       let name = el('div', 'desktop-icon-name', displayName)
@@ -664,9 +671,9 @@ App.Desktop = (function () {
   // 拿起整个选中组并开始拖（组内相对位置不变）
   function startGroupDrag(world) {
     // 过滤掉 positions/bounds 缺失的幽灵项（文件已删/不可见），避免访问 undefined 中断拖动；
-    // 回收站不可拖动（锚定根目录，排除出 dragTargets）
+    // 回收站可重定位（拖到空白处改布局位置），但不可移入其他文件夹（handleDrop 守卫）
     dragTargets = Array.from(selection).filter(function (n) {
-      return positions[n] && bounds[n] && !isTrashPath(n)
+      return positions[n] && bounds[n]
     })
     dragStartWorld = { x: world.x, y: world.y }
     dragStartPositions = {}
@@ -763,7 +770,7 @@ App.Desktop = (function () {
     })
     if (App.Loading && typeof App.Loading.showTag === 'function') {
       const hit = folderHitAt(world)
-      if (hit) {
+      if (hit && !dragIncludesTrash()) {
         if (isTrashPath(hit)) {
           App.Loading.showTag('将移入回收站')
         } else {
@@ -865,7 +872,8 @@ App.Desktop = (function () {
     // 拖入文件夹：手指下命中文件夹 → 移动文件到文件夹（移动语义，非吸附）
     if (moved && !isFolderView()) {
       const hit = folderHitAt(world)
-      if (hit) {
+      // 回收站不可移入其他文件夹（锚定根目录）；命中文件夹时仍按重定位处理（不 moveIntoFolder）
+      if (hit && !dragIncludesTrash()) {
         // 锁定文件（正在预览）禁止移动
         if (lockedMoveBlocked()) {
           dragTargets.forEach(function (n) { setPickedUp(n, false) })

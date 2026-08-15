@@ -920,8 +920,10 @@ App.Desktop = (function () {
       })
       // 2. 静止图标（非移动组）
       const movingSet = new Set(dragTargets)
+      // 静止图标仅取当前视图内的（bounds 是权威）；positions 可能残留子文件夹 key，
+      // 过滤掉 bounds 未命中项，避免 resolvePlacement 结果里出现无 bounds 的幽灵条目
       const statics = Object.keys(positions).filter(function (n) {
-        return !movingSet.has(n)
+        return !movingSet.has(n) && bounds[n]
       }).map(function (n) {
         return { name: n, x: positions[n].x, y: positions[n].y }
       })
@@ -1024,7 +1026,11 @@ App.Desktop = (function () {
           items.forEach(function (it) { valid[fullPath(it.name)] = true })
           Object.keys(positions).forEach(function (key) {
             const inCur = key.indexOf('/') < 0
-            if (inCur && !valid[key]) delete positions[key]
+            if (!inCur) {
+              delete positions[key]        // 子文件夹 key 残留清理（folder 自动排布，非桌面布局）
+            } else if (!valid[key]) {
+              delete positions[key]        // 根级失效 key（文件已删）
+            }
           })
         }
         render()

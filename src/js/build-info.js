@@ -197,9 +197,16 @@ App.BuildInfo = (function () {
       chips[i].addEventListener('click', function () {
         let cached = _barOptsCache[bodyId]
         if (!cached) return
-        cached.sortKey = this.getAttribute('data-sort')
+        let newKey = this.getAttribute('data-sort')
+        if (newKey === cached.sortKey) return
+        // 关键：sortKey 必须写回 opts（renderBarList 只读 opts.sortKey），
+        // 否则重渲染仍按旧键排序——「切换排列方式标签不工作」的根因
+        cached.sortKey = newKey
+        cached.opts.sortKey = newKey
         let box = document.getElementById(bodyId)
-        if (box) box.innerHTML = renderBarList(cached.items, cached.opts).replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '')
+        if (box) {
+          box.innerHTML = renderBarList(cached.items, cached.opts).replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '')
+        }
         bindExpandToggle(cached.opts.toggleId, '.' + cached.opts.rowClass, 8)
         bindSortChips(bodyId)
       })

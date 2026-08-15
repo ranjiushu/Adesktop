@@ -29,7 +29,7 @@
 - **类型图标系统**（`type-icons.js` + `type-icons.css`）：按文件名/目录判定 18 类语义
   （folder/trash/text/markdown/json/html/code/image/video/audio/archive/pdf/word/excel/
   ppt/font/executable/unknown），返回内联 SVG（stroke=currentColor，Feather 风格零依赖），
-  替换原 emoji 📁/📄/🗑️
+  替换原 emoji 图标（文件夹/文档/回收站）
 - **类型语义色**：同一形态（如 fileText）下靠颜色区分相近类型（text 蓝 / md 紫 / json 橙 /
   code 青 / image 绿 / pdf 红 / archive 黄褐 …），`.type-icon.type-{kind}` 控制 currentColor
 - **缩略图服务（ThumbnailService，`thumbnail.js`）**：与 Desktop 核心引擎解耦——File 对象
@@ -55,7 +55,7 @@
   其他文件管理器也能直接看到/取回
 - **删除 = 移入回收站**（安全删除，不做彻底删除）：`actions.deleteSelection` 复用移动
   管道（copy+del 源，SAF 无跨目录 rename），重名自动加序号、两阶段进度、复制失败保留源
-- **回收站图标渲染**：根目录特判 `🗑️` + `is-trash` 次色名（区别于普通 📁 文件夹），
+- **回收站图标渲染**：根目录特判回收站图标 + `is-trash` 次色名（区别于普通文件夹图标），
   子文件夹视图不渲染（回收站只锚定根目录）
 - **拖入回收站**：复用拖入文件夹命中逻辑，实时标签显示「将移入回收站」（而非
   「移入 XXX 文件夹」）
@@ -82,7 +82,7 @@
   桌面手指依旧有效（不拦截触摸，不创作独立交互模型），DOM 遮挡使其背后的文件点不到
 - **实体基本性质**：点击 Viewer = 选中实体（脆弱/临时：点外部取消选中，Viewer 保持打开）；
   长按/拖动 = 移动实体位置（世界坐标位移，取消还原）；点击不穿透
-- **文件锁定（Windows 式）**：被 Viewer 打开的文件 🔒 锁定——禁止复制/剪切/重命名/
+- **文件锁定（Windows 式）**：被 Viewer 打开的文件锁定——禁止复制/剪切/重命名/
   移动（拖入文件夹），拖动摆放（改布局位置）仍可；关闭 Viewer 即解除
 - **全屏 = 相册式独立新页面**（#viewer-fs-page：媒体黑底 contain 居中 / 文档浅色阅读，
   不绑定 Viewer 概念）；退出回到原页面状态——桌面空间回画布实体（内容与位置保留），

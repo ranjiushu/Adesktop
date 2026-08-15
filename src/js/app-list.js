@@ -17,6 +17,9 @@ App.AppList = (function () {
   let _apps = null          // 缓存 [{package, label, isSystem}]
   let _query = ''
   let _pending = null       // 待确认添加的 app
+  let _iconCache = {}       // package → data URI（列表图标缓存）
+  let _iconObserver = null  // IntersectionObserver（懒加载列表图标）
+  let _iconBody = null      // 列表滚动容器（Observer root）
 
   function _getEl(id) { return document.getElementById(id) }
 
@@ -65,9 +68,56 @@ App.AppList = (function () {
     return html
   }
 
+  function _setAvatarImg(avatar, uri) {
+    if (!avatar || !uri) return
+    const img = document.createElement('img')
+    img.className = 'app-list-icon'
+    img.alt = ''
+    img.decoding = 'async'
+    img.onerror = function () { /* 保持字母头像 */ }
+    img.src = uri
+    avatar.innerHTML = ''
+    avatar.appendChild(img)
+  }
+
+  function _loadIcon(pkg, avatar) {
+    if (!pkg || !avatar) return
+    if (_iconCache[pkg]) { _setAvatarImg(avatar, _iconCache[pkg]); return }
+    if (!App.FileAPI || typeof App.FileAPI.appIcon !== 'function') return
+    App.FileAPI.appIcon(pkg).then(function (uri) {
+      _iconCache[pkg] = uri
+      _setAvatarImg(avatar, uri)
+    }).catch(function () { /* 保持字母头像 */ })
+  }
+
+  // 懒加载列表图标：IntersectionObserver 只取可视区（+300px 余量）图标，
+  // 数百个系统应用不一次性 base64 传输；无 Observer 环境降级为立即加载。
+  function _attachIcon(row) {
+    const pkg = row.getAttribute('data-package')
+    const avatar = row.querySelector('.app-list-avatar')
+    if (!pkg || !avatar) return
+    if (typeof IntersectionObserver === 'function' && _iconBody) {
+      if (!_iconObserver) {
+        _iconObserver = new IntersectionObserver(function (entries) {
+          for (let i = 0; i < entries.length; i++) {
+            const en = entries[i]
+            if (!en.isIntersecting) continue
+            _iconObserver.unobserve(en.target)
+            const p = en.target.getAttribute('data-package')
+            _loadIcon(p, en.target.querySelector('.app-list-avatar'))
+          }
+        }, { root: _iconBody, rootMargin: '300px' })
+      }
+      _iconObserver.observe(row)
+    } else {
+      _loadIcon(pkg, avatar)
+    }
+  }
+
   function render() {
     const body = _getEl(BODY_ID)
     if (!body) return
+    _iconBody = body
     if (!_apps) {
       body.innerHTML = '<div class="app-list-empty">正在加载应用列表…</div>'
       return
@@ -85,6 +135,7 @@ App.AppList = (function () {
     if (groups.system.length) {
       html += '<div class="app-list-section-title">系统应用</div>' + _rowsHtml(groups.system)
     }
+    if (_iconObserver) { _iconObserver.disconnect(); _iconObserver = null }
     body.innerHTML = html
     const rows = body.querySelectorAll('.app-list-row')
     for (let i = 0; i < rows.length; i++) {
@@ -95,6 +146,7 @@ App.AppList = (function () {
           isSystem: this.getAttribute('data-system') === '1'
         })
       })
+      _attachIcon(rows[i])
     }
   }
 
@@ -124,24 +176,35 @@ App.AppList = (function () {
     return App.Dialog.isOpen(CONFIRM_OVERLAY_ID)
   }
 
-  // ── 写快捷方式文件（根目录，重名自动加序号）──
+  // ── 写快捷方式文件（根目录，重名自动加序号；图标内嵌自包含）──
   function _addShortcut(app) {
-    App.FileAPI.list('').then(function (items) {
-      const stem = App.Shortcut.sanitizeFileName(app.label, app.package)
-      const ext = App.Shortcut.EXT
-      let name = stem + '.' + ext
-      let seq = 2
-      const exists = function (n) {
-        for (let i = 0; i < items.length; i++) {
-          if (items[i].name === n && !items[i].isDir) return true
+    // 先取图标（失败降级无图标），再写文件——图标取不到不影响创建
+    const iconPromise = (App.FileAPI && typeof App.FileAPI.appIcon === 'function')
+      ? App.FileAPI.appIcon(app.package).catch(function () { return null })
+      : Promise.resolve(null)
+    iconPromise.then(function (icon) {
+      return App.FileAPI.list('').then(function (items) {
+        const stem = App.Shortcut.sanitizeFileName(app.label, app.package)
+        const ext = App.Shortcut.EXT
+        let name = stem + '.' + ext
+        let seq = 2
+        const exists = function (n) {
+          for (let i = 0; i < items.length; i++) {
+            if (items[i].name === n && !items[i].isDir) return true
+          }
+          return false
         }
-        return false
-      }
-      while (exists(name)) {
-        name = stem + ' ' + seq + '.' + ext
-        seq++
-      }
-      return App.FileAPI.write(name, App.Shortcut.buildAppShortcut(app)).then(function () { return name })
+        while (exists(name)) {
+          name = stem + ' ' + seq + '.' + ext
+          seq++
+        }
+        return App.FileAPI.write(name, App.Shortcut.buildAppShortcut({
+          package: app.package,
+          label: app.label,
+          isSystem: app.isSystem,
+          icon: icon
+        })).then(function () { return name })
+      })
     }).then(function (name) {
       App.toast.show('已添加快捷方式: ' + name)
       if (App.Desktop && typeof App.Desktop.refresh === 'function') App.Desktop.refresh()

@@ -116,6 +116,14 @@
   font-size: var(--font-size-lg);
   font-weight: 600;
 }
+/* 应用真实图标（懒加载替换字母头像） */
+.app-list-avatar .app-list-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
 .app-list-meta {
   flex: 1;
   min-width: 0;

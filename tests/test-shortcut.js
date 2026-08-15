@@ -53,6 +53,9 @@ check(threw, '未知 type 抛错')
 const fallbackMeta = S.parseShortcut(JSON.stringify({ type: 'application', package: 'com.x.y' }))
 check(fallbackMeta.label === 'com.x.y', 'application 缺 label 回退 package')
 
+const iconMeta = S.parseShortcut(JSON.stringify({ type: 'application', package: 'a.b', icon: 'data:image/png;base64,xx' }))
+check(iconMeta.icon === 'data:image/png;base64,xx', 'application 解析 icon 字段')
+
 // ── parseShortcut: file（预留） ──
 const fm = S.parseShortcut(JSON.stringify({ type: 'file', label: 'a.pdf', uri: 'content://x' }))
 check(fm.type === 'file' && fm.uri === 'content://x', 'file 类型预留解析')
@@ -62,6 +65,11 @@ const built = S.buildAppShortcut({ package: 'a.b', label: 'A', isSystem: true })
 check(built.indexOf('"type":"application"') >= 0, 'buildAppShortcut 含 type=application')
 check(built.indexOf('"package":"a.b"') >= 0, 'buildAppShortcut 含 package')
 check(built.indexOf('"isSystem":true') >= 0, 'buildAppShortcut 含 isSystem')
+
+const builtIcon = S.buildAppShortcut({ package: 'a.b', label: 'A', icon: 'data:image/png;base64,yy' })
+check(builtIcon.indexOf('"icon":"data:image/png;base64,yy"') >= 0, 'buildAppShortcut 内嵌 icon')
+const builtNoIcon = S.buildAppShortcut({ package: 'a.b', label: 'A' })
+check(builtNoIcon.indexOf('"icon"') < 0, 'buildAppShortcut 无 icon 不写入字段')
 
 // ── sanitizeFileName ──
 check(S.sanitizeFileName('微信', 'fb') === '微信', '普通中文标签保留')

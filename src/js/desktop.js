@@ -194,6 +194,12 @@ App.Desktop = (function () {
       const kind = App.TypeIcons ? App.TypeIcons.kindFor(p.item.name, p.item.isDir) : 'unknown'
       if (isTrashItem) {
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor('trash') : '🗑️'
+      } else if (kind === 'shortcut' && App.Thumbnail && typeof App.Thumbnail.requestShortcutIcon === 'function') {
+        // 应用快捷方式：类型图标兜底 → 读内嵌 base64 图标渐进替换（自包含，随文件迁移）
+        icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor('shortcut') : '📄'
+        App.Thumbnail.requestShortcutIcon(p.key, function (uri) {
+          if (icon.parentNode) setThumbImg(icon, uri, kind)
+        }, function () { /* 失败：保持类型图标 */ })
       } else if (App.Thumbnail && App.Thumbnail.canThumbnail(kind)) {
         // 先类型图标（fallback 基线），异步请求缩略图，成功替换（渐进式：类型图标 → 真缩略图）
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor(kind) : '📄'

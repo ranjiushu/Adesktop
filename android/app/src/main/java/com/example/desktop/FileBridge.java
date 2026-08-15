@@ -13,6 +13,9 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
@@ -27,6 +30,7 @@ import androidx.documentfile.provider.DocumentFile;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -692,6 +696,55 @@ public class FileBridge {
                 resolveErr(cbId, "无法启动应用: " + (e.getMessage() == null ? pkg : e.getMessage()));
             }
         });
+    }
+
+    /* 获取应用图标：PackageManager 加载 Drawable → 缩放到 48dp → PNG → base64 data URI。
+     * 供前端列表渐进式展示 + 写入快捷方式 JSON（自包含，可随文件迁移）。 */
+    @JavascriptInterface
+    public void appIcon(String pkg, String cbId) {
+        if (pkg == null || pkg.trim().isEmpty()) {
+            resolveErr(cbId, "应用包名无效");
+            return;
+        }
+        executor.execute(() -> {
+            try {
+                Drawable d = activity.getPackageManager().getApplicationIcon(pkg);
+                Bitmap bmp;
+                if (d instanceof BitmapDrawable) {
+                    bmp = ((BitmapDrawable) d).getBitmap();
+                } else {
+                    bmp = drawableToBitmap(d);
+                }
+                Bitmap scaled = scaleToIcon(bmp);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                scaled.compress(Bitmap.CompressFormat.PNG, 100, baos);
+                String b64 = android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP);
+                resolveOk(cbId, "data:image/png;base64," + b64);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /** 非 BitmapDrawable 的 Drawable（如 AdaptiveIconDrawable/矢量）→ 绘制到位图 */
+    private Bitmap drawableToBitmap(Drawable d) {
+        int w = d.getIntrinsicWidth(), h = d.getIntrinsicHeight();
+        if (w <= 0) w = 96;
+        if (h <= 0) h = 96;
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+        d.setBounds(0, 0, w, h);
+        d.draw(canvas);
+        return bmp;
+    }
+
+    /** 缩放到 48dp（应用图标标准尺寸），控制 base64 体积；已达标原样返回 */
+    private Bitmap scaleToIcon(Bitmap src) {
+        float density = activity.getResources().getDisplayMetrics().density;
+        int target = Math.max(1, Math.round(48 * density));
+        int w = src.getWidth(), h = src.getHeight();
+        if (w == target && h == target) return src;
+        return Bitmap.createScaledBitmap(src, target, target, true);
     }
 
     /* ── 缩略图 ──

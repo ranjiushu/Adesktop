@@ -9,7 +9,9 @@
  *       · 失败缓存（failed）→ 立即 onFallback()
  *       · 未命中 → 先回退类型图标，异步桥层 thumb（采样/帧提取/磁盘缓存）+ 解码验证，成功后 onReady
  *       · 同一路径并发请求合并（pending 去重），避免重复 thumb / 解码
- * 依赖: namespace.js, file-api.js
+ *   - requestShortcutIcon(path, onReady, onFallback)：快捷方式图标（.desktop 内嵌 base64）
+ *       · 读 JSON → App.Shortcut.parseShortcut → 取 icon（data URI）→ 解码验证 → onReady
+ * 依赖: namespace.js, file-api.js, shortcut.js
  * 导出: App.Thumbnail
  */
 'use strict'
@@ -17,6 +19,8 @@
 App.Thumbnail = (function () {
   // path -> { state: 'pending'|'ready'|'failed', uri, waiters: [{ok,fail}] }
   let entries = {}
+  // path -> 同上（快捷方式图标缓存，与缩略图分池）
+  let shortcutEntries = {}
 
   // 可缩略图类型：图片（采样解码，含 SVG 渲染预览 / GIF 首帧）+ 视频（首帧提取）。
   // 桥层 FileBridge.thumb 统一处理采样 / 帧提取 / 磁盘缓存（内存可控）。
@@ -64,8 +68,54 @@ App.Thumbnail = (function () {
     })
   }
 
+  // 快捷方式图标：读 .desktop JSON → 提取内嵌 base64 icon → 解码验证 → onReady。
+  // 与缩略图同一「渐进式 + pending 去重」模型；失败回退类型图标。
+  function requestShortcutIcon(path, onReady, onFallback) {
+    const e = shortcutEntries[path]
+    if (e) {
+      if (e.state === 'ready') { onReady(e.uri); return }
+      if (e.state === 'failed') { onFallback(); return }
+      e.waiters.push({ ok: onReady, fail: onFallback })
+      return
+    }
+    const entry = { state: 'pending', uri: null, waiters: [{ ok: onReady, fail: onFallback }] }
+    shortcutEntries[path] = entry
+    generateShortcutIcon(path, entry)
+  }
+
+  function generateShortcutIcon(path, entry) {
+    App.FileAPI.read(path).then(function (content) {
+      const meta = App.Shortcut.parseShortcut(content)
+      const uri = meta.icon
+      if (!uri || typeof uri !== 'string' || uri.indexOf('data:image/') !== 0) {
+        throw new Error('快捷方式无图标')
+      }
+      const img = new Image()
+      img.onload = function () {
+        entry.state = 'ready'
+        entry.uri = uri
+        const ws = entry.waiters
+        entry.waiters = []
+        ws.forEach(function (w) { w.ok(uri) })
+      }
+      img.onerror = function () {
+        entry.state = 'failed'
+        const ws = entry.waiters
+        entry.waiters = []
+        ws.forEach(function (w) { w.fail() })
+      }
+      img.src = uri
+    }).catch(function () {
+      entry.state = 'failed'
+      const ws = entry.waiters
+      entry.waiters = []
+      ws.forEach(function (w) { w.fail() })
+    })
+  }
+
   return {
     canThumbnail: canThumbnail,
-    request: request
+    request: request,
+    requestShortcutIcon: requestShortcutIcon
   }
 })()

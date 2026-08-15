@@ -64,6 +64,8 @@ App.FileAPI = (function () {
     listApps: function () { return call('listApps', []) },
     // 启动指定包名应用（getLaunchIntentForPackage + startActivity）
     launchApp: function (pkg) { return call('launchApp', [pkg]) },
+    // 应用图标：PackageManager Drawable → base64 data URI（列表/快捷方式展示用）
+    appIcon: function (pkg) { return call('appIcon', [pkg]) },
     hasBridge: function () { return !!window.FileBridge }
   }
 })()

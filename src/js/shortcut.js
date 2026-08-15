@@ -42,7 +42,8 @@ App.Shortcut = (function () {
         version: typeof obj.version === 'number' ? obj.version : 1,
         package: obj.package.trim(),
         label: typeof obj.label === 'string' && obj.label ? obj.label : obj.package,
-        isSystem: !!obj.isSystem
+        isSystem: !!obj.isSystem,
+        icon: typeof obj.icon === 'string' && obj.icon ? obj.icon : null
       }
     }
     if (type === 'file') {
@@ -53,14 +54,17 @@ App.Shortcut = (function () {
   }
 
   // 构建 Application Shortcut 的 JSON 文本（写入文件用）。
+  // icon 可选（base64 data URI）：内嵌后快捷方式自包含，可随文件迁移。
   function buildAppShortcut(app) {
-    return JSON.stringify({
+    const obj = {
       type: 'application',
       version: SCHEMA_VERSION,
       package: app.package,
       label: app.label || app.package,
       isSystem: !!app.isSystem
-    })
+    }
+    if (app.icon && typeof app.icon === 'string') obj.icon = app.icon
+    return JSON.stringify(obj)
   }
 
   // 标签 → 安全文件名主名（剥离路径分隔符/非法字符/控制字符/首尾点/折叠空白）。

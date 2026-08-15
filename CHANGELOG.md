@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### 类型图标系统（Type Icons）
+
+- **类型图标系统**（`type-icons.js` + `type-icons.css`）：按文件名/目录判定 18 类语义
+  （folder/trash/text/markdown/json/html/code/image/video/audio/archive/pdf/word/excel/
+  ppt/font/executable/unknown），返回内联 SVG（stroke=currentColor，Feather 风格零依赖），
+  替换原 emoji 📁/📄/🗑️
+- **类型语义色**：同一形态（如 fileText）下靠颜色区分相近类型（text 蓝 / md 紫 / json 橙 /
+  code 青 / image 绿 / pdf 红 / archive 黄褐 …），`.type-icon.type-{kind}` 控制 currentColor
+- **位图缩略图**：`canThumbnail` 只对位图图片（jpg/png/webp/gif/bmp/ico/heic/heif/avif）
+  返回 true，渲染层 `resolveUri` → `<img class="desktop-icon-thumb">`（object-fit: cover）；
+  SVG 矢量用类型图标（不缩略图）
+- **失败回退**：resolveUri 失败（reject）或 img 加载失败（onerror）均回退类型图标；
+  URI 结果缓存（uriCache）避免每次 refresh 重复桥调用
+- 测试：`test-type-icons`（类型判定/缩略图判定/SVG 生成），无头 E2E
+  `tools/ui/type-icons-verify.js`（类型 SVG + 缩略图三路径：成功/reject 回退/onerror 回退）
+
 ### 回收站（安全删除）
 
 - **回收站 = 根目录下的真实隐藏文件夹 `.trash`**（文件即真相）：桥层 `rootInfo` 幂等

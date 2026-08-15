@@ -49,6 +49,7 @@ App.Desktop = (function () {
   let bounds = {}      // fullPath → {x, y, w, h}（世界坐标 AABB，命中测试用）
   let selection = new Set()
   let iconEls = {}     // fullPath → DOM 元素
+  let uriCache = {}    // fullPath → 媒体 URI（缩略图 resolveUri 结果缓存，避免重复桥调用）
   let dragTargets = []        // 移动的图标 fullPath 列表（组移动）
   let dragStartWorld = null   // 手指起始世界坐标
   let dragStartPositions = {} // fullPath → 起始世界坐标（保持组内相对位置）
@@ -67,6 +68,38 @@ App.Desktop = (function () {
     if (className) node.className = className
     if (text != null) node.textContent = text
     return node
+  }
+
+  // 缩略图渲染：位图图片先显示类型图标（回退基线），resolveUri 成功后替换为 <img>；
+  // 加载失败（onerror）回退类型图标。URI 结果缓存，避免每次 refresh 重复桥调用。
+  function setThumbImg(iconEl, uri, kind) {
+    const img = document.createElement('img')
+    img.className = 'desktop-icon-thumb'
+    img.alt = ''
+    img.decoding = 'async'
+    img.onerror = function () {
+      if (iconEl && iconEl.parentNode) {
+        iconEl.innerHTML = App.TypeIcons.svgFor(kind)
+      }
+    }
+    img.src = uri
+    iconEl.innerHTML = ''
+    iconEl.appendChild(img)
+  }
+
+  function renderThumb(iconEl, path, kind) {
+    iconEl.innerHTML = App.TypeIcons.svgFor(kind)
+    const cached = uriCache[path]
+    if (cached) {
+      setThumbImg(iconEl, cached, kind)
+      return
+    }
+    App.FileAPI.resolveUri(path).then(function (uri) {
+      uriCache[path] = uri
+      setThumbImg(iconEl, uri, kind)
+    }).catch(function () {
+      // resolveUri 失败：保持已渲染的类型图标
+    })
   }
 
   function viewportWidth() {
@@ -173,7 +206,15 @@ App.Desktop = (function () {
       if (App.Clipboard && App.Clipboard.isCut(p.key)) {
         card.classList.add('clip-cut')
       }
-      let icon = el('div', 'desktop-icon-glyph', isTrashItem ? '🗑️' : (p.item.isDir ? '📁' : '📄'))
+      let icon = el('div', 'desktop-icon-glyph')
+      const kind = App.TypeIcons ? App.TypeIcons.kindFor(p.item.name, p.item.isDir) : 'unknown'
+      if (isTrashItem) {
+        icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor('trash') : '🗑️'
+      } else if (App.TypeIcons && App.TypeIcons.canThumbnail(p.item.name)) {
+        renderThumb(icon, p.key, kind)
+      } else {
+        icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor(kind) : (p.item.isDir ? '📁' : '📄')
+      }
       let name = el('div', 'desktop-icon-name', p.item.name)
       card.appendChild(icon)
       card.appendChild(name)

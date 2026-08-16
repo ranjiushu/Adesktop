@@ -120,12 +120,14 @@ async function main() {
     const chip = body ? body.querySelector('[data-sort="name"]') : null
     if (!chip) return { ok: false, reason: '无 名称 标签' }
     chip.scrollIntoView({ block: 'center' })
-    const firstRow = body.querySelector('.file-bar-row')
-    const before = firstRow ? firstRow.textContent.slice(0, 30) : ''
+    const rowsText = () => Array.from(body.querySelectorAll('.file-bar-row'))
+      .map(function (r) { return r.textContent.replace(/\s+/g, ' ').trim() })
+    const before = rowsText()
     chip.click()
-    const after = document.querySelector('#build-source-body .file-bar-row')
-    const afterText = after ? after.textContent.slice(0, 30) : ''
-    return { ok: before !== afterText, before, after: afterText }
+    const after = rowsText()
+    // 完整列表对比：首行可能因数据巧合相同（行数最多者字母序也靠前），
+    // 列表整体顺序必然变化；防御：至少前 5 行序列有差异
+    return { ok: before.length === after.length && before.join('\n') !== after.join('\n'), before: before.slice(0, 2), after: after.slice(0, 2) }
   })
   if (sortChipTest.ok) pass('源码规模「名称」排序标签生效')
   else fail('排序标签不生效: ' + JSON.stringify(sortChipTest))

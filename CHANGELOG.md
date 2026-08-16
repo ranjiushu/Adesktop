@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 画布缩放范围放宽 0.4~2.5 → 0.3~3（2026-08-16）
+
+- `desktop-camera.js`：`ZOOM_MIN` 0.4 → 0.3、`ZOOM_MAX` 2.5 → 3（双指缩放/相机
+  创建/动画端点统一过 `clampZoom`）
+- 测试同步：`test-desktop-camera.js` 边界断言（0.3/3）、`test-desktop-gesture-dom.js`
+  捏合 clamp 断言 scale(3)、`scripts/verify-home.js` 4c 注释修正为实际 zoom ≈2.56
+  （旧上限 2.5 时被 clamp，新上限 3 下不再截断）
+- 文档同步：`docs/interaction.md`（缩放范围 0.3 ~ 3 ×2 处）、
+  `docs/bridge-and-data-contract.md`（`[0.3, 3]`）
+
 ### Viewer media 文件名栏改覆盖式（2026-08-16）
 
 - **media 类（image/video/svg）文件名栏 = absolute 覆盖在卡片底部**：不参与 flex 占位，

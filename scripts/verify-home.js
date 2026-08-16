@@ -238,10 +238,10 @@ async function main() {
   // ── 4c. zoom 变化回 Home：缩小场景动画全程图标不出界（防「甩出屏幕再拉回」）──
   // 背景：同进度插值（zoom 与屏幕中心点共用同一缓动）时图标屏幕位置 = (P-W)·z 中途
   // 出现极值，边缘图标被推出视口再拉回（单测扫描复现出界 120px）。三段式修复后
-  // 全程不出界。本场景：捏合放大偏离（zoom 2.5）→ 点按 Home（快照 zoom 1.60）→
-  // 动画 400ms 内逐帧采样所有图标矩形，断言中心点始终在 viewport 内。
+  // 全程不出界。本场景：捏合放大偏离（快照 1.60 × 1.6 = zoom ≈2.56）→ 点按 Home
+  // （快照 zoom 1.60）→ 动画 400ms 内逐帧采样所有图标矩形，断言中心点始终在 viewport 内。
   await pan(client, vp.x, vp.y + 200, 160, 0)      // 大幅平移偏离
-  await pinchIn(client, vp.x, vp.y + 200)          // 捏合放大（zoom 2.5）
+  await pinchIn(client, vp.x, vp.y + 200)          // 捏合放大（zoom ≈2.56）
   await sleep(400)
   const tZoomed = parseTransform(await canvasTransform(page))
   // 动画前基线：记录各图标中心点（起点）

@@ -75,21 +75,28 @@ App.Actions = (function () {
   }
 
   // ── 阶段 C：重命名（单选才可用，调用方校验）──
-  // oldPath/newPath 均为完整相对路径（选中集合以完整路径为 key，FileAPI 桥天然匹配）。
+  // oldPath = 完整相对路径；newName = 纯文件名（重命名限同目录，领域语义见
+  //   docs/operation-contract.md 2.2；跨目录 = move，走 _transfer 管道，不走 rename）。
   // 重名预检：list 目标目录（oldPath 父目录，防跨目录调用检查错位置），
   // 存在同名项即拒绝——SAF renameTo 同名失败、私有模式 File.renameTo 同名行为
   // 平台相关（可能静默覆盖），两模式行为必须一致：先查后改。
   // 锁定文件（正在预览）拒绝重命名。
-  function rename(oldPath, newPath) {
-    if (!oldPath || !newPath || oldPath === newPath) return
+  function rename(oldPath, newName) {
+    if (!oldPath || !newName || oldPath === newName) return
+    // 重命名限同目录（领域语义）：newName 必须为纯文件名，不得含路径分隔符。
+    // 跨目录 = move 管道（_transfer），不走 rename——桥层同样拦截（两后端一致，见
+    // docs/operation-contract.md 2.2）。防路径注入：'sub/b.txt' 这类输入直接拒绝。
+    if (newName.indexOf('/') >= 0) {
+      App.toast.show('重命名失败: 名称不能包含路径分隔符')
+      return
+    }
     if (_isLocked(oldPath)) {
       App.toast.show('文件正在预览（锁定），不可重命名')
       return
     }
-    const newName = newPath.indexOf('/') >= 0
-      ? newPath.slice(newPath.lastIndexOf('/') + 1) : newPath
     const targetDir = oldPath.indexOf('/') >= 0
       ? oldPath.slice(0, oldPath.lastIndexOf('/')) : ''
+    const newPath = targetDir ? targetDir + '/' + newName : newName
     App.FileAPI.list(targetDir).then(function (items) {
       for (let i = 0; i < items.length; i++) {
         if (items[i].name === newName) {

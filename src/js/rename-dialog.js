@@ -55,13 +55,9 @@ App.RenameDialog = (function () {
       App.toast.show('名称未变化')
       return
     }
-    // 拼完整新路径：保留旧路径所在目录（重命名不跨目录）
-    let newPath = newName
-    if (target.indexOf('/') >= 0) {
-      const i = target.lastIndexOf('/')
-      newPath = target.slice(0, i + 1) + newName
-    }
-    App.Actions.rename(target, newPath)
+    // 重命名限同目录：newName 为纯文件名，目标目录由 Actions.rename 内部从 oldPath 推导
+    //（领域语义见 operation-contract.md 2.2；跨目录 = move 管道，不走 rename）
+    App.Actions.rename(target, newName)
   }
 
   function init() {

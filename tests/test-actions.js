@@ -204,14 +204,31 @@ async function main() {
   check(calls.toasts.some(function (t) { return t.indexOf('重命名失败') === 0 }),
     'rename 重名 → toast 失败（含原因）')
 
-  // ── 子目录内重命名：预检查目标目录（oldPath 父目录），非当前目录 ──
-  resetCalls(); listResult = []   // docs 下无同名 → 通过
-  A.rename('docs/a.txt', 'docs/b.txt')
+  // ── [P1] 重命名限同目录：子目录文件 → newName 为纯文件名，桥收到同目录完整路径 ──
+  resetCalls(); listResult = []
+  A.rename('docs/a.txt', 'b.txt')
   await tick()
   check(calls.list.length === 1 && calls.list[0] === 'docs',
-    'rename 子目录 → 预检 list(docs)（目标目录）')
+    'rename 子目录 → 预检 list(docs)（oldPath 父目录）')
   check(calls.rename.some(function (c) { return c[0] === 'docs/a.txt' && c[1] === 'docs/b.txt' }),
-    'rename 子目录无冲突 → 桥调用完整路径')
+    'rename(docs/a.txt, b.txt) → 桥收到 docs/b.txt（同目录，内部拼完整路径）')
+
+  // ── [P1] 重命名限同目录：newName 含路径分隔符 → 拒绝，不调桥 ──
+  // 防跨目录改名绕过 move 管道（桥层同样拦截，两后端一致）
+  resetCalls(); listResult = []
+  A.rename('a.txt', 'sub/b.txt')
+  await tick()
+  check(calls.rename.length === 0, 'rename newName 含 / → 桥 rename 不被调用')
+  check(calls.applyRename === 0, 'rename newName 含 / → applyRename 不被调用')
+  check(calls.toasts.some(function (t) { return t.indexOf('重命名失败') === 0 }),
+    'rename newName 含 / → toast 重命名失败')
+
+  // ── [P1] 重命名：newName 为空 → 直接拒绝，不调桥 ──
+  resetCalls(); listResult = []
+  A.rename('a.txt', '')
+  await tick()
+  check(calls.rename.length === 0 && calls.applyRename === 0,
+    'rename newName 为空 → 桥 rename/applyRename 均不调用')
 
   // ── 复制：只写剪贴板，文件不动 ──
   resetCalls(); C.clear()

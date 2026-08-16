@@ -161,6 +161,14 @@ class FileStore {
     boolean rename(String oldPath, String newPath) throws IOException {
         Object resolved = ctx.resolve(oldPath);
         if (!BridgeContext.isSafeRelPath(newPath)) throw new IOException("非法路径: " + newPath);
+        // 重命名限同目录（两后端一致，见 docs/operation-contract.md 1.5）：
+        // SAF DocumentFile.renameTo 天然只支持同目录改名；私有模式 File.renameTo 在
+        // newPath 带目录时等于跨目录移动——此处显式拦截，防两后端行为分叉。
+        String oldParent = parentOf(oldPath);
+        String newParent = parentOf(newPath);
+        if (!oldParent.equals(newParent)) {
+            throw new IOException("重命名不能跨目录: " + oldPath + " -> " + newPath);
+        }
         boolean ok;
         if (resolved instanceof DocumentFile) {
             DocumentFile df = (DocumentFile) resolved;
@@ -174,5 +182,11 @@ class FileStore {
         }
         if (!ok) throw new IOException("重命名失败: " + oldPath);
         return true;
+    }
+
+    /** 相对路径的父目录（'' 表示根目录）；'docs/a.txt' → 'docs'，'a.txt' → '' */
+    private static String parentOf(String path) {
+        int i = path.lastIndexOf('/');
+        return i < 0 ? "" : path.substring(0, i);
     }
 }

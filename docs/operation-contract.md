@@ -53,7 +53,7 @@
 |------|-------------|--------------------|--------|
 | 真移动 | `File.renameTo`（O(1) 原子） | `DocumentsContract.moveDocument`（provider 级） | 一致，均失败降级 copy+delete |
 | 降级复制 | 流拷贝 + `setLastModified` 保留 mtime（失败即抛错） | 流拷贝；**无公开 API 设置 mtime** | [P1] **mtime 不一致**（降级路径下排序行为不同） |
-| 重命名 | `File.renameTo`（newPath 可含目录 → **潜伏跨目录移动**） | `DocumentFile.renameTo`（**仅同目录改名**） | [P1] **行为分叉**：前端目前只用同目录重命名未触发，桥契约未禁止 |
+| 重命名 | `File.renameTo`（newPath 含目录 = 跨目录移动） | `DocumentFile.renameTo`（仅同目录改名） | **已收紧（2026-08-17）**：桥层 `FileStore.rename` 校验 newPath 父目录 = oldPath 父目录，跨目录拒绝；JS `Actions.rename(path, newName)` 拒绝含 `/` 的 newName——两后端一致 |
 | 路径校验 | `isUnderPrivateRoot` | `isSafeRelPath` + resolve | 一致 |
 
 结论：**「move(src,dst) 成功后最终 FS 状态一致」在真移动路径成立，在降级复制路径受
@@ -79,13 +79,13 @@ mtime 差异影响**（[P1] 本轮先文档化接受，不引入新机制）。
 
 | 属性 | 契约 |
 |------|------|
-| 输入 | `oldPath`（完整相对路径）、`newPath`（同目录完整相对路径） |
-| 前置 | 单选；目标未被 Viewer 锁定（`_isLocked` 拒绝，含锁定目录内子项）；目标目录**无同名**（重名拒绝，不自动加序号）；`newName` 非空且 ≠ 原名 |
+| 输入 | `oldPath`（完整相对路径）、`newName`（**纯文件名**，重命名限同目录） |
+| 前置 | 单选；`newName` 非空、≠ 原名、**不含路径分隔符**（含 `/` 拒绝——跨目录 = move 管道，不走 rename）；目标未被 Viewer 锁定（`_isLocked` 拒绝，含锁定目录内子项）；目标目录**无同名**（重名拒绝，不自动加序号） |
 | 成功 | 目录内 `oldPath` 消失、`newPath` 出现；布局 key 迁移（positions/bounds/selection 旧 key → 新 key）+ saveLayout + refresh（`applyRename` 内部完成）；toast「已重命名」 |
 | 失败 | 目录不变（桥层失败：SAF renameTo 失败 / 私有 renameTo 失败）；toast「重命名失败」 |
 | 取消 | 无取消（单步操作） |
 | UI 状态 | 锁定文件拒绝时 toast 提示；成功 toast 后对话框关闭 |
-| 后端 | 私有：`File.renameTo`（[P1] newPath 带目录时**可跨目录移动**——潜伏分叉）；SAF：`DocumentFile.renameTo`（仅同目录） |
+| 后端 | 私有：`File.renameTo`（桥层校验父目录一致，跨目录拒绝）；SAF：`DocumentFile.renameTo`（仅同目录）——两后端一致 |
 
 现有测试：`tests/test-desktop-applyrename.js`（布局 key 迁移）、`tests/test-actions.js`（重名拒绝）。
 
@@ -169,7 +169,7 @@ mtime 差异影响**（[P1] 本轮先文档化接受，不引入新机制）。
 | 5 | 取消防抖（cancelTransfer 只发一次） | test-actions.js | 已有 |
 | 6 | **取消后停止调度剩余项（3 以后不再启动）** | test-actions.js [P0] 用例 | **已修（2026-08-17）** |
 | 7 | 唯一入口 uniqueName 三处共用 + planPaste 键改 name | test-clipboard.js / test-actions.js | **已修（2026-08-17）** |
-| 8 | rename 跨目录拒绝（两后端一致） | — | [P1] **待补（第 ④ 步）** |
+| 8 | rename 跨目录拒绝（两后端一致） | test-actions.js（newName 含 / 拒绝）+ FileStore.java 同目录校验 | **已修（2026-08-17）** |
 | 9 | delete 进 .trash 重名加序号 / 回收站自身不可删 / 未授权拒绝 | test-actions.js | 已有 |
 | 10 | open 锁定 / 解锁 | test-desktop-viewerlink-lock.js | 已有 |
 | 11 | SAF/private 双后端等价（Operation Contract Test） | — | [P2] 待评估（Java 侧依赖 Android，建议退化为真机验收矩阵） |

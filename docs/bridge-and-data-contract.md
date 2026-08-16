@@ -26,7 +26,7 @@
 | `FileAPI.write(path, content)` | `write` | `path, content` | `true` | 原子写（临时文件 + rename） |
 | `FileAPI.mkdir(path)` | `mkdir` | `path` | `boolean` | 建目录，返回是否新建 |
 | `FileAPI.del(path)` | `delete` | `path` | `true` | 移入回收站（安全删除，不彻底删） |
-| `FileAPI.rename(old, new)` | `rename` | `oldPath, newPath` | `true` | 重命名 / 移动 |
+| `FileAPI.rename(old, newName)` | `rename` | `oldPath, newPath` | `true` | 重命名（**限同目录**：桥层校验 newPath 父目录 = oldPath 父目录，跨目录拒绝；跨目录 = move） |
 | `FileAPI.copy(src, dst)` | `copy` | `srcPath, dstPath` | `true` | 复制 |
 | `FileAPI.move(src, dst)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+del） |
 | `FileAPI.copy(src, dst, onProgress)` | `copy` | `srcPath, dstPath` | `true` | 复制（onProgress 可选：字节级进度回调） |

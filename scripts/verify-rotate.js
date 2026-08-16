@@ -1,8 +1,8 @@
-// 旋转画布 90° E2E 门禁：CDP 真实触摸序列验证
+// 切换画布方向（旋转 90°）E2E 门禁：CDP 真实触摸序列验证
 // ═══════════════════════════════════════════════════════════════
 //  场景：无头 Chromium（evaluateOnNewDocument 预注入 FileBridge 内存桩，
 //        根目录含 docs 文件夹，boot refresh 即成功）：
-//    1. 顶栏 view-menu 按钮存在；打开菜单出现「旋转画布 90°」项
+//    1. 顶栏 view-menu 按钮存在；打开菜单出现「切换画布方向」项
 //    2. 根目录下旋转项可用（不 disabled）；点击 → canvas transform 出现 rotate(90deg)
 //       + 勾选态 active + 旋转后坐标换算互逆（点击图标仍命中正确世界坐标）
 //    3. 再点一次 → 转回（rotate 消失 + 勾选清除）
@@ -116,7 +116,7 @@ async function main() {
     return { disabled: el.disabled, x: r.left + r.width / 2, y: r.top + r.height / 2 }
   })
   if (!rotateItem) { fail('view-menu 中旋转画布项缺失'); process.exit(1) }
-  pass('view-menu 中「旋转画布 90°」项存在')
+  pass('view-menu 中「切换画布方向」项存在')
   if (!rotateItem.disabled) pass('根目录下旋转项可用')
   else fail('根目录下旋转项应可用（实际 disabled）')
   // 关闭菜单
@@ -211,6 +211,68 @@ async function main() {
     }
   } else {
     fail('根目录 docs 图标未渲染（folder 场景跳过）')
+  }
+
+  // ── 4.5 横屏/竖屏 Home 槽位独立（切换画布方向后各记各的、各回各的）──
+  // 竖屏长按 Home 记录竖屏快照 → 旋转到横屏 → 底栏 Home 高亮应消失（横屏无快照）
+  // → 横屏长按记录横屏快照 → 竖屏/横屏各存各的（landscape* 字段独立）
+  const homeRect = await rect('#bb-btn-home')
+  if (homeRect) {
+    // 竖屏长按 Home 记录快照（底部工具栏 Home 按钮）
+    await tap(client, homeRect.x, homeRect.y, 650)
+    await sleep(300)
+    const snapP = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
+    })
+    if (snapP && snapP.home) pass('竖屏长按 Home → 快照写入顶层 home 槽位')
+    else fail('竖屏快照写入断言', JSON.stringify(snapP))
+    // 旋转到横屏 → 底栏 Home 高亮应消失（横屏槽位尚无快照）
+    await tap(client, menuBtn.x, menuBtn.y)
+    const rot5 = await rect('[data-rotate="toggle"]')
+    await tap(client, rot5.x, rot5.y)
+    await sleep(300)
+    const hasSnapLand = await page.evaluate(() =>
+      document.getElementById('bb-btn-home').classList.contains('home-has-snapshot'))
+    if (!hasSnapLand) pass('切横屏 → Home 高亮消失（横屏槽位独立无快照）')
+    else fail('切横屏后 Home 不应高亮（横屏槽位应独立）')
+    // 横屏长按 Home 记录横屏快照
+    await tap(client, homeRect.x, homeRect.y, 650)
+    await sleep(300)
+    const snapL = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
+    })
+    if (snapL && snapL.landscapeHome) pass('横屏长按 Home → 快照写入 landscapeHome 槽位')
+    else fail('横屏快照写入断言', JSON.stringify(snapL))
+    // 值相同是正常的（两次记录时相机均未平移/缩放）——关键是字段结构独立：
+    // landscapeHome 与 home 是互不覆盖的两个槽位，竖屏更新不影响横屏值
+    if (snapL && snapL.home && snapL.landscapeHome) {
+      pass('竖屏/横屏快照槽位独立（home 与 landscapeHome 字段并存）')
+    } else {
+      fail('竖屏/横屏快照槽位应独立并存', JSON.stringify(snapL))
+    }
+    // 竖屏更新快照 → 横屏槽位保留原值（互不覆盖）
+    await tap(client, homeRect.x, homeRect.y, 650)
+    await sleep(300)
+    const snapP2 = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
+    })
+    if (snapP2 && snapP2.landscapeHome &&
+        JSON.stringify(snapP2.landscapeHome) === JSON.stringify(snapL.landscapeHome)) {
+      pass('更新竖屏快照 → 横屏槽位保留（互不覆盖）')
+    } else {
+      fail('更新竖屏后横屏槽位应保留', JSON.stringify(snapP2))
+    }
+    // 转回竖屏 → Home 高亮恢复（竖屏槽位有快照）
+    await tap(client, menuBtn.x, menuBtn.y)
+    const rot6 = await rect('[data-rotate="toggle"]')
+    await tap(client, rot6.x, rot6.y)
+    await sleep(300)
+    const hasSnapPort = await page.evaluate(() =>
+      document.getElementById('bb-btn-home').classList.contains('home-has-snapshot'))
+    if (hasSnapPort) pass('切回竖屏 → Home 高亮恢复（竖屏槽位快照保留）')
+    else fail('切回竖屏后 Home 应高亮（竖屏槽位快照应保留）')
+  } else {
+    fail('底栏 Home 按钮缺失（槽位场景跳过）')
   }
 
   // ── 5. 全程零 pageerror ──

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 切换画布方向 + 横屏/竖屏 Home 槽位（2026-08-17）
+
+- **菜单项改名**：「旋转画布 90°」→「切换画布方向」（语义更清晰，仍是 0↔90 toggle）
+- **Home 槽位按画布方向分**：竖屏（rotation=0）与横屏（rotation=90）各有独立的
+  Home 快照/默认视角槽位（`home-store.js` version 2）：
+  - 顶层 `home`/`fallback` = 竖屏槽位（version 1 旧数据天然就是竖屏，零迁移）
+  - `landscapeHome`/`landscapeFallback` = 横屏槽位（rotation=90 时读写）
+  - 切换画布方向后：长按 Home 记录到当前方向槽位、点按 Home 恢复到当前方向槽位、
+    底栏 Home 高亮按当前方向槽位有无快照显示；两套槽位互不覆盖
+- **调用点**：`captureHome`/`captureDefaultView`/`goHome`（desktop-navigation）、
+  启动相机恢复（desktop-persist）、Home 高亮（bottom-bar）均透传 `C.camera.rotation`
+- **验证**：`test-home-store` 新增双槽位读写/独立/兼容用例；`verify-rotate.js` E2E
+  新增竖屏/横屏快照独立场景（长按记录 → 切换方向高亮跟随 → 互不覆盖）
+
 ### 旋转画布 90°（2026-08-17）
 
 - **新增「旋转画布 90°」菜单项**（顶栏「排列与视图」菜单底部，`.view-menu-rotate`）：

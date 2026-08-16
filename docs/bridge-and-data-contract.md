@@ -85,7 +85,7 @@
 | store | key | 形状 | 关键语义 |
 |-------|-----|------|---------|
 | `LayoutStore` | `desktop.layout.v1` | `{version:1, icons:{name:{x,y}}, camera:{x,y,zoom}}` | `icons` 的 key 是**文件名**（非 fullPath）；`camera` 为世界坐标 |
-| `HomeStore` | `desktop.home.v1` | `{version:1, home?:{x,y,zoom}, fallback?:{x,y,zoom}}` | `home` 优先于 `fallback`；两者都无回出厂 `(0,0,1)` |
+| `HomeStore` | `desktop.home.v1` | `{version:2, home?:{x,y,zoom}, fallback?:{x,y,zoom}, landscapeHome?:{x,y,zoom}, landscapeFallback?:{x,y,zoom}}` | 竖屏（顶层）与横屏（`landscape*`）各自独立槽位；`home` 优先于 `fallback`；两者都无回出厂 `(0,0,1)`；version 1 旧数据 = 竖屏槽位（零迁移） |
 | `ViewStore` | `desktop.view.v1` | `{version:1, viewStyle, sortBy, sortDir, advancedBrowse}` | `viewStyle` 取 `'grid' \| 'list'`；`sortBy` 取 `name/mtime/type/size`；`sortDir` 取 `1 \| -1` |
 
 ### 2.1 相机不变式（运行时契约，类型系统拦不住）

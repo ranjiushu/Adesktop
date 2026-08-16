@@ -215,6 +215,7 @@
 
 .viewer-audio-icon {
   opacity: 0.9;
+  stroke-width: 1.6;
 }
 
 .viewer-audio-name {

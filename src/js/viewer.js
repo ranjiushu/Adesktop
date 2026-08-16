@@ -158,7 +158,7 @@ App.InternalViewer = (function () {
     card.innerHTML =
       '<header class="viewer-header">' +
       '<button class="viewer-back-btn" aria-label="退出全屏">' +
-      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>' +
+      App.icons.get('chevronLeft', { width: 20, height: 20 }) +
       '</button>' +
       '<span class="viewer-title"></span>' +
       '<div class="viewer-tools"></div>' +
@@ -544,9 +544,7 @@ App.InternalViewer = (function () {
         wrap.className = 'viewer-audio'
         wrap.innerHTML =
           '<div class="viewer-audio-cover">' +
-            '<svg class="viewer-audio-icon" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-              '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>' +
-            '</svg>' +
+            App.icons.get('music', { width: 56, height: 56, className: 'viewer-audio-icon' }) +
             '<div class="viewer-audio-name">' + App.Markdown.escapeHtml(state.name) + '</div>' +
           '</div>'
         const audio = document.createElement('audio')

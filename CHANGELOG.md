@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 矢量图标系统移植（2026-08-16）
+
+- **图标系统统一**（移植 LexiCull 同构方案）：`index.html` 顶部新增隐藏 SVG sprite
+  （`<symbol id="icon-{kebab}">`，70 个图标 = LexiCull 全集 61 个 + Desktop 特有 9 个：
+  arrow-left/right/up、home、file、refresh-cw、maximize、scissors、music），
+  新增 `src/js/icons.js`（`App.icons.get(name, opts)` + 命名访问 `App.icons.<name>`，
+  输出 `<svg><use href="#icon-xxx"/></svg>`），ES6 重写（禁 var）
+- **25 处手写内联 SVG 全部收编**：顶栏汉堡/三点、底部栏后退/前进/新建/Home/上级目录、
+  Drawer 关闭、BuildInfo/AppList 返回、FAB 加号/叉、Speed Dial 全部 14 个操作图标、
+  Viewer 返回键与音频大图标——统一为 sprite `<use>` 引用，零手写 path
+- **新增 `tests/test-icons.js`**：生成器纯函数（get/命名访问/kebab/class 转义）+
+  sprite symbol 与 `_NAMES` 双向一致性校验（缺一即 FAIL），新图标必须两处同步登记
+- 文档 `docs/build-pipeline.md` 新增「图标系统」约定小节
+
 ### 弹窗/对话框模块优化 + 提交与构建页修复（2026-08-16）
 
 - **弹窗模块统一约定**（`dialog.js`/`dialog.css`）：弹窗为矩形（直角）卡片；不设

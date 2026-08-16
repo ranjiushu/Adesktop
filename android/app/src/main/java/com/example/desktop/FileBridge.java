@@ -22,6 +22,7 @@ import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.DocumentsContract;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.MimeTypeMap;
 import android.webkit.WebView;
@@ -45,6 +46,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class FileBridge {
+
+    /** 日志 TAG（logcat 可观测：真机文件操作错误的双通道出口） */
+    private static final String TAG = "FileBridge";
 
     /** 单次 read 上限：防止大文件整读导致 OOM（预览/编辑功能上线前先做护栏） */
     private static final long MAX_READ_BYTES = 10L * 1024 * 1024;
@@ -158,6 +162,14 @@ public class FileBridge {
     }
 
     private void resolveErr(String cbId, String err) {
+        // 双通道：logcat 日志 + 前端回调（真机排障不黑箱）
+        Log.e(TAG, err);
+        postResolve(cbId, false, err);
+    }
+
+    /** 带异常的失败出口：logcat 打完整栈（桥层排障关键），回调只透传 message */
+    private void resolveErr(String cbId, String err, Throwable t) {
+        Log.e(TAG, err, t);
         postResolve(cbId, false, err);
     }
 
@@ -233,7 +245,7 @@ public class FileBridge {
                 o.put("trashName", TRASH_NAME);
                 resolveOk(cbId, o);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -290,7 +302,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, arr);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -319,7 +331,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, content);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -344,7 +356,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, true);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -431,7 +443,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, created);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -450,7 +462,7 @@ public class FileBridge {
                 if (!deleted) throw new IOException("删除失败: " + path);
                 resolveOk(cbId, true);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -475,7 +487,7 @@ public class FileBridge {
                 if (!ok) throw new IOException("重命名失败: " + oldPath);
                 resolveOk(cbId, true);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -502,7 +514,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, true);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -557,7 +569,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, true);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -666,7 +678,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, uri);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -707,7 +719,7 @@ public class FileBridge {
                     }
                 });
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -765,7 +777,7 @@ public class FileBridge {
                 activity.runOnUiThread(() -> ma.deliverFileChooser(uris));
                 resolveOk(cbId, true);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -827,7 +839,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, arr);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -877,7 +889,7 @@ public class FileBridge {
                 String b64 = android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP);
                 resolveOk(cbId, "data:image/png;base64," + b64);
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
@@ -943,7 +955,7 @@ public class FileBridge {
                 }
                 resolveOk(cbId, Uri.fromFile(cacheFile).toString());
             } catch (Exception e) {
-                resolveErr(cbId, e.getMessage());
+                resolveErr(cbId, e.getMessage(), e);
             }
         });
     }

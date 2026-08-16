@@ -190,7 +190,11 @@ App.Actions = (function () {
     opts = opts || {}
     App.FileAPI.list(targetDir).then(function (items) {
       const plan = App.Clipboard.planPaste(cb, items, targetDir)
-      if (!plan.length) return
+      if (!plan.length) {
+        // 剪贴板条目缺失（源已被删/移动）→ 明确告警，不静默
+        App.toast.show((opts.emptyText || '源文件已不存在，操作已取消'))
+        return
+      }
       const isMove = cb.mode === 'cut'
       const title = opts.title || (isMove ? '正在移动' : '正在粘贴')
       const totalSteps = plan.length

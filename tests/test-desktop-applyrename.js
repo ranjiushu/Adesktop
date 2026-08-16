@@ -113,6 +113,20 @@ sandbox.App.bridge = { vibrate: function () {} }
 sandbox.App.ViewMenu = { setEnabled: function () {} }
 sandbox.App.DesktopGesture = { init: function () {}, setCamera: function () {} }
 
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-core.js'), 'utf8'), sandbox,
+  { filename: 'desktop-core.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-render.js'), 'utf8'), sandbox,
+  { filename: 'desktop-render.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-browse-mode.js'), 'utf8'), sandbox,
+  { filename: 'desktop-browse-mode.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-navigation.js'), 'utf8'), sandbox,
+  { filename: 'desktop-navigation.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-persist.js'), 'utf8'), sandbox,
+  { filename: 'desktop-persist.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-viewer-link.js'), 'utf8'), sandbox,
+  { filename: 'desktop-viewer-link.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-gesture-handlers.js'), 'utf8'), sandbox,
+  { filename: 'desktop-gesture-handlers.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop.js'), 'utf8'), sandbox,
   { filename: 'desktop.js' })
 

@@ -103,14 +103,16 @@ App.DesktopPersist = (function () {
         C.positions[key] = saved.icons[key]
       })
     }
-    // 相机优先级：Home 快照 > 默认视角 > 上次布局视角（与 initLayout 原语义一致）
+    // 相机优先级：Home 快照 > 默认视角 > 上次布局视角（与 initLayout 原语义一致）。
+    // rotation 透传：按当前画布方向读对应槽位（竖屏/横屏各自恢复）
     let cam = null
     if (App.HomeStore) {
-      const home = App.HomeStore.load(C.state.rootId)
+      const rot = C.camera && C.camera.rotation === 90 ? 90 : 0
+      const home = App.HomeStore.load(C.state.rootId, rot)
       if (home && home.home) {
-        cam = App.DesktopCamera.create(home.home.x, home.home.y, home.home.zoom)
+        cam = App.DesktopCamera.create(home.home.x, home.home.y, home.home.zoom, rot)
       } else if (home && home.fallback) {
-        cam = App.DesktopCamera.create(home.fallback.x, home.fallback.y, home.fallback.zoom)
+        cam = App.DesktopCamera.create(home.fallback.x, home.fallback.y, home.fallback.zoom, rot)
       }
     }
     if (!cam && saved && saved.camera) {

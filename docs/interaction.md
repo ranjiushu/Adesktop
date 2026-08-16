@@ -223,7 +223,7 @@ down ─────────────────────────
 **定位**：画布整体顺时针旋转 90° 的视图变换——「像转一张纸」，图标/文字/背景点阵随画布一起转（文字侧躺），
 再次点击转回 0°。只旋转画布视觉与坐标映射，**不改变**相机位置/缩放、图标世界坐标、布局持久化数据。
 
-- **开关**：顶栏「排列与视图」菜单底部「旋转画布 90°」勾选项（`.view-menu-rotate`，`data-rotate="toggle"`）。
+- **开关**：顶栏「排列与视图」菜单底部「切换画布方向」勾选项（`.view-menu-rotate`，`data-rotate="toggle"`）。
   **与其余项相反的可用性**——根目录（Desktop 空间）可用，子文件夹（Folder 容器）禁用
   （`setEnabled(true)` 时 `disabled`；旋转对有限画布滚动容器无意义）。仿高级浏览模式走独立处理器 `_onRotateToggle`。
 - **状态存储**：`camera.rotation`（0 或 90）。旋转是瞬时两态切换（无过渡动画），
@@ -246,6 +246,10 @@ down ─────────────────────────
   调用方：手势层 `toWorld/commit`（用 `_viewportW/H` 缓存）、框选 `showMarquee`（`C.viewportWidth/Height`）、
   viewer `syncHandle`（`_layer.clientWidth/Height`）。
 - **不持久化**：旋转是临时视图状态（toggle 语义），不入 `view-store`/`layout-store`；刷新/重载回正。
+- **Home 槽位按方向分**：竖屏（rotation=0）与横屏（rotation=90）各有独立的 Home 快照/默认视角槽位
+  （`home-store.js` version 2：顶层 `home`/`fallback` = 竖屏，`landscapeHome`/`landscapeFallback` = 横屏；
+  version 1 旧数据顶层字段天然就是竖屏槽位，零迁移）。切换画布方向后：长按 Home 记录到当前方向槽位、
+  点按 Home 恢复到当前方向槽位、底栏 Home 高亮按当前方向槽位有无快照显示。两套槽位互不覆盖。
 
 ## 8. 位置持久化（当前：localStorage 临时方案）
 

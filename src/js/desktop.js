@@ -72,9 +72,10 @@ App.Desktop = (function () {
   // 导航模块依赖注入：目录切换后刷新渲染（persist 域 refresh）
   N.setRefresh(P.refresh)
 
-  // 旋转画布 90°（view-menu 驱动）：桌面空间 0↔90 toggle；folder 容器无意义，忽略。
+  // 旋转画布 toggle（view-menu 驱动）：桌面空间 0↔90 toggle；folder 容器无意义，忽略。
   // 旋转是瞬时两态（无过渡动画），只改 camera.rotation 并重应用 transform；
   // 手势层/Viewer 手柄经 setCamera/onUpdate 自动同步（rotation 随相机对象透传）。
+  // 同步 Home 快照视觉：竖屏/横屏各自槽位的标记（画布方向切换后底栏 Home 高亮跟随）。
   function toggleRotate() {
     if (C.isFolderView()) return false
     const next = C.camera.rotation === 90 ? 0 : 90
@@ -84,6 +85,9 @@ App.Desktop = (function () {
     }
     if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
       App.InternalViewer.syncHandles(C.camera)
+    }
+    if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
+      App.BottomBar.updateHomeState()
     }
     return true
   }

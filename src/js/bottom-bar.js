@@ -43,13 +43,16 @@ App.BottomBar = (function () {
     }
   }
 
-  // Home 快照视觉：已记录快照 → 图标强调色（用户可感知「快照存在」）
+  // Home 快照视觉：已记录快照 → 图标强调色（用户可感知「快照存在」）。
+  // 按当前画布方向（rotation）读对应槽位：竖屏/横屏各有独立快照标记。
   function updateHomeState() {
     let home = _getEl('bb-btn-home')
     if (!home || !App.HomeStore) return
     const rootId = (App.Desktop && typeof App.Desktop.getRootId === 'function')
       ? App.Desktop.getRootId() : ''
-    const data = App.HomeStore.load(rootId)
+    const rot = (App.Desktop && typeof App.Desktop.isRotated === 'function' && App.Desktop.isRotated())
+      ? 90 : 0
+    const data = App.HomeStore.load(rootId, rot)
     if (data && data.home) home.classList.add('home-has-snapshot')
     else home.classList.remove('home-has-snapshot')
   }

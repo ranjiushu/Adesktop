@@ -129,10 +129,11 @@ App.DesktopNavigation = (function () {
   // ── Home：空间锚点（位置快照 + 默认视角）──
   // 长按底栏 Home = 记录当前相机为快照；点按 Home = 回快照（无则默认视角，再无则出厂 (0,0,1)）。
   // 默认视角 = 用户经 Drawer「设为默认视角」设置的兜底视角。仅桌面空间（根目录）有意义。
+  // rotation 透传：竖屏（0）/横屏（90）各存各的槽位，切换画布方向后 Home 回对应槽位。
   function captureHome() {
     if (C.isFolderView()) return false
     const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveHome(cam, C.state.rootId)) {
+    if (!App.HomeStore.saveHome(cam, C.state.rootId, C.camera.rotation)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('Home 视角保存失败')
       return false
     }
@@ -148,7 +149,7 @@ App.DesktopNavigation = (function () {
   function captureDefaultView() {
     if (C.isFolderView()) return false
     const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveFallback(cam, C.state.rootId)) {
+    if (!App.HomeStore.saveFallback(cam, C.state.rootId, C.camera.rotation)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('默认视角保存失败')
       return false
     }
@@ -163,7 +164,7 @@ App.DesktopNavigation = (function () {
   function goHome() {
     if (C.isFolderView()) return
     let target = App.DesktopCamera.create()
-    const data = App.HomeStore.load(C.state.rootId)
+    const data = App.HomeStore.load(C.state.rootId, C.camera.rotation)
     if (data && data.home) {
       target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom)
     } else if (data && data.fallback) {

@@ -156,65 +156,74 @@
   margin-right: 4px;
 }
 
-/* ===== 提交详情弹窗 ===== */
-.commit-modal-scroll {
-  max-height: 55vh;
+/* ===== 提交/文件详情弹窗（统一 dialog 模板，build-info.js 动态创建） ===== */
+/* 弹窗本体：复用 .dialog（矩形、user-select:text）；内容超高可滚动 */
+.build-detail-modal {
+  max-height: 70vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  margin: 0 -20px;
-  padding: 0 20px;
 }
-.commit-modal-hash {
+/* 点击即复制：「点击谁就复制谁」——[data-copy] 文本块可点，:active 反馈 + 吐司 */
+.build-detail-modal [data-copy]:not(button) {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.1s;
+}
+.build-detail-modal [data-copy]:not(button):active {
+  background: var(--hover-dim);
+}
+.build-detail-path {
   font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
   font-size: 11px;
-  color: var(--accent-blue);
+  color: var(--text-tertiary);
   margin-bottom: 12px;
-  cursor: pointer;
-  display: inline-block;
-  padding: 2px 0;
-  border-radius: 4px;
-  transition: background 0.1s;
-}
-.commit-modal-hash:active {
-  background: var(--hover-dim);
-}
-.commit-modal-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
+  word-break: break-all;
   line-height: 1.5;
-  margin-bottom: 2px;
-  word-break: break-word;
-  cursor: pointer;
-  padding: 2px 0;
-  border-radius: 4px;
-  transition: background 0.1s;
 }
-.commit-modal-title:active {
-  background: var(--hover-dim);
+/* 文件详情键值网格（label/value 两列） */
+.build-detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  row-gap: 6px;
+  column-gap: 12px;
+  font-size: 13px;
+  line-height: 1.6;
 }
-.commit-modal-divider {
-  height: 0.5px;
-  background: var(--border-outer);
-  margin: 8px 0 10px;
+.build-detail-label {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
-.commit-modal-stat {
+.build-detail-value {
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-all;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  font-size: 12px;
+}
+/* 提交详情：作者时间 / 变更统计 / 文件行 */
+.build-detail-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.build-detail-stat {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 10px;
+  margin: 6px 0 8px;
   line-height: 1.6;
 }
-.commit-modal-stat-num {
-  font-variant-numeric: tabular-nums;
+.build-detail-stat-ins { color: var(--color-done, #48BB78); }
+.build-detail-stat-del { color: var(--accent-red, #BA1A1A); }
+.build-detail-divider {
+  height: 0.5px;
+  background: var(--border-outer);
+  margin: 8px 0;
 }
-.commit-modal-stat-num.ins {
-  color: var(--color-done, #48BB78);
-}
-.commit-modal-stat-num.del {
-  color: var(--accent-red, #BA1A1A);
-}
-.commit-modal-file {
+.build-detail-file {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -225,28 +234,21 @@
   color: var(--text-secondary);
   word-break: break-all;
 }
-.commit-modal-file + .commit-modal-file {
+.build-detail-file + .build-detail-file {
   border-top: 0.5px solid var(--border-outer);
 }
-.commit-modal-file-name {
+.build-detail-file-name {
   flex: 1;
   min-width: 0;
   word-break: break-all;
   line-height: 1.5;
 }
-.commit-modal-file-ins {
+.build-detail-file-stat {
   flex-shrink: 0;
-  color: var(--color-done, #48BB78);
   font-size: 12px;
-  min-width: 36px;
+  min-width: 72px;
   text-align: right;
-}
-.commit-modal-file-del {
-  flex-shrink: 0;
-  color: var(--accent-red, #BA1A1A);
-  font-size: 12px;
-  min-width: 36px;
-  text-align: right;
+  white-space: nowrap;
 }
 
 /* 布局恒定原则：用类名切换替代 style.display，避免 DOM 重排 */

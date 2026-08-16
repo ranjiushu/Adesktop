@@ -15,6 +15,9 @@
 App.Loading = (function () {
   let DIALOG_ID = 'loading-dialog'
   let TITLE_ID = 'loading-dialog-title'
+  let CURRENT_ID = 'loading-current'
+  let CURRENT_LABEL_ID = 'loading-current-label'
+  let CURRENT_COUNT_ID = 'loading-current-count'
   let PHASE_ID = 'loading-phase'
   let PHASE_LABEL_ID = 'loading-phase-label'
   let PHASE_BAR_ID = 'loading-phase-bar'
@@ -23,7 +26,12 @@ App.Loading = (function () {
   let TOTAL_LABEL_ID = 'loading-total-label'
   let TOTAL_BAR_ID = 'loading-total-bar'
   let TOTAL_COUNT_ID = 'loading-total-count'
+  let ACTIONS_ID = 'loading-actions'
+  let CANCEL_ID = 'loading-cancel'
   let TAG_ID = 'drop-tag'
+
+  let _onCancel = null   // 当前对话框的取消回调（Actions 注入）
+  let _cancelBound = false
 
   function _el(id) { return document.getElementById(id) }
 
@@ -48,8 +56,22 @@ App.Loading = (function () {
     return total > 0 ? (text + ' ' + done + '/' + total) : (text || '')
   }
 
+  // 字节人性化：1234567 → '1.2 MB'；不足 1 KB 显示 B
+  function _bytes(done, total) {
+    function fmt(n) {
+      if (n < 1024) return Math.round(n) + ' B'
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
+      if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB'
+      return (n / 1024 / 1024 / 1024).toFixed(1) + ' GB'
+    }
+    return fmt(done) + ' / ' + fmt(total)
+  }
+
   // ── 对话框：show({title, phaseLabel, phaseDone, phaseTotal,
-  //                  totalLabel, totalDone, totalTotal})
+  //                  totalLabel, totalDone, totalTotal,
+  //                  current: {name, done, total}, cancellable, onCancel})
+  //   current  → 当前文件字节级进度行（正在复制 xxx 12/250 MB）
+  //   cancellable+onCancel → 传输中显示取消按钮（点按 = 请求桥层取消）
   //   phaseTotal>0 → 显示阶段进度条（移动 = 复制阶段/删除阶段）
   //   totalTotal>0 → 显示总进度条（分阶段整体）
   //   两者都无 → 不确定进度（条纹滑动，目录切换/刷新）
@@ -61,6 +83,22 @@ App.Loading = (function () {
     App.Dialog.open(DIALOG_ID)
     let title = _el(TITLE_ID)
     if (title) title.textContent = opts.title || '处理中'
+    // 当前文件行（字节级进度）
+    let cur = _el(CURRENT_ID)
+    let hasCurrent = !!(opts.current && opts.current.name)
+    if (cur) {
+      _toggleClass(cur, 'loading-visible', hasCurrent)
+      if (hasCurrent) {
+        let clab = _el(CURRENT_LABEL_ID)
+        if (clab) clab.textContent = opts.current.name
+        let ccnt = _el(CURRENT_COUNT_ID)
+        if (ccnt) ccnt.textContent = _bytes(opts.current.done || 0, opts.current.total || 0)
+      }
+    }
+    // 取消按钮（传输中）
+    _onCancel = opts.cancellable ? opts.onCancel : null
+    let acts = _el(ACTIONS_ID)
+    if (acts) _toggleClass(acts, 'loading-visible', !!_onCancel)
     // 阶段进度条
     let phase = _el(PHASE_ID)
     let hasPhase = opts.phaseTotal > 0
@@ -113,6 +151,15 @@ App.Loading = (function () {
     let dlg = _el(DIALOG_ID)
     if (!dlg) return
     App.Dialog.close(DIALOG_ID)
+    _onCancel = null
+    let cur = _el(CURRENT_ID)
+    if (cur) cur.classList.remove('loading-visible')
+    let clab = _el(CURRENT_LABEL_ID)
+    if (clab) clab.textContent = ''
+    let ccnt = _el(CURRENT_COUNT_ID)
+    if (ccnt) ccnt.textContent = ''
+    let acts = _el(ACTIONS_ID)
+    if (acts) acts.classList.remove('loading-visible')
     let bar = _el(PHASE_BAR_ID)
     if (bar) {
       bar.classList.remove('loading-indeterminate')
@@ -120,11 +167,28 @@ App.Loading = (function () {
     }
     let tbar = _el(TOTAL_BAR_ID)
     if (tbar) tbar.style.width = '0%'
+    let plab = _el(PHASE_LABEL_ID)
+    if (plab) plab.textContent = ''
+    let tlab = _el(TOTAL_LABEL_ID)
+    if (tlab) tlab.textContent = ''
     let cnt = _el(PHASE_COUNT_ID)
     if (cnt) cnt.textContent = ''
     let tcnt = _el(TOTAL_COUNT_ID)
     if (tcnt) tcnt.textContent = ''
   }
+
+  // 取消按钮：全局绑定一次（模块加载时），回调取当前注册的 onCancel
+  function _initCancel() {
+    let btn = _el(CANCEL_ID)
+    if (!btn || _cancelBound) return
+    _cancelBound = true
+    App.utils.bindPress(btn, function () {
+      if (typeof _onCancel === 'function') _onCancel()
+    })
+  }
+
+  // 模块加载即绑定（按钮在静态 HTML 中常驻）
+  _initCancel()
 
   // ── 实时标签（拖入文件夹提示）：跟手提示，不弹对话框 ──
   function showTag(text) {

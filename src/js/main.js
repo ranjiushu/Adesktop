@@ -37,6 +37,14 @@ App.boot = function boot() {
   if (App.CreateDialog && typeof App.CreateDialog.init === 'function') {
     App.CreateDialog.init()
   }
+  // 新建网站快捷方式对话框（Drawer「新建网站」弹出）
+  if (App.WebsiteDialog && typeof App.WebsiteDialog.init === 'function') {
+    App.WebsiteDialog.init()
+  }
+  // 网页文件上传桥（拖拽到网站 → 待上传 → 网页请求文件时回传）
+  if (App.WebUpload && typeof App.WebUpload.init === 'function') {
+    App.WebUpload.init()
+  }
   // 重命名对话框（选中态操作栏弹出）
   if (App.RenameDialog && typeof App.RenameDialog.init === 'function') {
     App.RenameDialog.init()
@@ -77,6 +85,11 @@ App.onRootChanged = function onRootChanged() {
 // 均未消费返回 false（壳退出 App）。不依赖 pushState 是否被 WebView 计入 canGoBack。
 // 返回键「不关闭」Viewer：Viewer 是画布实体，关闭走 Morph FAB「关闭」（删除语义）。
 App.handleSystemBack = function handleSystemBack() {
+// 0. 弹窗优先（dialog-overlay 最顶层：新建/重命名/确认框/详情弹窗）——系统返回键关闭栈顶弹窗，
+//    弹窗不设「取消/关闭」按钮，关闭途径 = 返回键 / 点空白（见 dialog.js 模块约定）
+if (App.Dialog && typeof App.Dialog.handleBack === 'function' && App.Dialog.handleBack()) {
+  return true
+}
 // 1. 全屏态 Viewer 优先：返回键 = 退出全屏（回到原页面状态）
 if (App.InternalViewer && typeof App.InternalViewer.hasFullscreen === 'function' &&
     App.InternalViewer.hasFullscreen()) {

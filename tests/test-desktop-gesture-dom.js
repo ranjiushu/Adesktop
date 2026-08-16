@@ -80,12 +80,12 @@ viewportEl.dispatch('touchend', tev('touchend', []))
 check(canvasEl.style.transform === 'translate3d(-50px,-50px,0) scale(1)',
   '双指平移 50px → translate3d(-50px,-50px,0) scale(1)，实际: ' + canvasEl.style.transform)
 
-// 场景 2：双指捏合（指距 60 → 160，质心不动），放大越界 clamp 到 2.5
+// 场景 2：双指捏合（指距 60 → 200，质心不动），放大越界 clamp 到 3
 viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 200, 400), touch(2, 260, 400)]))
-viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, 150, 400), touch(2, 310, 400)]))
+viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, 130, 400), touch(2, 330, 400)]))
 viewportEl.dispatch('touchend', tev('touchend', []))
-check(canvasEl.style.transform.indexOf('scale(2.5)') >= 0,
-  '捏合放大越界 clamp → scale(2.5)，实际: ' + canvasEl.style.transform)
+check(canvasEl.style.transform.indexOf('scale(3)') >= 0,
+  '捏合放大越界 clamp → scale(3)，实际: ' + canvasEl.style.transform)
 
 // 场景 3：指数突变 2→1 指，剩指 dead 不误触发（重置后验证）
 G.init({ viewport: viewportEl, canvas: canvasEl, camera: C.create() })

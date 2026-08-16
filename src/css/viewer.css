@@ -17,6 +17,36 @@
   pointer-events: auto;
 }
 
+/* ── 拖动手柄：canvas 态 Viewer 底部中心下方的悬浮横条（屏幕层固定尺寸）── */
+.viewer-drag-handle {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(107, 114, 128, 0.55);
+  pointer-events: none;   /* 纯视觉；命中走手势层 handleAt 世界坐标判定 */
+  transition: background 0.15s ease;
+}
+
+.viewer-drag-handle.viewer-drag-handle-active {
+  background: var(--color-accent);
+}
+
+/* ── 拖动手柄：canvas 态 Viewer 卡片底部中心下方的悬浮小横条（辅助拖动入口）──
+   屏幕坐标定位（viewer-layer 内，不随画布 transform 缩放），固定尺寸；
+   命中检测走手势层世界坐标（handleWorldRect 反算），元素本身 pointer-events 穿透
+   （layer 默认 none），不拦截桌面手势。 */
+.viewer-drag-handle {
+  position: absolute;
+  border-radius: 3px;
+  background: rgba(107, 114, 128, 0.5);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  transition: background 0.15s ease;
+}
+
+.viewer-drag-handle.viewer-drag-handle-active {
+  background: var(--color-accent);
+}
+
 /* 卡片：flex 纵向面板（canvas 态世界坐标定位 / fullscreen 态占满内容区） */
 .viewer-card {
   display: flex;
@@ -33,6 +63,43 @@
 .viewer-card-canvas {
   position: absolute;
   z-index: 5;
+}
+
+/* 画布实体：文件名栏移到内容区下方（Windows 式空间化——内容为主，文件名作为底部信息条；
+   DOM 顺序不变，仅用 order 调整；全屏态（viewer-card-fullscreen）不受影响仍为顶栏）。
+   分隔线改到栏上方（与内容区之间）。 */
+.viewer-card-canvas .viewer-header {
+  order: 2;
+  border-bottom: none;
+  border-top: 1px solid var(--color-border);
+}
+
+/* 画布实体：未选中时隐藏文件名栏（含边框/背景整条区域）——内容区占满整卡；
+   选中态由点击/框选/长按触发（与文件图标一致的脆弱选中），拖动必然已选中故拖动中保持显示；
+   命中判定基于世界坐标 rect（含整卡区域），显隐不影响手势。 */
+.viewer-card-canvas:not(.viewer-card-selected) .viewer-header {
+  display: none;
+}
+
+/* 画布实体 media 类（image/video/svg，按固有宽高比自适应 fitAspectRect）：
+   文件名栏 absolute 覆盖在卡片底部——不占 flex 空间，选中显示文件名时不改变媒体缩放比例，
+   盖住底部少量内容可接受（优先保媒体画面）。media 标记类由 viewer.js 的
+   canvasCardClass() 按 kind 添加（audio 除外：3:4 封面卡片底部是原生播放控制条，
+   保持占位式不遮挡）。
+   半透明深色浮层（类似播放器字幕条/网站标签），标题反白保证可读性。 */
+.viewer-card-canvas.viewer-card-media .viewer-header {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  order: 0;   /* absolute 脱离 flex 布局，order 不再起作用 */
+  background: rgba(17, 24, 39, 0.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: none;
+}
+
+.viewer-card-canvas.viewer-card-media .viewer-title {
+  color: #fff;
 }
 
 /* 顶栏：文件名 + 全屏预览按钮 */
@@ -215,6 +282,7 @@
 
 .viewer-audio-icon {
   opacity: 0.9;
+  stroke-width: 1.6;
 }
 
 .viewer-audio-name {

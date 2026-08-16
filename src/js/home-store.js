@@ -12,8 +12,15 @@
 'use strict'
 
 App.HomeStore = (function () {
-  const KEY = 'desktop.home.v1'
+  const LEGACY_KEY = 'desktop.home.v1'   // 旧版单根 key（迁移兼容）
+  const KEY_PREFIX = 'desktop.home.'
   const DEFAULT_CAMERA = { x: 0, y: 0, zoom: 1 }
+
+  // 动态 key：desktop.home.<rootId>.v1；rootId 为空 → 旧 key（兼容读取）
+  // Home 快照是「相对当前根目录」的空间锚点，切根不得继承（见 docs/operation-contract.md 1.6）
+  function keyFor(rootId) {
+    return rootId ? KEY_PREFIX + rootId + '.v1' : LEGACY_KEY
+  }
 
   // 结构化校验：x/y/zoom 均为有限数字（zoom 范围由 DesktopCamera 应用时钳制）
   function validCamera(c) {
@@ -24,9 +31,9 @@ App.HomeStore = (function () {
   }
 
   // 读：返回 { home?, fallback? }（只含通过校验的字段）；无数据/全脏 → null
-  function load() {
+  function load(rootId) {
     try {
-      const raw = localStorage.getItem(KEY)
+      const raw = localStorage.getItem(keyFor(rootId))
       if (!raw) return null
       const data = JSON.parse(raw)
       if (!data || typeof data !== 'object') return null
@@ -41,8 +48,8 @@ App.HomeStore = (function () {
 
   // 写：patch 只允许 { home? } / { fallback? }，未提供的字段保持原值。
   // 成功 true，失败 false（调用方告警，铁律：写入路径不吞错）
-  function save(patch) {
-    const cur = load() || {}
+  function save(patch, rootId) {
+    const cur = load(rootId) || {}
     const data = { version: 1 }
     if (cur.home) data.home = cur.home
     if (cur.fallback) data.fallback = cur.fallback
@@ -55,7 +62,24 @@ App.HomeStore = (function () {
       data.fallback = patch.fallback
     }
     try {
-      localStorage.setItem(KEY, JSON.stringify(data))
+      localStorage.setItem(keyFor(rootId), JSON.stringify(data))
+      return true
+    } catch (e) {
+      return false
+    }
+  }
+
+  // 一次性迁移：旧版单根 key → 当前 root key（首见 root 吸收旧数据，随后删除旧 key）。
+  // 无旧数据/无 rootId → false（幂等，可重复调用）。
+  function migrateLegacy(rootId) {
+    if (!rootId) return false
+    try {
+      const raw = localStorage.getItem(LEGACY_KEY)
+      if (raw == null) return false
+      if (localStorage.getItem(keyFor(rootId)) == null) {
+        localStorage.setItem(keyFor(rootId), raw)
+      }
+      localStorage.removeItem(LEGACY_KEY)
       return true
     } catch (e) {
       return false
@@ -64,9 +88,11 @@ App.HomeStore = (function () {
 
   return {
     load: load,
-    saveHome: function (camera) { return save({ home: camera }) },
-    saveFallback: function (camera) { return save({ fallback: camera }) },
-    KEY: KEY,
+    saveHome: function (camera, rootId) { return save({ home: camera }, rootId) },
+    saveFallback: function (camera, rootId) { return save({ fallback: camera }, rootId) },
+    migrateLegacy: migrateLegacy,
+    keyFor: keyFor,
+    KEY: LEGACY_KEY,
     DEFAULT_CAMERA: DEFAULT_CAMERA
   }
 })()

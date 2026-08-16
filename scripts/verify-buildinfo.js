@@ -114,12 +114,212 @@ async function main() {
   if (repo) pass('仓库规模统计渲染')
   else fail('仓库规模未渲染')
 
-  const changelog = await page.evaluate(() => {
-    const content = document.getElementById('build-guide-content')
-    return !!(content && content.innerHTML.length > 0)
+  // ── 3c. 源码规模排序标签（切换排列方式） ──
+  const sortChipTest = await page.evaluate(() => {
+    const body = document.getElementById('build-source-body')
+    const chip = body ? body.querySelector('[data-sort="name"]') : null
+    if (!chip) return { ok: false, reason: '无 名称 标签' }
+    chip.scrollIntoView({ block: 'center' })
+    const rowsText = () => Array.from(body.querySelectorAll('.file-bar-row'))
+      .map(function (r) { return r.textContent.replace(/\s+/g, ' ').trim() })
+    const before = rowsText()
+    chip.click()
+    const after = rowsText()
+    // 完整列表对比：首行可能因数据巧合相同（行数最多者字母序也靠前），
+    // 列表整体顺序必然变化；防御：至少前 5 行序列有差异
+    return { ok: before.length === after.length && before.join('\n') !== after.join('\n'), before: before.slice(0, 2), after: after.slice(0, 2) }
   })
-  if (changelog) pass('更新日志注入')
-  else fail('更新日志缺失')
+  if (sortChipTest.ok) pass('源码规模「名称」排序标签生效')
+  else fail('排序标签不生效: ' + JSON.stringify(sortChipTest))
+
+  // ── 3d. 文件详情弹窗：统一模板 + 文字可复制 + 无取消按钮 + 返回键关闭 ──
+  const fileModal = await page.evaluate(() => {
+    window.App.BuildInfo.showFileDetailModal(window.FILE_STATS[0])
+    const ov = document.getElementById('detail-modal-overlay')
+    if (!ov) return { open: false }
+    const modal = ov.querySelector('.dialog')
+    const cs = getComputedStyle(modal)
+    return {
+      open: true,
+      unified: !!modal && !!modal.className.match(/\bdialog\b/),
+      radius: cs.borderRadius,
+      userSelect: cs.userSelect,
+      noCloseBtn: modal.textContent.indexOf('关闭') < 0 && modal.textContent.indexOf('取消') < 0,
+      title: modal.querySelector('.dialog-title').textContent,
+      path: modal.querySelector('.build-detail-path').textContent
+    }
+  })
+  if (fileModal.open && fileModal.unified && fileModal.radius === '0px')
+    pass('文件详情弹窗使用统一模板（矩形 .dialog）')
+  else fail('弹窗未用统一模板: ' + JSON.stringify(fileModal))
+  if (fileModal.userSelect === 'text') pass('弹窗文字可复制（user-select: text）')
+  else fail('弹窗文字不可复制: ' + fileModal.userSelect)
+  if (fileModal.noCloseBtn) pass('弹窗无「关闭/取消」按钮')
+  else fail('弹窗仍有关闭/取消按钮')
+  const expected = await page.evaluate(() => {
+    const f = window.FILE_STATS[0]
+    return { name: f.name.split('/').pop(), path: f.name }
+  })
+  if (fileModal.title === expected.name && fileModal.path === expected.path)
+    pass('文件详情信息准确（名称/路径）')
+  else fail('文件详情信息不准确: ' + JSON.stringify(fileModal))
+
+  // 返回键：先关弹窗，面板保持打开
+  const modalBack = await page.evaluate(() => {
+    const before = document.getElementById('detail-modal-overlay') != null
+    const handled = window.App.handleSystemBack() === true
+    const closed = document.getElementById('detail-modal-overlay') == null
+    const panelOpen = document.getElementById('buildinfo').classList.contains('buildinfo-open')
+    return { before, handled, closed, panelOpen }
+  })
+  if (modalBack.before && modalBack.handled && modalBack.closed && modalBack.panelOpen)
+    pass('系统返回键关闭详情弹窗（面板保持打开）')
+  else fail('返回键关闭弹窗异常: ' + JSON.stringify(modalBack))
+
+  // ── 3d2. 点击即复制（「点击谁就复制谁」+ 吐司） ──
+  const tapCopy = await page.evaluate(() => {
+    // 拦截复制实现记录调用（headless 无剪贴板权限，验证参数 + 吐司即可）
+    window.__copies = []
+    window.App.ui.copyText = function (text, msg) {
+      window.__copies.push({ text: text, msg: msg })
+      window.App.toast.show(msg)
+      return true
+    }
+    window.App.BuildInfo.showFileDetailModal(window.FILE_STATS[0])
+    const ov = document.getElementById('detail-modal-overlay')
+    ov.querySelector('.dialog-title').click()   // 点击标题 → 复制文件名
+    ov.querySelector('.build-detail-path').click()  // 点击路径 → 复制路径
+    ov.querySelector('.build-detail-value').click() // 点击行数值 → 复制值
+    const copies = window.__copies.slice()
+    const toastMsg = document.querySelector('.toast') ? document.querySelector('.toast').textContent : ''
+    window.App.Dialog.close('detail-modal-overlay')
+    const o = document.getElementById('detail-modal-overlay')
+    if (o) o.remove()
+    return { copies: copies, toastMsg: toastMsg }
+  })
+  const f0 = await page.evaluate(() => window.FILE_STATS[0])
+  const expName = f0.name.split('/').pop()
+  const tc1 = tapCopy.copies && tapCopy.copies[0]
+  const tc2 = tapCopy.copies && tapCopy.copies[1]
+  const tc3 = tapCopy.copies && tapCopy.copies[2]
+  if (tc1 && tc1.text === expName && tc1.msg === '已复制文件名') pass('点击标题复制文件名 + 吐司')
+  else fail('点击标题复制异常: ' + JSON.stringify(tc1))
+  if (tc2 && tc2.text === f0.name && tc2.msg === '已复制路径') pass('点击路径复制路径 + 吐司')
+  else fail('点击路径复制异常: ' + JSON.stringify(tc2))
+  if (tc3 && tc3.text === String(f0.lines) && tc3.msg === '已复制') pass('点击行数值复制 + 吐司')
+  else fail('点击行数值复制异常: ' + JSON.stringify(tc3))
+  if (tapCopy.toastMsg && tapCopy.toastMsg.indexOf('已复制') >= 0) pass('吐司提示复制成功: ' + tapCopy.toastMsg)
+  else fail('吐司未提示: ' + tapCopy.toastMsg)
+
+  // ── 3e. 提交详情弹窗：北京时间 + 点击内容不关闭（保证长按选字） ──
+  const commitModal = await page.evaluate(() => {
+    const c = window.RECENT_COMMITS[0]
+    window.App.BuildInfo.showCommitDetailModal(c)
+    const ov = document.getElementById('detail-modal-overlay')
+    if (!ov) return { open: false }
+    const modal = ov.querySelector('.dialog')
+    const meta = modal.querySelector('.build-detail-meta').textContent
+    modal.click()  // 点击弹窗本体不应关闭
+    const stillOpen = document.getElementById('detail-modal-overlay') != null
+    // 期望显示 = git UTC 时间 + 8 小时（北京口径）
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) ([+-])(\d{2})(\d{2})$/.exec(c.date)
+    let expected = ''
+    if (m) {
+      const sign = m[7] === '-' ? -1 : 1
+      const off = sign * (+m[8] * 60 + +m[9])
+      const utc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - off * 60000
+      const d = new Date(utc + 8 * 3600000)
+      const p = function (n) { return (n < 10 ? '0' : '') + n }
+      expected = d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) +
+        ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes())
+    }
+    return { open: true, meta: meta, stillOpen: stillOpen, expected: expected }
+  })
+  if (commitModal.open && commitModal.stillOpen) pass('点击弹窗本体不关闭（文字可选择复制）')
+  else fail('点击弹窗本体误关闭')
+  if (commitModal.open && commitModal.meta.indexOf(commitModal.expected) >= 0)
+    pass('提交时间显示北京时间格式: ' + commitModal.meta)
+  else fail('提交时间未转北京时间: ' + commitModal.meta + ' (期望含 ' + commitModal.expected + ')')
+  await page.evaluate(() => {
+    // 生产关闭路径：App.Dialog.close 出栈 + 移除 DOM（closeDetailModal 同款）
+    window.App.Dialog.close('detail-modal-overlay')
+    const o = document.getElementById('detail-modal-overlay')
+    if (o) o.remove()
+  })
+
+  // ── 3e2. 提交弹窗点击复制：hash / 作者时间 / 文件行 ──
+  const commitCopy = await page.evaluate(() => {
+    const c = window.RECENT_COMMITS[0]
+    window.App.BuildInfo.showCommitDetailModal(c)
+    const ov = document.getElementById('detail-modal-overlay')
+    window.__copies = []
+    window.App.ui.copyText = function (text, msg) {
+      window.__copies.push({ text: text, msg: msg })
+      window.App.toast.show(msg)
+      return true
+    }
+    const hash = ov.querySelector('.build-detail-path')
+    const meta = ov.querySelector('.build-detail-meta')
+    const fileRow = ov.querySelector('.build-detail-file')
+    hash.click()
+    meta.click()
+    if (fileRow) fileRow.click()
+    const copies = window.__copies.slice()
+    const toastMsg = document.querySelector('.toast') ? document.querySelector('.toast').textContent : ''
+    window.App.Dialog.close('detail-modal-overlay')
+    const o = document.getElementById('detail-modal-overlay')
+    if (o) o.remove()
+    return { copies: copies, toastMsg: toastMsg, firstFile: c.files && c.files[0] ? c.files[0].name : null }
+  })
+  const fullHash = await page.evaluate(() => window.RECENT_COMMITS[0].fullHash)
+  const ch1 = commitCopy.copies && commitCopy.copies[0]
+  const ch2 = commitCopy.copies && commitCopy.copies[1]
+  const ch3 = commitCopy.copies && commitCopy.copies[2]
+  if (ch1 && ch1.text === fullHash && ch1.msg === '已复制完整 Hash') pass('点击 hash 复制完整 Hash + 吐司')
+  else fail('点击 hash 复制异常: ' + JSON.stringify(ch1))
+  if (ch2 && ch2.msg === '已复制作者与时间' && typeof ch2.text === 'string' && ch2.text.indexOf('Desktop Dev') >= 0)
+    pass('点击作者时间复制 + 吐司')
+  else fail('点击作者时间复制异常: ' + JSON.stringify(ch2))
+  if (commitCopy.firstFile && ch3 && ch3.text === commitCopy.firstFile && ch3.msg === '已复制文件路径')
+    pass('点击文件行复制文件路径 + 吐司')
+  else fail('点击文件行复制异常: ' + JSON.stringify(ch3))
+  if (commitCopy.toastMsg && commitCopy.toastMsg.indexOf('已复制') >= 0) pass('提交弹窗吐司提示复制成功')
+  else fail('提交弹窗吐司未提示')
+
+  // ── 3f. 更新日志 md 渲染：h3 标题 / 多行列表项 ──
+  const changelogMd = await page.evaluate(() => {
+    const c = document.getElementById('build-guide-content')
+    if (!c) return { h3Count: 0, multiLineItem: '' }
+    c.style.display = ''
+    const r = {
+      h3Count: c.querySelectorAll('h3').length,
+      multiLineItem: (function () {
+        const lis = c.querySelectorAll('li')
+        for (const li of lis) {
+          if (li.textContent.indexOf('并入') >= 0) return li.textContent.replace(/\s+/g, ' ')
+        }
+        return ''
+      })()
+    }
+    c.style.display = 'none'
+    return r
+  })
+  if (changelogMd.h3Count > 0) pass('更新日志 h3 标题渲染 (' + changelogMd.h3Count + ' 个)')
+  else fail('更新日志 h3 标题未渲染')
+  if (changelogMd.multiLineItem.indexOf('成为首个开发基线') >= 0) pass('更新日志多行列表项并入同一 <li>')
+  else fail('更新日志列表续行被拆段: ' + changelogMd.multiLineItem)
+
+  // ── 3g. 展开后无横向溢出（changelog 含超长无空格 ASCII token，曾撑宽滚动容器） ──
+  const noHScroll = await page.evaluate(() => {
+    const c = document.getElementById('build-guide-content')
+    c.style.display = ''
+    const body = document.getElementById('buildinfo-body')
+    const r = { scrollW: body.scrollWidth, clientW: body.clientWidth }
+    c.style.display = 'none'
+    return r
+  })
+  if (noHScroll.scrollW <= noHScroll.clientW) pass('更新日志展开后无横向溢出 (' + noHScroll.scrollW + ' ≤ ' + noHScroll.clientW + ')')
+  else fail('更新日志展开后横向溢出: scrollW=' + noHScroll.scrollW + ' > clientW=' + noHScroll.clientW)
 
   // 更新日志折叠交互（面板内滚动区，先用 evaluate 滚动到可见）
   const toggle = await page.evaluate(() => {

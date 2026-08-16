@@ -2,6 +2,7 @@
  * 根目录（Desktop 空间）下菜单项置灰（仅提示）；子文件夹（Folder 容器）下可选。
  * 排列方式：名称/修改日期/类型/大小，点击当前项切换升降序；
  * 视图：网格 / 列表。偏好经 App.ViewStore 持久化（全局，应用于所有子文件夹）。
+ * 高级浏览模式：始终可用（不受 setEnabled 置灰控制），勾选切换单指平移行为。
  * 依赖: namespace.js, utils.js, view-store.js, folder-sort.js, desktop.js
  * 导出: App.ViewMenu
  */
@@ -17,7 +18,7 @@ App.ViewMenu = (function () {
     return menu ? menu.querySelectorAll('.view-menu-item') : []
   }
 
-  // 渲染当前选中态：排序项高亮 + 方向箭头，视图项高亮 + 勾
+  // 渲染当前选中态：排序项高亮 + 方向箭头，视图项高亮 + 勾，浏览模式勾选
   function renderState() {
     const menu = _getEl('view-menu')
     if (!menu || !App.Desktop || typeof App.Desktop.getViewPrefs !== 'function') return
@@ -34,6 +35,15 @@ App.ViewMenu = (function () {
     }
     const viewItem = menu.querySelector('[data-view="' + prefs.viewStyle + '"]')
     if (viewItem) viewItem.classList.add('active')
+    // 高级浏览模式勾选态
+    const browseItem = menu.querySelector('[data-browse="advanced"]')
+    if (browseItem) {
+      if (typeof App.Desktop.isAdvancedBrowse === 'function' && App.Desktop.isAdvancedBrowse()) {
+        browseItem.classList.add('active')
+      } else {
+        browseItem.classList.remove('active')
+      }
+    }
   }
 
   function open() {
@@ -79,11 +89,13 @@ App.ViewMenu = (function () {
   function isEnabled() { return _enabled }
 
   // 目录切换时由 Desktop 调用：根目录置灰（仅提示），子文件夹可选
+  // 高级浏览模式项（.view-menu-browse）始终可用，不受置灰控制
   function setEnabled(on) {
     _enabled = !!on
     const menu = _getEl('view-menu')
     const items = _queryItems(menu)
     for (let i = 0; i < items.length; i++) {
+      if (items[i].classList.contains('view-menu-browse')) continue
       if (_enabled) items[i].removeAttribute('disabled')
       else items[i].setAttribute('disabled', '')
     }
@@ -113,6 +125,15 @@ App.ViewMenu = (function () {
     close()
   }
 
+  // 高级浏览模式切换：始终可用（不受 _enabled 限制）
+  function _onBrowseToggle() {
+    if (!App.Desktop || typeof App.Desktop.setAdvancedBrowse !== 'function') return
+    const next = !(typeof App.Desktop.isAdvancedBrowse === 'function' && App.Desktop.isAdvancedBrowse())
+    App.Desktop.setAdvancedBrowse(next)
+    renderState()
+    close()
+  }
+
   function init() {
     const btn = _getEl('btn-view-menu')
     if (btn) App.utils.bindPress(btn, toggle)
@@ -121,7 +142,12 @@ App.ViewMenu = (function () {
     const menu = _getEl('view-menu')
     const items = _queryItems(menu)
     for (let i = 0; i < items.length; i++) {
-      App.utils.bindPress(items[i], _onItemClick)
+      // 高级浏览模式项走独立处理器（不受 _enabled 限制）
+      if (items[i].classList.contains('view-menu-browse')) {
+        App.utils.bindPress(items[i], _onBrowseToggle)
+      } else {
+        App.utils.bindPress(items[i], _onItemClick)
+      }
     }
     setEnabled(false)   // 初始根目录：置灰
   }

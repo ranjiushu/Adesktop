@@ -1,36 +1,19 @@
 /* 文件系统动作（FAB / Drawer / 新建对话框共享）：
  * 新建文件夹/新建文件/刷新/切换根目录 + 阶段 C：重命名/复制/剪切/粘贴。
- * 复制/剪切只写剪贴板（内存态，Windows 模型），粘贴时才真正 copy / copy+delete。
+ * 复制/剪切只写剪贴板（内存态，Windows 模型），粘贴时才真正 copy / move（cut）。
+ * 移动 = 真移动优先（FileBridge.move：私有 File.renameTo / SAF moveDocument），失败降级 copy+del。
  * 路径约定：全部使用完整相对路径（含当前目录前缀），FileAPI 桥天然匹配。
  * 依赖: namespace.js, file-api.js, clipboard.js, toast.js, desktop.js
  */
 'use strict'
 
 App.Actions = (function () {
-  // 重名自动加序号：遍历目录找不冲突的名字。
-  // 文件拆分主名与扩展名（如「报告.txt」重名 → 「报告 2.txt」），
-  // 文件夹直接加序号（「新建文件夹」→「新建文件夹 2」）。
-  function _uniqueName(items, base, isDir) {
-    let stem = base
-    let ext = ''
-    if (!isDir && base.indexOf('.') > 0) {
-      let i = base.lastIndexOf('.')
-      stem = base.slice(0, i)
-      ext = base.slice(i)
-    }
-    let name = base
-    let seq = 2
-    function exists(n) {
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].name === n && items[i].isDir === isDir) return true
-      }
-      return false
-    }
-    while (exists(name)) {
-      name = stem + ' ' + seq + ext
-      seq++
-    }
-    return name
+  // 命名规划唯一入口（重名自动加序号，文件拆主名/扩展名，文件夹直接加序号）：
+  // 收敛自 clipboard.js——create / paste / delete 进回收站共用同一规则（见 operation-contract.md 1.2）。
+  // items = 当前目录项 [{name,isDir}]；占用键为 name 单键（真实 FS「一名字一 entry」）。
+  function _finalName(items, base, isDir) {
+    return App.Clipboard.uniqueName(
+      (items || []).map(function (it) { return it.name }), base, isDir)
   }
 
   // 当前目录（Desktop 提供；无则根目录）
@@ -46,7 +29,7 @@ App.Actions = (function () {
 
   function createFolder(name) {
     App.FileAPI.list(_curPath()).then(function (items) {
-      let finalName = _uniqueName(items, name || '新建文件夹', true)
+      let finalName = _finalName(items, name || '新建文件夹', true)
       return App.FileAPI.mkdir(_joinPath(finalName)).then(function () { return finalName })
     }).then(function (finalName) {
       App.toast.show('已创建文件夹: ' + finalName)
@@ -59,7 +42,7 @@ App.Actions = (function () {
   function createFile(name) {
     App.FileAPI.list(_curPath()).then(function (items) {
       // 名称原样使用（不自动补后缀）；空输入用默认名「新建文件」
-      let finalName = _uniqueName(items, name || '新建文件', false)
+      let finalName = _finalName(items, name || '新建文件', false)
       return App.FileAPI.write(_joinPath(finalName), '').then(function () { return finalName })
     }).then(function (finalName) {
       // toast 显示最终创建名（含重名序号），让用户确认名字无自动后缀
@@ -92,21 +75,28 @@ App.Actions = (function () {
   }
 
   // ── 阶段 C：重命名（单选才可用，调用方校验）──
-  // oldPath/newPath 均为完整相对路径（选中集合以完整路径为 key，FileAPI 桥天然匹配）。
+  // oldPath = 完整相对路径；newName = 纯文件名（重命名限同目录，领域语义见
+  //   docs/operation-contract.md 2.2；跨目录 = move，走 _transfer 管道，不走 rename）。
   // 重名预检：list 目标目录（oldPath 父目录，防跨目录调用检查错位置），
   // 存在同名项即拒绝——SAF renameTo 同名失败、私有模式 File.renameTo 同名行为
   // 平台相关（可能静默覆盖），两模式行为必须一致：先查后改。
   // 锁定文件（正在预览）拒绝重命名。
-  function rename(oldPath, newPath) {
-    if (!oldPath || !newPath || oldPath === newPath) return
+  function rename(oldPath, newName) {
+    if (!oldPath || !newName || oldPath === newName) return
+    // 重命名限同目录（领域语义）：newName 必须为纯文件名，不得含路径分隔符。
+    // 跨目录 = move 管道（_transfer），不走 rename——桥层同样拦截（两后端一致，见
+    // docs/operation-contract.md 2.2）。防路径注入：'sub/b.txt' 这类输入直接拒绝。
+    if (newName.indexOf('/') >= 0) {
+      App.toast.show('重命名失败: 名称不能包含路径分隔符')
+      return
+    }
     if (_isLocked(oldPath)) {
       App.toast.show('文件正在预览（锁定），不可重命名')
       return
     }
-    const newName = newPath.indexOf('/') >= 0
-      ? newPath.slice(newPath.lastIndexOf('/') + 1) : newPath
     const targetDir = oldPath.indexOf('/') >= 0
       ? oldPath.slice(0, oldPath.lastIndexOf('/')) : ''
+    const newPath = targetDir ? targetDir + '/' + newName : newName
     App.FileAPI.list(targetDir).then(function (items) {
       for (let i = 0; i < items.length; i++) {
         if (items[i].name === newName) {
@@ -141,7 +131,7 @@ App.Actions = (function () {
     }
   }
 
-  // ── 阶段 C：剪切（只写剪贴板 + 视觉标记，文件不动；粘贴时才 copy+delete）──
+  // ── 阶段 C：剪切（只写剪贴板 + 视觉标记，文件不动；粘贴时才真正移动）──
   function cutSelection(entries) {
     if (!entries || !entries.length) return
     if (_lockedEntry(entries)) {
@@ -176,81 +166,137 @@ App.Actions = (function () {
     return locked.indexOf(path) >= 0
   }
 
-  // ── 阶段 C：粘贴（目标名自动加序号；cut 模式 copy+delete 源）──
+  // ── 阶段 C：粘贴（目标名自动加序号；cut 模式 = 真移动，桥层降级 copy+delete）──
   // 统一执行链：paste（当前目录）与 moveIntoFolder（指定文件夹）共用。
   // cb = {mode:'copy'|'cut', entries:[{path,isDir}]}；targetDir = 完整相对路径。
   // opts.keepClipboard = true 时（拖入文件夹）不清剪贴板（非用户剪贴板操作）。
-  // 分阶段进度：两阶段分离执行——先全部复制，再删除源（移动语义）。
-  //   - 阶段进度条：当前阶段内 done/total（复制 3/5 → 删除源 2/5）
-  //   - 总进度条：跨阶段整体 done/(total*阶段数)
-  // 两阶段分离的风险收益：复制阶段失败 → 源全部保留（可重试，不删源）；
-  // 删除阶段失败 → 目标已生成、源未删（重复，告警提示，不丢数据）。
+  // 移动语义（cut）：逐项调桥 move（FileBridge 真移动优先——私有模式 File.renameTo
+  //   原子移动 / SAF 模式 DocumentsContract.moveDocument，失败自动降级 copy+delete）。
+  //   风险收益：真移动失败 → 该项整体不动（可重试）；降级复制成功但删源失败 →
+  //   目标已生成、源未删（重复，告警提示，不丢数据）。
+  // 进度/取消：copy/move 传 onProgress（桥层 __fbProgress 字节级进度，节流约 200ms），
+  //   刷新 Loading 当前文件行；cancellable 时显示取消按钮（请求桥层取消 + 清理半成品）。
+  // 失败汇总：逐项结果收集，失败不中断，结束后失败项 >0 弹列表（成功 N / 失败 M + 原因）。
+  // 移动后布局 key 迁移：positions/bounds 以完整路径为 key，不迁移刷新后丢位置。
   function _transfer(cb, targetDir, opts) {
     opts = opts || {}
     App.FileAPI.list(targetDir).then(function (items) {
       const plan = App.Clipboard.planPaste(cb, items, targetDir)
-      if (!plan.length) return
+      if (!plan.length) {
+        // 剪贴板条目缺失（源已被删/移动）→ 明确告警，不静默
+        App.toast.show((opts.emptyText || '源文件已不存在，操作已取消'))
+        return
+      }
       const isMove = cb.mode === 'cut'
       const title = opts.title || (isMove ? '正在移动' : '正在粘贴')
-      const totalSteps = plan.length * (isMove ? 2 : 1)
-      if (App.Loading && typeof App.Loading.show === 'function') {
-        App.Loading.show({
-          title: title,
-          phaseLabel: '复制',
-          phaseDone: 0, phaseTotal: plan.length,
-          totalLabel: '总进度',
-          totalDone: 0, totalTotal: totalSteps
-        })
+      const totalSteps = plan.length
+      let results = []      // 逐项结果 [{name, ok, error}]（失败汇总）
+      let done = 0
+      const moved = []      // 成功移动项 [{src, dst}] → 布局 key 迁移
+      let cancelSent = false
+      let cancelled = false      // 已请求取消：剩余项不再启动（P0 修复）
+      let cancelledItems = []    // 被取消项（未启动 + 传输中被中止），取消 ≠ 失败
+      // 取消请求（防抖）：置 cancelled → 剩余项不再调度；通知桥层中止当前任务并清理半成品。
+      // 桥层单线程 executor 内 cancelTransfer 直接置 volatile 标志，可打断当前传输。
+      function requestCancel() {
+        if (cancelSent) return
+        cancelSent = true
+        cancelled = true
+        if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
+          App.FileAPI.cancelTransfer()
+        }
       }
-      // 阶段 1：全部复制（失败 → 源不删，可重试）
-      let chain = Promise.resolve()
-      let copied = 0
-      plan.forEach(function (job) {
-        chain = chain.then(function () {
-          return App.FileAPI.copy(job.src, job.dst)
-        }).then(function () {
-          copied++
+      // 进度回调：桥层字节级进度 → Loading 当前文件行
+      function makeOnProgress(job) {
+        return function (p) {
+          if (!p || !p.path) return
           if (App.Loading && typeof App.Loading.show === 'function') {
             App.Loading.show({
               title: title,
-              phaseLabel: '复制',
-              phaseDone: copied, phaseTotal: plan.length,
+              phaseLabel: isMove ? '移动' : '复制',
+              phaseDone: done, phaseTotal: plan.length,
               totalLabel: '总进度',
-              totalDone: copied, totalTotal: totalSteps
+              totalDone: done, totalTotal: totalSteps,
+              current: { name: p.path, done: p.done, total: p.total },
+              cancellable: true,
+              onCancel: requestCancel
             })
           }
-        })
-      })
-      // 阶段 2（仅移动）：删除源
-      if (isMove) {
-        chain = chain.then(function () {
-          let deleted = 0
-          let delChain = Promise.resolve()
-          plan.forEach(function (job) {
-            delChain = delChain.then(function () {
-              return App.FileAPI.del(job.src)
-            }).then(function () {
-              deleted++
-              if (App.Loading && typeof App.Loading.show === 'function') {
-                App.Loading.show({
-                  title: title,
-                  phaseLabel: '删除源',
-                  phaseDone: deleted, phaseTotal: plan.length,
-                  totalLabel: '总进度',
-                  totalDone: plan.length + deleted, totalTotal: totalSteps
-                })
-              }
-            })
-          })
-          return delChain
+        }
+      }
+      if (App.Loading && typeof App.Loading.show === 'function') {
+        App.Loading.show({
+          title: title,
+          phaseLabel: isMove ? '移动' : '复制',
+          phaseDone: 0, phaseTotal: plan.length,
+          totalLabel: '总进度',
+          totalDone: 0, totalTotal: totalSteps,
+          cancellable: true,
+          onCancel: requestCancel
         })
       }
+      // 逐项执行：copy 模式 = 桥 copy；cut 模式 = 桥 move（真移动优先，失败降级 copy+del）
+      // 失败不中断（逐项收集），全部结束后统一汇总
+      // [P0] 取消后剩余项不再启动：cancelled 置位后跳过未开始的 job（计入取消项而非失败）
+      let chain = Promise.resolve()
+      plan.forEach(function (job) {
+        chain = chain.then(function () {
+          if (cancelled) {
+            cancelledItems.push(job.dst)
+            return
+          }
+          const op = isMove
+            ? App.FileAPI.move(job.src, job.dst, makeOnProgress(job))
+            : App.FileAPI.copy(job.src, job.dst, makeOnProgress(job))
+          return op.then(function () {
+            done++
+            results.push({ name: job.dst, ok: true, error: null })
+            if (isMove) moved.push({ src: job.src, dst: job.dst })
+            if (App.Loading && typeof App.Loading.show === 'function') {
+              App.Loading.show({
+                title: title,
+                phaseLabel: isMove ? '移动' : '复制',
+                phaseDone: done, phaseTotal: plan.length,
+                totalLabel: '总进度',
+                totalDone: done, totalTotal: totalSteps,
+                cancellable: true,
+                onCancel: requestCancel
+              })
+            }
+          }).catch(function (err) {
+            done++
+            if (cancelled) {
+              // 取消导致当前任务中止（桥层抛「操作已取消」）：计入取消项，不算失败
+              cancelledItems.push(job.dst)
+              return
+            }
+            results.push({ name: job.dst, ok: false, error: err && err.message || String(err) })
+            // 失败不中断：继续下一项
+          })
+        })
+      })
       return chain.then(function () {
+        const okCount = results.filter(function (r) { return r.ok }).length
+        const failList = results.filter(function (r) { return !r.ok })
+        if (isMove && moved.length &&
+            App.Desktop && typeof App.Desktop.applyMoves === 'function') {
+          App.Desktop.applyMoves(moved)
+        }
         if (isMove && !opts.keepClipboard) App.Clipboard.clear()
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
-        App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + copied + ' 项')
+        if (cancelledItems.length) {
+          // 取消结束态：取消不是失败——报「已取消 N 项」，不弹失败列表
+          App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + okCount +
+            ' 项，已取消 ' + cancelledItems.length + ' 项')
+        } else if (failList.length) {
+          // 失败汇总：先 toast 概览，再弹列表（成功 N / 失败 M + 原因）
+          App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + okCount + ' 项，失败 ' + failList.length + ' 项')
+          _showFailSummary(failList)
+        } else {
+          App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + okCount + ' 项')
+        }
         // Windows 原则：选中态脆弱——粘贴后源选中路径已失效（cut 源已删 / 目标已生成），
         // 清空选中 + 收起操作栏，避免「幽灵选中」残留
         App.Desktop.clearSelection()
@@ -259,7 +305,7 @@ App.Actions = (function () {
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
-        App.toast.show((opts.failText || (isMove ? '移动' : '粘贴')) + '失败: ' + err.message + '（已成功 ' + copied + ' 项）')
+        App.toast.show((opts.failText || (isMove ? '移动' : '粘贴')) + '失败: ' + err.message + '（已成功 ' + done + ' 项）')
         App.Desktop.clearSelection()
         App.Desktop.refresh()
       })
@@ -271,9 +317,46 @@ App.Actions = (function () {
     })
   }
 
+  // 批量操作失败汇总弹窗：列出失败项（名称 + 原因），「知道了」关闭。
+  // 复用 dialog-overlay 结构，仅一次绑定确定按钮。
+  let _failSummaryBound = false
+  function _showFailSummary(failList) {
+    if (!failList || !failList.length) return
+    const overlay = document.getElementById('transfer-fail-overlay')
+    if (!overlay) return
+    const listEl = document.getElementById('transfer-fail-list')
+    if (listEl) {
+      listEl.innerHTML = ''
+      failList.forEach(function (f) {
+        const li = document.createElement('li')
+        const name = document.createElement('span')
+        name.className = 'fail-name'
+        name.textContent = f.name
+        const reason = document.createElement('span')
+        reason.className = 'fail-reason'
+        reason.textContent = f.error || '未知错误'
+        li.appendChild(name)
+        li.appendChild(reason)
+        listEl.appendChild(li)
+      })
+    }
+    const summary = document.getElementById('transfer-fail-summary')
+    if (summary) summary.textContent = '共失败 ' + failList.length + ' 项'
+    if (!_failSummaryBound && App.utils && typeof App.utils.bindPress === 'function') {
+      const okBtn = document.getElementById('transfer-fail-ok')
+      if (okBtn) {
+        App.utils.bindPress(okBtn, function () { App.Dialog.close('transfer-fail-overlay') })
+        _failSummaryBound = true
+      }
+    }
+    if (App.Dialog && typeof App.Dialog.open === 'function') {
+      App.Dialog.open('transfer-fail-overlay')
+    }
+  }
+
   // ── 阶段 C+：删除 = 移入回收站（安全删除，不做彻底删除）──
   // entries: [{path, isDir}]（完整路径）；目标 = 根目录回收站（Desktop.getTrashName）。
-  // 复用移动管道（copy+del 源，SAF 无跨目录 rename），重名自动加序号、失败保留源（安全）。
+  // 复用移动管道（真移动优先，桥层降级 copy+del），重名自动加序号、失败保留源（安全）。
   // 守卫：回收站自身不可删；锁定文件（正在预览）不可删；无回收站名（未授权）拒绝。
   function deleteSelection(entries) {
     if (!entries || !entries.length) return
@@ -311,7 +394,7 @@ App.Actions = (function () {
     _transfer(cb, _curPath())
   }
 
-  // 拖入文件夹（桌面空间拖动命中文件夹松手）：移动语义（copy+del 源），
+  // 拖入文件夹（桌面空间拖动命中文件夹松手）：移动语义（真移动，桥层降级 copy+del 源），
   // 目标目录 = 文件夹完整路径，不清用户剪贴板（非剪贴板操作）。
   function moveIntoFolder(entries, dirPath) {
     if (!entries || !entries.length || !dirPath) return

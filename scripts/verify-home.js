@@ -7,7 +7,7 @@
 //    3. 双指平移 + 捏合偏离 → 长按 Home（650ms）→ 快照写入 localStorage
 //       + home-has-snapshot 类 + toast
 //    4. 再次平移偏离 → 点按 Home → 相机回到快照（transform 数值断言，含 zoom）
-//    5. Drawer「设为默认视角」→ fallback 写入，home 保留
+//    5. 设为默认视角 → fallback 写入，home 保留
 //    6. 全程零 pageerror
 //
 //  用法: DESKTOP_BUNDLE=dist/desktop.bundle.min.html node scripts/verify-home.js
@@ -238,10 +238,10 @@ async function main() {
   // ── 4c. zoom 变化回 Home：缩小场景动画全程图标不出界（防「甩出屏幕再拉回」）──
   // 背景：同进度插值（zoom 与屏幕中心点共用同一缓动）时图标屏幕位置 = (P-W)·z 中途
   // 出现极值，边缘图标被推出视口再拉回（单测扫描复现出界 120px）。三段式修复后
-  // 全程不出界。本场景：捏合放大偏离（zoom 2.5）→ 点按 Home（快照 zoom 1.60）→
-  // 动画 400ms 内逐帧采样所有图标矩形，断言中心点始终在 viewport 内。
+  // 全程不出界。本场景：捏合放大偏离（快照 1.60 × 1.6 = zoom ≈2.56）→ 点按 Home
+  // （快照 zoom 1.60）→ 动画 400ms 内逐帧采样所有图标矩形，断言中心点始终在 viewport 内。
   await pan(client, vp.x, vp.y + 200, 160, 0)      // 大幅平移偏离
-  await pinchIn(client, vp.x, vp.y + 200)          // 捏合放大（zoom 2.5）
+  await pinchIn(client, vp.x, vp.y + 200)          // 捏合放大（zoom ≈2.56）
   await sleep(400)
   const tZoomed = parseTransform(await canvasTransform(page))
   // 动画前基线：记录各图标中心点（起点）
@@ -296,13 +296,10 @@ async function main() {
   }
   await sleep(700)                                 // 等动画结束，避免影响后续场景
 
-  // ── 5. Drawer「设为默认视角」→ fallback 写入且 home 保留 ──
+  // ── 5. 设为默认视角 → fallback 写入且 home 保留 ──
+  //（Drawer 已移除「设为默认视角」按钮，直接调用 API 验证 fallback 写入逻辑）
   await sleep(1500)  // 等上一个 toast 过期
-  const drawerBtn = await rect('#btn-drawer')
-  await tap(client, drawerBtn.x, drawerBtn.y)
-  await sleep(400)  // 等抽屉展开动画（0.28s）落定
-  const setView = await rect('[data-action="set-default-view"]')
-  await tap(client, setView.x, setView.y)
+  await page.evaluate(() => { if (App.Actions && App.Actions.setDefaultView) App.Actions.setDefaultView() })
   await sleep(400)
   const snap2 = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop.home.v1')))
   if (snap2 && snap2.fallback && snap2.home && snap2.home.zoom === snap.home.zoom) {

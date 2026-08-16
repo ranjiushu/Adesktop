@@ -34,10 +34,6 @@ App.fabSpeedDial = (function () {
       case 'refresh':
         App.Actions.refresh()
         break
-      case 'switch-root':
-        collapse()
-        App.Actions.switchRoot()
-        return
       case 'clear-selection':
         if (App.Desktop && typeof App.Desktop.clearSelection === 'function') {
           App.Desktop.clearSelection()

@@ -47,7 +47,9 @@ App.BottomBar = (function () {
   function updateHomeState() {
     let home = _getEl('bb-btn-home')
     if (!home || !App.HomeStore) return
-    const data = App.HomeStore.load()
+    const rootId = (App.Desktop && typeof App.Desktop.getRootId === 'function')
+      ? App.Desktop.getRootId() : ''
+    const data = App.HomeStore.load(rootId)
     if (data && data.home) home.classList.add('home-has-snapshot')
     else home.classList.remove('home-has-snapshot')
   }

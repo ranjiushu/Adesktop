@@ -113,6 +113,20 @@ sandbox.App.bridge = { vibrate: function () {} }
 sandbox.App.ViewMenu = { setEnabled: function () {} }
 sandbox.App.DesktopGesture = { init: function () {}, setCamera: function () {} }
 
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-core.js'), 'utf8'), sandbox,
+  { filename: 'desktop-core.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-render.js'), 'utf8'), sandbox,
+  { filename: 'desktop-render.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-browse-mode.js'), 'utf8'), sandbox,
+  { filename: 'desktop-browse-mode.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-navigation.js'), 'utf8'), sandbox,
+  { filename: 'desktop-navigation.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-persist.js'), 'utf8'), sandbox,
+  { filename: 'desktop-persist.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-viewer-link.js'), 'utf8'), sandbox,
+  { filename: 'desktop-viewer-link.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-gesture-handlers.js'), 'utf8'), sandbox,
+  { filename: 'desktop-gesture-handlers.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop.js'), 'utf8'), sandbox,
   { filename: 'desktop.js' })
 
@@ -150,6 +164,28 @@ async function main() {
   // 3) 相同位置重命名（no-op 防御）
   D.applyRename('b.txt', 'b.txt')
   check(savedLayout && savedLayout.icons['b.txt'], '同名重命名 no-op，布局不被破坏')
+
+  // 4) 批量布局迁移 applyMoves（移动后）：src 布局 key → dst，不 refresh，可多文件
+  savedLayout = null
+  // 移动 b.txt → sub/b.txt（含子目录）；c.txt 不动
+  D.applyMoves([{ src: 'b.txt', dst: 'sub/b.txt' }, { src: 'not-exist.txt', dst: 'x.txt' }])
+  check(!!savedLayout, 'applyMoves → saveLayout 被调用（有迁移时）')
+  check(savedLayout && savedLayout.icons['sub/b.txt'] &&
+    savedLayout.icons['sub/b.txt'].x === 100 && savedLayout.icons['sub/b.txt'].y === 100,
+    'applyMoves 迁移：sub/b.txt 继承 b.txt 位置 {100,100}')
+  check(savedLayout && !savedLayout.icons['b.txt'], 'applyMoves 迁移：b.txt 旧 key 已移除')
+  check(savedLayout && savedLayout.icons['c.txt'] &&
+    savedLayout.icons['c.txt'].x === 200,
+    'applyMoves 不动条目：c.txt 保持 {200,200}')
+  check(savedLayout && !savedLayout.icons['x.txt'],
+    'applyMoves 无布局条目：not-exist.txt 迁移不产生新 key')
+
+  // 5) applyMoves 空/无效列表 → 不 saveLayout（无变更）
+  savedLayout = null
+  D.applyMoves([])
+  check(savedLayout === null, 'applyMoves 空列表 → 不 saveLayout')
+  D.applyMoves([{ src: 'c.txt', dst: 'c.txt' }])
+  check(savedLayout === null, 'applyMoves src=dst → 不 saveLayout（no-op）')
 
   if (failures > 0) {
     console.error('  [FAIL] desktop-applyrename 测试 ' + failures + ' 项失败')

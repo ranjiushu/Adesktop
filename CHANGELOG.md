@@ -2,6 +2,150 @@
 
 ## Unreleased
 
+### FileBridge 拆分 7 模块（门面 + 委托）（2026-08-17）
+
+- **FileBridge.java 1206 行 → 265 行薄门面**：22 个 `@JavascriptInterface` 方法签名一字
+  不动（`window.FileBridge` API 面不变），实现按职责委托给新模块
+- 新模块：`BridgeContext`（共享上下文 + 回调管道 + 路径工具）、`FileStore`（list/read/
+  write/mkdir/delete/rename）、`TransferEngine`（move/copy/cancel + 进度上报 + 半成品清理）、
+  `ThumbnailService`（缩略图）、`AppBridge`（已安装应用）、`ExternalOpen`（resolveUri/
+  openExternal/openUrl）、`UploadBridge`（网页上传）
+- 关键不变式：文件操作仍全部串行于 `BridgeContext` 同一单线程 executor；`cancelRequested`
+  取消标志与 copy 循环竞态语义原样保留；`cancelTransfer` 仍不进 executor（尽快中止语义）
+- 壳层零改动：`MainActivity` 的 `new FileBridge(this, webView, rootUri)` 签名不变；
+  前端 `bridge.js`/`file-api.js`/测试套件零改动
+- 验证：`verify.sh` 10/10 全绿 + Gradle assembleRelease 构建通过 + APK 归档
+
+## Unreleased
+
+### Viewer 拖动手柄（辅助拖动区）（2026-08-16）
+
+- **新增拖动手柄**：每个 canvas 态 Viewer 卡片底部中心下方悬浮 36×6px 小横条
+  （屏幕层固定尺寸不随画布 zoom 缩放，间距 14px，始终可见含未选中，选中变 accent 色）
+- **按住手柄 = 自动选中 + 直接拖动**：不受选中态限制的辅助拖动入口——未选中 Viewer
+  也直接拿起移动实体（不必先点击/长按），拖动结束选中保持、点外部取消；轻点手柄 =
+  仅选中（与点击卡片语义一致，不改变现有选中/框选逻辑）
+- **固定屏幕尺寸实现**：`handleScreenRect`（屏幕坐标渲染）/ `handleWorldRect`（世界
+  坐标命中）纯函数，相机变化由 `syncHandles` 跟随（desktop.js onUpdate 每帧驱动），
+  卡片移动/媒体自适应后 `applyCanvasRect` 同步；目录切换 suspend/resume、全屏进出
+  时手柄同步隐藏/恢复；元素 pointer-events 穿透（命中全走手势层世界坐标判定）
+- 手势接线：`hitTest` 手柄优先命中 → `viewer-handle` 类型；gesture 状态机
+  `viewer-handle` 位移超阈值直接进入拖拽（不进框选）；`handleTap`/`handleLongPress`/
+  `handleDragStart` 处理手柄（自动选中 + beginDrag）
+- 测试/文档：`test-viewer.js` 增 handleScreenRect/handleWorldRect 纯函数断言；
+  `viewer-entity-verify.js` 增 5b（手柄存在固定尺寸/未选中直接拖动/自动选中/轻点仅选中）；
+  `docs/viewer.md` + `docs/interaction.md` 同步
+
+### 画布缩放范围放宽 0.4~2.5 → 0.3~3（2026-08-16）
+
+- `desktop-camera.js`：`ZOOM_MIN` 0.4 → 0.3、`ZOOM_MAX` 2.5 → 3（双指缩放/相机
+  创建/动画端点统一过 `clampZoom`）
+- 测试同步：`test-desktop-camera.js` 边界断言（0.3/3）、`test-desktop-gesture-dom.js`
+  捏合 clamp 断言 scale(3)、`scripts/verify-home.js` 4c 注释修正为实际 zoom ≈2.56
+  （旧上限 2.5 时被 clamp，新上限 3 下不再截断）
+- 文档同步：`docs/interaction.md`（缩放范围 0.3 ~ 3 ×2 处）、
+  `docs/bridge-and-data-contract.md`（`[0.3, 3]`）
+
+### Viewer media 文件名栏改覆盖式（2026-08-16）
+
+- **media 类（image/video/svg）文件名栏 = absolute 覆盖在卡片底部**：不参与 flex 占位，
+  选中显示文件名时**不改变媒体缩放比例**（fitAspectRect 结果不动），盖住底部少量内容
+  可接受；半透明深色浮层 + 白色标题保证可读性。viewer.js 新增 `canvasCardClass()`
+  按 kind 给 canvas 态卡片加 `viewer-card-media` 标记类（audio 除外：3:4 封面卡片底部
+  是原生播放控制条，保持占位式不遮挡）
+- 文档/验证同步：`docs/viewer.md` 增 media 覆盖式说明；`viewer-modules-verify.js`
+  新增 5b（media 覆盖式：未选中隐藏/absolute 覆盖/卡片尺寸与媒体比例不变）与
+  5c（文档类仍占位式）断言
+
+### Viewer 画布实体：文件名栏移至底部 + 未选中隐藏（2026-08-16）
+
+- **文件名栏移到内容区下方**：canvas 态 Viewer 的 `.viewer-header` 用 CSS `order` 从卡片
+  顶部改到内容区下方（DOM 顺序不变；全屏态 `.viewer-card-fullscreen` 不受影响仍为顶栏，
+  返回按钮 + 工具条不变），分隔线改到栏上方
+- **未选中隐藏文件名栏**：canvas 态未选中（打开初始/点外部取消/框选未命中）时整条文件名
+  栏 `display: none`，内容区占满整卡；选中（点击/框选/长按）时显示——纯 CSS 随
+  `viewer-card-selected` 类驱动，选中与拖动解耦（拖动必然已选中，拖动中保持可见；
+  命中判定基于世界坐标 rect，显隐不影响手势/框选/拖动）
+- 文档同步：`docs/viewer.md`「文件名栏在内容区下方 + 未选中隐藏」；
+  `tools/ui/viewer-entity-verify.js` 增断言（未选中隐藏 / 选中时栏在内容区下方 / 取消隐藏）
+
+### 网站快捷方式 + 网页文件上传桥（2026-08-16）
+
+- **网站快捷方式**：`shortcut.js` 契约加 `website` 类型（url/label），新增
+  `normalizeUrl`/`hostOf` 纯函数；`FileOpener.openShortcut` 分派 website →
+  `InternalViewer` 画布内 iframe 打开
+- **Viewer 加 website kind**：iframe `src` 直连远程网址，安全 sandbox 不含
+  `allow-same-origin`（opaque origin 隔离顶层 Java 桥），`referrerpolicy=no-referrer`
+  防 file:// 路径泄露；锚点取视觉中心 + 级联错位，接近全屏宽卡片（非 3:4）
+- **桥层加 openUrl**：ACTION_VIEW 打开网址（网站加载失败兜底系统浏览器）
+- **新建网站对话框**（`website-dialog.js`）：Drawer「新建网站」入口 → 网址 + 可选名称 →
+  写 `<名称>.desktop`（type=website，重名自动加序号）
+- **网站信任开关**：website 快捷方式加 `trusted` 字段；新建对话框勾选「信任该网站」→
+  完整加载（可读写授权目录，用户显式接受风险）；未勾选保持 opaque origin 安全隔离
+  （复杂 SPA 因 localStorage/cookie 被拒而白屏）
+- **修复网页上传阻断**：sandbox 会阻止 iframe 内 `<input type=file>` 触发文件选择器
+  （onShowFileChooser 不回调）；信任网站改为完全移除 sandbox（第三方 https iframe 与
+  file:// 顶层跨域，同源策略天然隔离 Java 桥），恢复 localStorage/cookie/file chooser；
+  加 logcat 诊断日志（tag `DesktopWebUpload`）
+- **网页文件上传桥**（`web-upload.js`）：拖拽文件到 website iframe 松手 → 设为待上传 +
+  toast 提示；网页触发 `<input type=file>` → 原生 `onShowFileChooser` 拦截 →
+  弹确认「用待上传文件 / 重新选择」；桥层加 `completeUpload`/`chooseUploadFromSystem`/
+  `cancelUpload`（resolveUri 回传 / 系统 GET_CONTENT 选择器 / 回传 null）
+- 契约锁同步：`test-bridge-contract.js` 登记 openUrl + 三个上传桥方法；
+  `docs/bridge-and-data-contract.md` 同步；新增 `test-web-upload.js`
+
+### Drawer/FAB 精简（2026-08-16）
+
+- **Drawer 移除 4 项操作**：新建文件夹、新建文件、刷新、设为默认视角（新建/刷新仍保留在
+  FAB Speed Dial；设为默认视角功能保留为 `App.Actions.setDefaultView` API，仅移除 UI 入口）
+- **FAB Speed Dial 移除「切换根目录」**（保留 Drawer 内「切换根目录」入口）
+- **Drawer 剩余图标 emoji → 矢量图标**：切换根目录（folder-move）、已安装应用（smartphone，新增）、
+  提交与构建（wrench，新增）；sprite 新增 `icon-smartphone`/`icon-wrench` 并登记 icons.js _NAMES
+- 同步适配：drawer.js 移除已删 action 分支；fab-speed-dial.js 移除 switch-root case；
+  verify-home E2E 场景 5 改为直调 `App.Actions.setDefaultView()`（按钮移除后仍验证 fallback 写入）
+
+### 矢量图标系统移植（2026-08-16）
+
+- **图标系统统一**（移植 LexiCull 同构方案）：`index.html` 顶部新增隐藏 SVG sprite
+  （`<symbol id="icon-{kebab}">`，70 个图标 = LexiCull 全集 61 个 + Desktop 特有 9 个：
+  arrow-left/right/up、home、file、refresh-cw、maximize、scissors、music），
+  新增 `src/js/icons.js`（`App.icons.get(name, opts)` + 命名访问 `App.icons.<name>`，
+  输出 `<svg><use href="#icon-xxx"/></svg>`），ES6 重写（禁 var）
+- **25 处手写内联 SVG 全部收编**：顶栏汉堡/三点、底部栏后退/前进/新建/Home/上级目录、
+  Drawer 关闭、BuildInfo/AppList 返回、FAB 加号/叉、Speed Dial 全部 14 个操作图标、
+  Viewer 返回键与音频大图标——统一为 sprite `<use>` 引用，零手写 path
+- **新增 `tests/test-icons.js`**：生成器纯函数（get/命名访问/kebab/class 转义）+
+  sprite symbol 与 `_NAMES` 双向一致性校验（缺一即 FAIL），新图标必须两处同步登记
+- 文档 `docs/build-pipeline.md` 新增「图标系统」约定小节
+
+### 弹窗/对话框模块优化 + 提交与构建页修复（2026-08-16）
+
+- **弹窗模块统一约定**（`dialog.js`/`dialog.css`）：弹窗为矩形（直角）卡片；不设
+  「取消/关闭」按钮，关闭途径 = 系统返回键 / 点击遮罩空白；弹窗正文可长按选择复制
+  （`user-select: text`）。`App.Dialog` 新增打开栈 + `handleBack()`：系统返回键
+  （`handleSystemBack` 第一优先级）关闭栈顶弹窗，弹窗可多层嵌套逐级关闭
+- 新建/重命名/添加快捷方式确认框移除「取消」按钮（关闭走返回键/点空白），
+  新建对话框按钮布局由三列改双列（文件 + 文件夹）
+- **提交与构建详情弹窗重构**：文件/提交详情改用统一 `.dialog` 模板（此前手写内联样式
+  14px 圆角、点击弹窗本体即关闭——长按选字被打断，文字不可复制的根因）；移除「关闭」
+  按钮；点遮罩空白或系统返回键关闭（先关弹窗、面板保持打开）
+- **弹窗信息准确化**：提交时间/文件创建·修改时间由 git UTC（`+0000`）原样显示改为
+  转北京时间（+08:00）展示，与构建时间口径一致（此前差 8 小时的「信息不准确」根因）
+- **弹窗点击即复制**：提交与构建详情弹窗「点击谁就复制谁」——标题（文件名/提交信息）、
+  路径、完整 Hash、作者·时间、行数/字数/创建/修改值、变更统计、文件行均可点按复制
+  （复制内容 = 该元素文本，文件行/按钮复制纯路径），统一吐司提示「已复制…」；
+  可点区域带 :active 按压反馈，长按选字不受影响
+- **源码规模排序标签修复**：切换排列方式（行数/名称/修改时间）此前点击不生效——
+  `bindSortChips` 未把新排序键写回 `opts.sortKey`，重渲染仍按旧键排序
+- **更新日志渲染重构**：构建期 python 迷你渲染器（不支持 `###` 标题、列表续行被拆段）
+  改为注入 `CHANGELOG_MD` 原文、运行时由 `App.Markdown` 渲染（h1-h6/多行列表项/
+  有序列表/引用/代码/链接统一支持）；`App.Markdown` 新增多行列表项续行合并
+- **更新日志容器宽度对齐**：sticky 折叠头负 margin 外扩 4px/边导致与屏幕宽度不一致，
+  改为与内容列对齐；容器横向 padding 归零与上方卡片同宽。展开后内容级横向溢出修复：
+  CHANGELOG 含超长无空格 ASCII token（如 `folder/trash/text/...` 斜杠串），默认换行规则
+  不在 `/` 处断行、横向撑宽滚动容器（展开后整页可左右滑动、内容被裁），
+  `.changelog-container` 开启 `overflow-wrap: anywhere` 任意字符断行根治
+
 ### 工程（治理移植，2026-08-15）
 
 - 分支治理升级为三级模型 `main ← feat/dev ← topic`：`feat/infinite-canvas` 并入
@@ -158,6 +302,12 @@
   （无弹射）；动画中手势/目录切换即打断（onGestureStart 回调），手势直控优先。
   演进说明：曾用缓出曲线（起步弹射）、三段式（段切换断续）均被单一飞行曲线取代。
   test-desktop-camera 补防出界复现案例 + 飞行均匀性断言，verify-home 补 zoom 变化 E2E
+- 高级浏览模式（阶段 E）：顶栏「排列与视图」菜单底部新增「高级浏览模式」勾选项
+  （view-menu，始终可用不受根目录置灰控制）——单指拖动空白/未选中图标从「框选」切换为
+  平移画布（桌面）/ 滚动目录（文件夹），手势层 `_browseMode` 控制 empty/icon 命中进入
+  pan 相位而非 marquee；已选中文件仍走拿起移动。双击空白进入/退出「临时操作模式」
+  （effective = 高级浏览 ON && 非临时模式），临时切回框选/拿起语义便于精细操作；偏好经
+  view-store `advancedBrowse` 持久化。docs/interaction.md 补 §7.6 定稿 + 阶段表 E 行
 - 沉浸式状态栏/导航栏（参考 LexiCull 方案）：edge-to-edge 内容延伸，状态栏/导航栏
   透明，安全区经 WindowInsets 注入 CSS 变量（safe-top / safe-bottom / panel-bottom）
 - 系统栏图标明暗由壳层统一控制（浅色主题 → 深色图标），手势临时栏

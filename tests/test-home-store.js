@@ -87,6 +87,22 @@ check(H2.saveHome(CAM) === false, 'setItem 抛异常 → saveHome false（写入
 // ── 出厂默认视角 ──
 check(H.DEFAULT_CAMERA.x === 0 && H.DEFAULT_CAMERA.y === 0 && H.DEFAULT_CAMERA.zoom === 1, 'DEFAULT_CAMERA = (0,0,1)')
 
+// ── [P1] root 隔离：不同 rootId 各存各的快照，互不继承 ──
+store = {}
+check(H.saveHome(CAM, 'rootA') === true, 'saveHome(rootA) 成功')
+check(H.saveFallback({ x: 1, y: 2, zoom: 3 }, 'rootB') === true, 'saveFallback(rootB) 成功')
+check(H.load('rootA').home.x === 123.5, 'rootA 快照独立')
+check(H.load('rootB').fallback && !H.load('rootB').home, 'rootB 独立（无 rootA 的 home）')
+check(!store['desktop.home.v1'], 'rootId key 模式下不写旧 key')
+
+// ── [P1] 一次性迁移：旧 key 数据 → 当前 root key，随后删除旧 key ──
+store = {}
+store['desktop.home.v1'] = JSON.stringify({ version: 1, home: CAM })
+check(H.migrateLegacy('rootA') === true, 'migrateLegacy 有旧数据 → true')
+check(H.load('rootA').home.x === 123.5, '旧数据被首见 root 吸收')
+check(!store['desktop.home.v1'], '迁移后删除旧 key（不再共享）')
+check(H.migrateLegacy('rootA') === false, 'migrateLegacy 无旧数据 → false（幂等）')
+
 if (failures > 0) {
   console.error('  [FAIL] home-store 测试 ' + failures + ' 项失败')
   process.exit(1)

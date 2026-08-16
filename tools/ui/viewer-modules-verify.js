@@ -133,6 +133,69 @@ async function main() {
   })
   check(Math.abs(rImg.ratio - 320 / 180) < 0.03, '图片 Viewer 态 = 原始比例（320:180 ≈ 1.78，实测 ' + rImg.ratio.toFixed(3) + '）')
 
+  console.log('═══ 5b. media 文件名栏 = 覆盖式（选中显示名字不改变媒体缩放比例） ═══')
+  const rImgSel = await page.evaluate(function () {
+    const inst = App.InternalViewer.list()[0]
+    const card = inst._card
+    const header = card.querySelector('.viewer-header')
+    const body = card.querySelector('.viewer-body')
+    const img = card.querySelector('.viewer-media-img')
+    const cardBefore = { w: parseFloat(card.style.width), h: parseFloat(card.style.height) }
+    const imgBefore = { w: img.getBoundingClientRect().width, h: img.getBoundingClientRect().height }
+    const headerBefore = getComputedStyle(header).display
+    App.InternalViewer.selectOnly(inst.id)
+    const hs = getComputedStyle(header)
+    const hr = header.getBoundingClientRect()
+    const br = body.getBoundingClientRect()
+    const cr = card.getBoundingClientRect()
+    return {
+      cardBefore: cardBefore,
+      imgBefore: imgBefore,
+      headerBeforeHidden: headerBefore === 'none',
+      headerDisplay: hs.display,
+      headerPosition: hs.position,
+      headerOnTopOfBody: hr.top < br.bottom - 1,        // header 覆盖在 body 内容之上
+      headerAtCardBottom: Math.abs(hr.bottom - cr.bottom) < 2,
+      cardAfter: { w: parseFloat(card.style.width), h: parseFloat(card.style.height) },
+      imgAfter: { w: img.getBoundingClientRect().width, h: img.getBoundingClientRect().height },
+      mediaClass: card.classList.contains('viewer-card-media')
+    }
+  })
+  check(rImgSel.headerBeforeHidden, 'media 打开未选中 → 文件名栏隐藏')
+  check(rImgSel.mediaClass, 'media 卡片带 viewer-card-media 标记类')
+  check(rImgSel.headerDisplay !== 'none' && rImgSel.headerPosition === 'absolute',
+    'media 选中 → 文件名栏显示且为 absolute 覆盖')
+  check(rImgSel.headerOnTopOfBody && rImgSel.headerAtCardBottom, '文件名栏覆盖在卡片底部（盖住内容）')
+  check(rImgSel.cardAfter.w === rImgSel.cardBefore.w && rImgSel.cardAfter.h === rImgSel.cardBefore.h,
+    '选中显示文件名 → 卡片尺寸不变（不占位）')
+  check(Math.abs(rImgSel.imgAfter.w - rImgSel.imgBefore.w) < 1 && Math.abs(rImgSel.imgAfter.h - rImgSel.imgBefore.h) < 1,
+    '选中显示文件名 → 媒体缩放比例不变（320:180 保持）')
+
+  console.log('═══ 5c. 文档类文件名栏 = 占位式（底部条，非覆盖） ═══')
+  await page.evaluate(function () { App.InternalViewer.closeAll() })
+  await page.evaluate(function () { App.Desktop.openItem('note.txt') })
+  await page.waitForFunction(function () { return document.querySelector('.viewer-card-canvas') }, { timeout: 5000 })
+  const rDocSel = await page.evaluate(function () {
+    const inst = App.InternalViewer.list()[0]
+    const card = inst._card
+    const header = card.querySelector('.viewer-header')
+    const body = card.querySelector('.viewer-body')
+    App.InternalViewer.selectOnly(inst.id)
+    const hs = getComputedStyle(header)
+    const hr = header.getBoundingClientRect()
+    const br = body.getBoundingClientRect()
+    const cr = card.getBoundingClientRect()
+    return {
+      headerPosition: hs.position,
+      headerBelowBody: Math.abs(hr.top - br.bottom) < 2,   // 占位式：header 顶部紧贴 body 底部
+      headerAtCardBottom: Math.abs(hr.bottom - cr.bottom) < 2,
+      mediaClass: card.classList.contains('viewer-card-media')
+    }
+  })
+  check(rDocSel.headerPosition !== 'absolute', '文档类选中 → 文件名栏非 absolute（占位式）')
+  check(rDocSel.headerBelowBody && rDocSel.headerAtCardBottom, '文档类文件名栏 = 底部条（body 上方占位，非覆盖）')
+  check(!rDocSel.mediaClass, '文档类卡片无 viewer-card-media 标记类')
+
   console.log('═══ 6. 框选划过未选中 Viewer → 触发选中 ═══')
   await page.evaluate(function () { App.InternalViewer.closeAll() })
   await page.evaluate(function () { App.Desktop.openItem('note.txt') })

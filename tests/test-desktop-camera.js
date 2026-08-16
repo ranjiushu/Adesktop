@@ -32,16 +32,16 @@ const C = sandbox.App.DesktopCamera
 
 // ── clampZoom ──
 check(C.clampZoom(1) === 1, 'clampZoom(1) = 1')
-check(C.clampZoom(0.4) === 0.4, 'clampZoom 下限 0.4 不截断')
-check(C.clampZoom(0.1) === 0.4, 'clampZoom 0.1 → 0.4（下限）')
-check(C.clampZoom(2.5) === 2.5, 'clampZoom 上限 2.5 不截断')
-check(C.clampZoom(9) === 2.5, 'clampZoom 9 → 2.5（上限）')
+check(C.clampZoom(0.3) === 0.3, 'clampZoom 下限 0.3 不截断')
+check(C.clampZoom(0.1) === 0.3, 'clampZoom 0.1 → 0.3（下限）')
+check(C.clampZoom(3) === 3, 'clampZoom 上限 3 不截断')
+check(C.clampZoom(9) === 3, 'clampZoom 9 → 3（上限）')
 check(C.clampZoom(NaN) === 1, 'clampZoom NaN → 1')
-check(C.clampZoom(Infinity) === 2.5, 'clampZoom Infinity → 2.5（上限）')
+check(C.clampZoom(Infinity) === 3, 'clampZoom Infinity → 3（上限）')
 
 // ── create ──
 check(C.create().zoom === 1 && C.create().x === 0 && C.create().y === 0, 'create() 默认 {0,0,1}')
-check(C.create(5, 6, 0.1).zoom === 0.4, 'create 越界 zoom 被 clamp')
+check(C.create(5, 6, 0.1).zoom === 0.3, 'create 越界 zoom 被 clamp')
 
 // ── screenToWorld / worldToScreen 互逆 ──
 const cam = C.create(10, 20, 2)
@@ -81,9 +81,9 @@ check(approx(awb2.x, awa2.x) && approx(awb2.y, awa2.y), 'pinchBy 缩小锚点世
 
 // ── pinchBy clamp 边界 ──
 const pinchMax = C.pinchBy(C.create(0, 0, 2), 100, 1000, 0, 0)
-check(pinchMax.zoom === 2.5, 'pinchBy 放大越界 → clamp 2.5')
+check(pinchMax.zoom === 3, 'pinchBy 放大越界 → clamp 3')
 const pinchMin = C.pinchBy(C.create(0, 0, 0.5), 100, 1, 0, 0)
-check(pinchMin.zoom === 0.4, 'pinchBy 缩小越界 → clamp 0.4')
+check(pinchMin.zoom === 0.3, 'pinchBy 缩小越界 → clamp 0.3')
 
 // pinchBy 非法指距 → 相机不变
 const pinchBad = C.pinchBy(C.create(5, 6, 1), 0, 100, 50, 50)

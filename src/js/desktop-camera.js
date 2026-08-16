@@ -7,8 +7,8 @@
 'use strict'
 
 App.DesktopCamera = (function () {
-  const ZOOM_MIN = 0.4
-  const ZOOM_MAX = 2.5
+  const ZOOM_MIN = 0.3
+  const ZOOM_MAX = 3
 
   function num(v, d) {
     return (typeof v === 'number' && isFinite(v)) ? v : d

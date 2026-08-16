@@ -116,7 +116,7 @@ App.DesktopPersist = (function () {
       }
     }
     if (!cam && saved && saved.camera) {
-      cam = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
+      cam = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom, saved.camera.rotation)
     }
     if (cam) C.camera = cam
   }
@@ -168,12 +168,13 @@ App.DesktopPersist = (function () {
 
   // 保存布局（位置 + 相机），失败告警（铁律：写入路径失败必须告警）
   // folder 容器：布局自动排布，不持久化（位置/相机均不写）
+  // rotation 透传：崩溃恢复后按保存时的旋转态重建相机（竖屏/横屏视角不混淆）
   function saveLayout() {
     if (C.isFolderView()) return
     const data = {
       version: 1,
       icons: C.positions,
-      camera: { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
+      camera: { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom, rotation: C.camera.rotation || 0 }
     }
     if (!App.LayoutStore.save(data, C.state.rootId)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败')

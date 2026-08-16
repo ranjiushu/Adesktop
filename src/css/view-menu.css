@@ -74,11 +74,14 @@
   font-weight: 600;
 }
 
-.view-menu-dir,
-.view-menu-check {
+.view-menu-dir {
   display: none;
   font-style: normal;
   font-weight: 600;
+}
+
+.view-menu-check {
+  display: none;
 }
 
 /* 勾选标记（MD 图标）：active 时显示，flex 布局对齐 */

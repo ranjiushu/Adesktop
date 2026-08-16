@@ -36,7 +36,7 @@ App.Desktop = (function () {
       onClamp: function (c) {
         if (!C.isFolderView()) return c
         return App.DesktopCamera.clampToBounds(
-          { x: 0, y: c.y, zoom: 1 },
+          { x: 0, y: c.y, zoom: 1, rotation: 0 },
           C.viewportWidth(), C.state.canvasH, C.viewportWidth(), C.viewportHeight())
       },
       onUpdate: function (c) {

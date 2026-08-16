@@ -58,20 +58,37 @@ App.InternalViewer = (function () {
   }
 
   // 手柄世界矩形（命中测试用）：固定屏幕尺寸反算世界尺寸（/zoom），
-  // 中心 = 卡片底部中心世界点，间距 = HANDLE_GAP/zoom（屏幕 14px 等距）。
+  // 中心 = 卡片底部中心世界点，间距 = HANDLE_GAP/zoom（屏幕 14px 恒定）。
   // 命中测试走世界坐标（手势层 toWorld 后回调），与 handleScreenRect 是同一矩形
   // 的两种表示（worldToScreen 互逆），纯函数可单测。
-  function handleWorldRect(cardRect, camera) {
+  // rotation=90 时需要 vw/vh 计算旋转中心：先算屏幕矩形，再逆旋转回世界坐标；
+  // 无 vw/vh 时退化为旧逻辑（rotation=0 或调用方未传视口尺寸的防御路径）。
+  function handleWorldRect(cardRect, camera, vw, vh) {
     if (!cardRect) return null
     const c = camera || create()
     const z = c.zoom || 1
+    const rot = c.rotation === 90
+    if (rot && vw > 0 && vh > 0) {
+      // 旋转态：先算屏幕矩形（含旋转），再逆变换回世界坐标
+      const sr = handleScreenRect(cardRect, camera, vw, vh)
+      if (!sr) return null
+      const scx = sr.x + sr.w / 2
+      const scy = sr.y + sr.h / 2
+      const ccx = vw / 2, ccy = vh / 2
+      // screenToWorld 逆旋转：lx = (sy-cy)+cx, ly = -(sx-cx)+cy
+      const lx = (scy - ccy) + ccx
+      const ly = -(scx - ccx) + ccy
+      const wcx = c.x + lx / z
+      const wcy = c.y + ly / z
+      // 屏幕 36×6 → 世界 6/z × 36/z（逆旋转后宽高互换）
+      return { x: wcx - HANDLE_H / (2 * z), y: wcy - HANDLE_W / (2 * z), w: HANDLE_H / z, h: HANDLE_W / z }
+    }
+    // rotation=0：原逻辑（无需视口尺寸）
+    const gap = HANDLE_GAP / z
     const w = HANDLE_W / z
     const h = HANDLE_H / z
-    const gap = HANDLE_GAP / z
-    const rot = c.rotation === 90
-    // 与 handleScreenRect 同一基准：旋转后视觉底部中心 = 原右边缘中心
-    const cx = rot ? cardRect.x + cardRect.w : cardRect.x + cardRect.w / 2
-    const top = rot ? cardRect.y + cardRect.h / 2 + gap : cardRect.y + cardRect.h + gap
+    const cx = cardRect.x + cardRect.w / 2
+    const top = cardRect.y + cardRect.h + gap
     return { x: cx - w / 2, y: top, w: w, h: h }
   }
 
@@ -294,9 +311,10 @@ App.InternalViewer = (function () {
     }
 
     // 命中判定：世界点 (wx, wy) 是否落在本实例手柄矩形内（手柄优先于卡片本身命中）
+    // vw/vh 透传：rotation=90 时 handleWorldRect 需要视口尺寸计算旋转中心
     function handleHitTest(wx, wy, camera) {
       if (!handleEl || state.mode !== 'canvas' || !state.rect) return false
-      const r = handleWorldRect(state.rect, camera)
+      const r = handleWorldRect(state.rect, camera, _layer.clientWidth, _layer.clientHeight)
       if (!r) return false
       return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h
     }

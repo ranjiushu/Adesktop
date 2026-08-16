@@ -161,14 +161,16 @@ App.DesktopNavigation = (function () {
   // 回到 Home：快照优先，其次默认视角，最后出厂 (0,0,1)。
   // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera——
   // 从文件夹返回仍恢复进文件夹前的视角，Home 只负责「现在」的空间锚点。
+  // rotation 透传：create 第四参确保目标相机保持当前旋转态（横屏点 Home 不闪回竖屏）。
   function goHome() {
     if (C.isFolderView()) return
-    let target = App.DesktopCamera.create()
-    const data = App.HomeStore.load(C.state.rootId, C.camera.rotation)
+    const rot = C.camera.rotation
+    let target = App.DesktopCamera.create(0, 0, 1, rot)
+    const data = App.HomeStore.load(C.state.rootId, rot)
     if (data && data.home) {
-      target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom)
+      target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom, rot)
     } else if (data && data.fallback) {
-      target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom)
+      target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom, rot)
     }
     animateCameraTo(target)
   }
@@ -192,7 +194,9 @@ App.DesktopNavigation = (function () {
   function animateCameraTo(target, durationMs) {
     cancelCameraAnim()
     const from = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom, rotation: C.camera.rotation }
-    const tgt = target || App.DesktopCamera.create()
+    // 浅拷贝：避免 mutate 调用方传入的 target 对象（goHome 等复用场景安全）
+    const raw = target || App.DesktopCamera.create()
+    const tgt = { x: raw.x, y: raw.y, zoom: raw.zoom, rotation: raw.rotation }
     // 目标相机透传当前 rotation（Home 复位只动位置/缩放，画布旋转状态保留；
     // 否则动画中途 rotation 变 0，画布闪回正）
     if (typeof tgt.rotation !== 'number') tgt.rotation = C.camera.rotation

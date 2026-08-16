@@ -380,6 +380,39 @@ async function main() {
       fail('再切横屏应落在横屏槽位位置',
         'slot=' + JSON.stringify(snapL && snapL.landscapeHome) + ' cam=' + JSON.stringify(camLand))
     }
+    // ── 4.6 横屏下点 Home 按钮：rotation 应保持 90（P0-1 回归守卫）──
+    // 此时处于横屏（rotation=90），横屏槽位有 landscapeHome 快照（P2）。
+    // 点按 Home → goHome 应落在横屏槽位 + rotation=90，不闪回竖屏。
+    // 先平移相机偏离横屏槽位位置
+    await pan(client, vp.x, vp.y + 200, 50, -30)
+    await sleep(200)
+    const camBeforeHome = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
+    })
+    // 点按 Home（短按，非长按）
+    await tap(client, homeRect.x, homeRect.y)
+    await sleep(600)   // 等 Home 动画完成（HOME_ANIM_MS=400 + 余量）
+    const camAfterHome = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
+    })
+    if (camAfterHome && camAfterHome.rotation === 90) {
+      pass('横屏下点 Home → rotation 保持 90（不闪回竖屏）')
+    } else {
+      fail('横屏下点 Home 应保持 rotation=90',
+        'before=' + JSON.stringify(camBeforeHome) + ' after=' + JSON.stringify(camAfterHome))
+    }
+    if (camAfterHome && snapL && snapL.landscapeHome &&
+        Math.abs(camAfterHome.x - snapL.landscapeHome.x) < 1e-6 &&
+        Math.abs(camAfterHome.y - snapL.landscapeHome.y) < 1e-6 &&
+        Math.abs(camAfterHome.zoom - snapL.landscapeHome.zoom) < 1e-6) {
+      pass('横屏下点 Home → 落在横屏槽位位置（landscapeHome）')
+    } else {
+      fail('横屏下点 Home 应落在横屏槽位位置',
+        'slot=' + JSON.stringify(snapL && snapL.landscapeHome) + ' cam=' + JSON.stringify(camAfterHome))
+    }
+
     // 转回竖屏，恢复初始状态（供场景 5 pageerror 检查）
     await tap(client, menuBtn.x, menuBtn.y)
     const rot8 = await rect('[data-rotate="toggle"]')

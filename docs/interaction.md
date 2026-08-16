@@ -230,10 +230,10 @@ down ─────────────────────────
 - **状态存储**：`camera.rotation`（0 或 90）。旋转是瞬时两态切换（无过渡动画），
   `App.Desktop.toggleRotate()` 以当前 x/y/zoom 重建相机对象（带 rotation）→ `DesktopGesture.setCamera` 重放
   transform → `InternalViewer.syncHandles` 重算手柄。`App.Desktop.isRotated()` 供菜单勾选态。
-- **切换先回 Home**：每次切换画布方向，先自动回到**当前方向**的 Home 槽位（快照优先 > 默认视角 >
-  出厂 (0,0,1)）再旋转——旋转是绕视口中心的，停在任意位置旋转后看到的区域完全不同；
-  先回 Home 保证旋转后落在当前方向的 Home 视角（位置可预期），而非停留在旋转前的任意位置。
-  无 Home 槽位时保持当前位置只转方向。
+- **切换落在目标方向槽位**：每次切换画布方向，相机自动落到**目标方向**的 Home 槽位
+  （竖屏切横屏读 `landscapeHome`/`landscapeFallback`，横屏切回竖屏读 `home`/`fallback`；
+  快照优先 > 默认视角）——「切到哪个方向就用哪个方向的槽位」。旋转是绕视口中心的，
+  落在目标方向槽位保证旋转后视角可预期；目标方向无槽位时保持当前位置只转方向。
 - **数学核心（`desktop-camera.js` 纯函数，rotation 透传）**：
   - `transform/applyTo(camera, el, vw, vh)`：rotation=90 时生成
     `translate3d(c.y*zoom + (vw+vh)/2, -c.x*zoom + (vh-vw)/2, 0) rotate(90deg) scale(zoom)`——

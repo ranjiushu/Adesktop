@@ -45,6 +45,27 @@ async function doubleTap(client, x, y) {
   await sleep(TAP_GAP)
 }
 
+// 双指水平平移：两指同向移动 dx/dy
+async function pan(client, x, y, dx, dy, steps = 10, gap = 12) {
+  await client.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: x - 30, y }, { x: x + 30, y }]
+  })
+  for (let i = 1; i <= steps; i++) {
+    await sleep(gap)
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [
+        { x: x - 30 + dx * i / steps, y: y + dy * i / steps },
+        { x: x + 30 + dx * i / steps, y: y + dy * i / steps }
+      ]
+    })
+  }
+  await sleep(gap)
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await sleep(200)
+}
+
 const canvasTransform = (page) => page.evaluate(() => document.getElementById('desktop-canvas').style.transform)
 
 async function waitFor(page, sel, timeoutMs) {
@@ -250,20 +271,29 @@ async function main() {
     fail('根目录 docs 图标未渲染（folder 场景跳过）')
   }
 
-  // ── 4.5 横屏/竖屏 Home 槽位独立（切换画布方向后各记各的、各回各的）──
-  // 竖屏长按 Home 记录竖屏快照 → 旋转到横屏 → 底栏 Home 高亮应消失（横屏无快照）
-  // → 横屏长按记录横屏快照 → 竖屏/横屏各存各的（landscape* 字段独立）
+  // ── 4.5 横屏/竖屏 Home 槽位独立（切换画布方向后落在对应方向槽位位置）──
+  // 竖屏平移相机 → 长按记录竖屏快照（位置 P1）→ 旋转到横屏：横屏无快照 → 保持
+  // 当前位置只转方向 → 横屏再平移 → 长按记录横屏快照（位置 P2 ≠ P1）→ 转回竖屏：
+  // 应落在竖屏槽位位置 P1 → 再转横屏：应落在横屏槽位位置 P2
   const homeRect = await rect('#bb-btn-home')
-  if (homeRect) {
-    // 竖屏长按 Home 记录快照（底部工具栏 Home 按钮）
+  const vp = await rect('#desktop-viewport')
+  if (homeRect && vp) {
+    // 竖屏：平移相机偏离原点 → 长按 Home 记录竖屏快照（P1）
+    await pan(client, vp.x, vp.y + 200, 120, 0)
+    await sleep(200)
+    const camPortrait = await page.evaluate(() => {
+      const t = document.getElementById('desktop-canvas').style.transform
+      const m = /translate3d\((-?[\d.]+)px,\s*(-?[\d.]+)px,\s*(-?[\d.]+)px?\)\s*scale\(([\d.]+)\)/.exec(t)
+      return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]), s: parseFloat(m[4]) } : null
+    })
     await tap(client, homeRect.x, homeRect.y, 650)
     await sleep(300)
     const snapP = await page.evaluate(() => {
       try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
     })
-    if (snapP && snapP.home) pass('竖屏长按 Home → 快照写入顶层 home 槽位')
+    if (snapP && snapP.home) pass('竖屏长按 Home → 快照写入顶层 home 槽位（tx=' + camPortrait.tx.toFixed(0) + '）')
     else fail('竖屏快照写入断言', JSON.stringify(snapP))
-    // 旋转到横屏 → 底栏 Home 高亮应消失（横屏槽位尚无快照）
+    // 旋转到横屏：横屏槽位尚无快照 → 保持当前位置只转方向（相机位置不变，仅加 rotate）
     await tap(client, menuBtn.x, menuBtn.y)
     const rot5 = await rect('[data-rotate="toggle"]')
     await tap(client, rot5.x, rot5.y)
@@ -272,7 +302,9 @@ async function main() {
       document.getElementById('bb-btn-home').classList.contains('home-has-snapshot'))
     if (!hasSnapLand) pass('切横屏 → Home 高亮消失（横屏槽位独立无快照）')
     else fail('切横屏后 Home 不应高亮（横屏槽位应独立）')
-    // 横屏长按 Home 记录横屏快照
+    // 横屏：再平移相机（位置偏离竖屏槽位 P1）→ 长按记录横屏快照（P2 ≠ P1）
+    await pan(client, vp.x, vp.y + 200, -60, 40)
+    await sleep(200)
     await tap(client, homeRect.x, homeRect.y, 650)
     await sleep(300)
     const snapL = await page.evaluate(() => {
@@ -280,12 +312,12 @@ async function main() {
     })
     if (snapL && snapL.landscapeHome) pass('横屏长按 Home → 快照写入 landscapeHome 槽位')
     else fail('横屏快照写入断言', JSON.stringify(snapL))
-    // 值相同是正常的（两次记录时相机均未平移/缩放）——关键是字段结构独立：
-    // landscapeHome 与 home 是互不覆盖的两个槽位，竖屏更新不影响横屏值
-    if (snapL && snapL.home && snapL.landscapeHome) {
-      pass('竖屏/横屏快照槽位独立（home 与 landscapeHome 字段并存）')
+    if (snapL && snapL.home && snapL.landscapeHome &&
+        (Math.abs(snapL.home.x - snapL.landscapeHome.x) > 1 ||
+         Math.abs(snapL.home.y - snapL.landscapeHome.y) > 1)) {
+      pass('竖屏/横屏快照槽位独立且位置不同（home 与 landscapeHome 分存）')
     } else {
-      fail('竖屏/横屏快照槽位应独立并存', JSON.stringify(snapL))
+      fail('竖屏/横屏快照槽位应独立且位置不同', JSON.stringify(snapL))
     }
     // 竖屏更新快照 → 横屏槽位保留原值（互不覆盖）
     await tap(client, homeRect.x, homeRect.y, 650)
@@ -308,6 +340,51 @@ async function main() {
       document.getElementById('bb-btn-home').classList.contains('home-has-snapshot'))
     if (hasSnapPort) pass('切回竖屏 → Home 高亮恢复（竖屏槽位快照保留）')
     else fail('切回竖屏后 Home 应高亮（竖屏槽位快照应保留）')
+
+    // ── 4.5b 核心断言：切到哪个方向就落在哪个方向的槽位位置 ──
+    // 竖屏槽位（home）= P1（竖屏平移后）；横屏槽位（landscapeHome）= P2（横屏再平移后，
+    // P2 ≠ P1）。验证：
+    //   转回竖屏 → 相机应回到 P1（竖屏槽位位置）
+    //   再转横屏 → 相机应落到 P2（横屏槽位位置，且 rotation=90）
+    // 直接用 App.DesktopCore.camera 数据层断言（绕过 transform 解析的旋转换算）
+    const camBackPortrait = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
+    })
+    if (camBackPortrait && camBackPortrait.rotation === 0 &&
+        snapP && snapP.home &&
+        Math.abs(camBackPortrait.x - snapP.home.x) < 1e-6 &&
+        Math.abs(camBackPortrait.y - snapP.home.y) < 1e-6 &&
+        Math.abs(camBackPortrait.zoom - snapP.home.zoom) < 1e-6) {
+      pass('切回竖屏 → 相机落在竖屏槽位位置（home 槽位 P1）')
+    } else {
+      fail('切回竖屏应落在竖屏槽位位置',
+        'slot=' + JSON.stringify(snapP && snapP.home) + ' cam=' + JSON.stringify(camBackPortrait))
+    }
+    // 再切横屏 → 应落在横屏槽位位置（landscapeHome 槽位 P2，rotation=90）
+    await tap(client, menuBtn.x, menuBtn.y)
+    const rot7 = await rect('[data-rotate="toggle"]')
+    await tap(client, rot7.x, rot7.y)
+    await sleep(300)
+    const camLand = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
+    })
+    if (camLand && camLand.rotation === 90 &&
+        snapL && snapL.landscapeHome &&
+        Math.abs(camLand.x - snapL.landscapeHome.x) < 1e-6 &&
+        Math.abs(camLand.y - snapL.landscapeHome.y) < 1e-6 &&
+        Math.abs(camLand.zoom - snapL.landscapeHome.zoom) < 1e-6) {
+      pass('再切横屏 → 相机落在横屏槽位位置（landscapeHome 槽位 P2，rotation=90）')
+    } else {
+      fail('再切横屏应落在横屏槽位位置',
+        'slot=' + JSON.stringify(snapL && snapL.landscapeHome) + ' cam=' + JSON.stringify(camLand))
+    }
+    // 转回竖屏，恢复初始状态（供场景 5 pageerror 检查）
+    await tap(client, menuBtn.x, menuBtn.y)
+    const rot8 = await rect('[data-rotate="toggle"]')
+    await tap(client, rot8.x, rot8.y)
+    await sleep(300)
   } else {
     fail('底栏 Home 按钮缺失（槽位场景跳过）')
   }

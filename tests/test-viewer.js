@@ -110,6 +110,25 @@ let hw2 = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zo
 check(hw2 && approx(hw2.w, 18) && approx(hw2.h, 3), 'handleWorldRect zoom=2 世界尺寸 = 屏幕尺寸/zoom（命中矩形随画布缩放）')
 check(approx(hw2.y, 307), 'handleWorldRect zoom=2 间距也按 /zoom（屏幕恒定 14px）')
 
+// ── 拖动手柄：rotation=90（画布顺时针旋转）──
+// 卡片世界 rect {x:100,y:200,w:200,h:100}，相机 (0,0,1,90)，视口 360×640：
+// 旋转后卡片视觉底部 = 原右边缘中心 (300, 250) → 未旋转屏幕 (300,250)
+// → 绕中心 (180,320) 顺时针 90°：(x,y) → (-y, x) 相对中心
+//   dx=300-180=120, dy=250-320=-70 → (70, 120) + (180,320) = (250, 440)
+//   手柄 y 再 +GAP → (250-18, 440+14) = (232, 454)
+const hsRot = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1, rotation: 90 }, 360, 640)
+check(hsRot && approx(hsRot.x, 250 - 18) && approx(hsRot.y, 440 + 14),
+  'handleScreenRect rotation=90 手柄贴卡片视觉底部（原右边缘中心绕中心旋转）')
+// handleWorldRect 与 handleScreenRect 同基准（旋转后视觉底部中心 = 原右边缘中心）
+const hwRot = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1, rotation: 90 })
+check(hwRot && approx(hwRot.x + hwRot.w / 2, 300) && approx(hwRot.y, 250 + 14),
+  'handleWorldRect rotation=90 命中矩形基准 = 原右边缘中心 + 间距')
+
+// rotation=0 且传了 vw/vh → 行为不变（旋转分支不触发）
+let hsPlain = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1 }, 360, 640)
+check(approx(hsPlain.x, 100 + 100 - 18) && approx(hsPlain.y, 200 + 100 + 14),
+  'handleScreenRect rotation=0 传 vw/vh 行为不变')
+
 if (failures > 0) {
   console.error('  [FAIL] viewer 测试 ' + failures + ' 项失败')
   process.exit(1)

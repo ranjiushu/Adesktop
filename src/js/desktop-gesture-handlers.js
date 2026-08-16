@@ -91,8 +91,10 @@ App.DesktopGestureHandlers = (function () {
   function showMarquee(startWorld, currentWorld) {
     const mq = document.getElementById('desktop-marquee')
     if (!mq) return
-    const a = App.DesktopCamera.worldToScreen(startWorld.x, startWorld.y, C.camera)
-    const b = App.DesktopCamera.worldToScreen(currentWorld.x, currentWorld.y, C.camera)
+    const vw = C.viewportWidth()
+    const vh = C.viewportHeight()
+    const a = App.DesktopCamera.worldToScreen(startWorld.x, startWorld.y, C.camera, vw, vh)
+    const b = App.DesktopCamera.worldToScreen(currentWorld.x, currentWorld.y, C.camera, vw, vh)
     mq.style.left = Math.min(a.x, b.x) + 'px'
     mq.style.top = Math.min(a.y, b.y) + 'px'
     mq.style.width = Math.abs(b.x - a.x) + 'px'

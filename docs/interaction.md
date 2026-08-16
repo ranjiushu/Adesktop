@@ -218,6 +218,35 @@ down ─────────────────────────
 - **偏好持久化**：`view-store.js` 的 `advancedBrowse`（默认 `false`，缺失/非法回退 false）。`setAdvancedBrowse(on)` 切换时合并写入 `ViewStore.save`，写入失败 toast「浏览模式保存失败」；启动时 `initLayout` 读回 `_advancedBrowse = !!prefs.advancedBrowse` 并同步到手势层。
 - **与阶段 D 的关系**：浏览模式只改手势语义，不触碰位置持久化；进入/退出浏览模式不改变相机与图标世界坐标。
 
+## 7.7 旋转画布（阶段 F 定稿）
+
+**定位**：画布整体顺时针旋转 90° 的视图变换——「像转一张纸」，图标/文字/背景点阵随画布一起转（文字侧躺），
+再次点击转回 0°。只旋转画布视觉与坐标映射，**不改变**相机位置/缩放、图标世界坐标、布局持久化数据。
+
+- **开关**：顶栏「排列与视图」菜单底部「旋转画布 90°」勾选项（`.view-menu-rotate`，`data-rotate="toggle"`）。
+  **与其余项相反的可用性**——根目录（Desktop 空间）可用，子文件夹（Folder 容器）禁用
+  （`setEnabled(true)` 时 `disabled`；旋转对有限画布滚动容器无意义）。仿高级浏览模式走独立处理器 `_onRotateToggle`。
+- **状态存储**：`camera.rotation`（0 或 90）。旋转是瞬时两态切换（无过渡动画），
+  `App.Desktop.toggleRotate()` 以当前 x/y/zoom 重建相机对象（带 rotation）→ `DesktopGesture.setCamera` 重放
+  transform → `InternalViewer.syncHandles` 重算手柄。`App.Desktop.isRotated()` 供菜单勾选态。
+- **数学核心（`desktop-camera.js` 纯函数，rotation 透传）**：
+  - `transform/applyTo(camera, el, vw, vh)`：rotation=90 时生成
+    `translate3d(c.y*zoom + (vw+vh)/2, -c.x*zoom + (vh-vw)/2, 0) rotate(90deg) scale(zoom)`——
+    绕视口中心顺时针旋转（推导：世界 p → scale → rotate → translate 矩阵链，视口中心不动点）。
+  - `screenToWorld/worldToScreen(sx, sy, camera, vw, vh)`：旋转时先绕视口中心逆旋转屏幕坐标
+    （`(x,y) → (y,-x)`）再走原公式 / 反之（`(x,y) → (-y,x)`）。保证旋转后点击/框选/拖拽命中准确。
+  - `panBy`：rotation=90 时屏幕位移先逆旋转（`Δc = (dy, -dx)/zoom` 修正），拖拽方向跟手。
+  - `pinchBy`：rotation=90 时锚点屏幕坐标先逆旋转再代入，锚点世界坐标不动。
+  - `lerp/lerpCentered/flightPath/clampToBounds`：透传起点 rotation（Home 动画/目录切换期间保持旋转态，
+    不会中途闪回正）。
+- **viewer 手柄**：`handleScreenRect/handleWorldRect` 适配 rotation——旋转后卡片视觉底部 = 原右边缘中心，
+  手柄贴新视觉底部；命中测试基准同步（世界坐标，与手势层 toWorld 一致）。
+- **坐标换算签名变化**：`screenToWorld/worldToScreen/applyTo/transform` 增加可选 `vw/vh` 参数
+  （旋转中心 = 视口中心），未传时 behavior 与旧版一致（rotation=0 或视口缺失时退化）。
+  调用方：手势层 `toWorld/commit`（用 `_viewportW/H` 缓存）、框选 `showMarquee`（`C.viewportWidth/Height`）、
+  viewer `syncHandle`（`_layer.clientWidth/Height`）。
+- **不持久化**：旋转是临时视图状态（toggle 语义），不入 `view-store`/`layout-store`；刷新/重载回正。
+
 ## 8. 位置持久化（当前：localStorage 临时方案）
 
 - 存 `localStorage['desktop.layout.v1']`（模块 `layout-store.js`）：

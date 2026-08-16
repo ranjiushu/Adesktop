@@ -190,7 +190,11 @@ App.DesktopNavigation = (function () {
   // （无分段断续）；zoom 不变退化为与 lerp 一致（纯平移动画不受影响）。
   function animateCameraTo(target, durationMs) {
     cancelCameraAnim()
-    const from = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
+    const from = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom, rotation: C.camera.rotation }
+    const tgt = target || App.DesktopCamera.create()
+    // 目标相机透传当前 rotation（Home 复位只动位置/缩放，画布旋转状态保留；
+    // 否则动画中途 rotation 变 0，画布闪回正）
+    if (typeof tgt.rotation !== 'number') tgt.rotation = C.camera.rotation
     const dur = (durationMs && durationMs > 0) ? durationMs : HOME_ANIM_MS
     const vw = C.viewportWidth()
     const vh = C.viewportHeight()
@@ -201,7 +205,7 @@ App.DesktopNavigation = (function () {
       const k = Math.min(1, (C._now() - t0) / dur)
       // lerpCentered 收真实时间比例 k（内部统一缓动 + 按 k 分段）——
       // 不得预缓动传入，否则段边界错位致平移段被压缩（真机「震感」）
-      const c = App.DesktopCamera.lerpCentered(from, target, k, vw, vh)
+      const c = App.DesktopCamera.lerpCentered(from, tgt, k, vw, vh)
       C.camera = c
       if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
         App.DesktopGesture.setCamera(C.camera)

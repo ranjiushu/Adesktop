@@ -1,6 +1,10 @@
 /* 桌面相机模块：世界坐标 + 相机（单层 transform）的数学核心，纯函数可单测。
- * 约定：camera = { x, y, zoom }，x/y = 视口左上角对应的世界点，zoom = 缩放因子。
+ * 约定：camera = { x, y, zoom, rotation }，x/y = 视口左上角对应的世界点，
+ *       zoom = 缩放因子，rotation = 画布旋转角（0 或 90，顺时针）。
  * 屏幕坐标 = 视口内像素（视口左上角为原点）。
+ * rotation=90 时画布绕视口中心顺时针旋转 90°：世界坐标 → 未旋转屏幕坐标
+ * → 绕中心旋转。所有产生新相机对象的函数（lerp/panBy/pinchBy/clampToBounds）
+ * 必须透传 rotation，否则旋转态在手指拖动/Home 动画后丢失（相机对象被替换）。
  * 依赖: namespace.js
  * 导出: App.DesktopCamera
  */
@@ -9,6 +13,8 @@
 App.DesktopCamera = (function () {
   const ZOOM_MIN = 0.3
   const ZOOM_MAX = 3
+  const ROT_0 = 0
+  const ROT_90 = 90
 
   function num(v, d) {
     return (typeof v === 'number' && isFinite(v)) ? v : d
@@ -18,11 +24,17 @@ App.DesktopCamera = (function () {
     return Math.min(Math.max(v, 0), 1)
   }
 
-  function create(x, y, zoom) {
+  // 旋转角归一化：仅支持 0 / 90（菜单 toggle 两态；其余输入防御回退 0）
+  function clampRotation(r) {
+    return r === ROT_90 ? ROT_90 : ROT_0
+  }
+
+  function create(x, y, zoom, rotation) {
     return {
       x: num(x, 0),
       y: num(y, 0),
-      zoom: clampZoom(zoom)
+      zoom: clampZoom(zoom),
+      rotation: clampRotation(rotation)
     }
   }
 
@@ -44,6 +56,8 @@ App.DesktopCamera = (function () {
 
   // 相机线性插值：from/to 各字段（x/y/zoom）按 k∈[0,1] 过渡，k 越界钳制。
   // from 缺失时用默认相机起步（防御）。zoom 端点已 clamp，中间值必在端点之间。
+  // rotation 不插值（旋转是瞬时的两态），沿用起点（插值期间保持当前旋转，
+  // 防止 Home 飞行到 rotation=0 目标时中途闪回正）。
   function lerp(from, to, k) {
     const f = from || create()
     const t = to || create()
@@ -51,7 +65,8 @@ App.DesktopCamera = (function () {
     return {
       x: f.x + (t.x - f.x) * ck,
       y: f.y + (t.y - f.y) * ck,
-      zoom: f.zoom + (t.zoom - f.zoom) * ck
+      zoom: f.zoom + (t.zoom - f.zoom) * ck,
+      rotation: f.rotation
     }
   }
 
@@ -114,7 +129,8 @@ App.DesktopCamera = (function () {
       return {
         x: W0x + (W1x - W0x) * fu - w / (2 * z),
         y: W0y + (W1y - W0y) * fu - h / (2 * z),
-        zoom: z
+        zoom: z,
+        rotation: f.rotation
       }
     }
   }
@@ -139,7 +155,8 @@ App.DesktopCamera = (function () {
       return {
         x: fx + (tx - fx) * ck - w / (2 * f.zoom),
         y: fy + (ty - fy) * ck - h / (2 * f.zoom),
-        zoom: f.zoom
+        zoom: f.zoom,
+        rotation: f.rotation
       }
     }
     // zoom 变化：flightPath 自带 easeOut 弧长参数化（Leaflet 同款）。
@@ -147,35 +164,72 @@ App.DesktopCamera = (function () {
     return flightPath(f, t, w, h)(clamp01(k))
   }
 
-  // 屏幕 → 世界
-  function screenToWorld(sx, sy, camera) {
+  // 屏幕 → 世界（rotation=90 时先绕视口中心逆旋转屏幕坐标，再走原公式）
+  function screenToWorld(sx, sy, camera, vw, vh) {
     const c = camera || create()
+    const w = num(vw, 0)
+    const h = num(vh, 0)
+    if (c.rotation === ROT_90 && w > 0 && h > 0) {
+      const cx = w / 2
+      const cy = h / 2
+      // 逆时针旋转（绕中心）：(x,y) → (y, -x)
+      const lx = (sy - cy) + cx
+      const ly = -(sx - cx) + cy
+      return { x: c.x + lx / c.zoom, y: c.y + ly / c.zoom }
+    }
     return { x: c.x + sx / c.zoom, y: c.y + sy / c.zoom }
   }
 
-  // 世界 → 屏幕
-  function worldToScreen(wx, wy, camera) {
+  // 世界 → 屏幕（rotation=90 时先走原公式，再绕视口中心顺时针旋转 90°）
+  function worldToScreen(wx, wy, camera, vw, vh) {
     const c = camera || create()
-    return { x: (wx - c.x) * c.zoom, y: (wy - c.y) * c.zoom }
+    const w = num(vw, 0)
+    const h = num(vh, 0)
+    const sx0 = (wx - c.x) * c.zoom
+    const sy0 = (wy - c.y) * c.zoom
+    if (c.rotation === ROT_90 && w > 0 && h > 0) {
+      const cx = w / 2
+      const cy = h / 2
+      // 顺时针旋转（绕中心）：(x,y) → (-y, x)
+      return { x: -(sy0 - cy) + cx, y: (sx0 - cx) + cy }
+    }
+    return { x: sx0, y: sy0 }
   }
 
-  // 平移：屏幕位移 dx/dy（手指拖动的屏幕像素）→ 相机在世界中反向移动 dx/zoom
+  // 平移：屏幕位移 dx/dy（手指拖动的屏幕像素）→ 相机在世界中反向移动 dx/zoom。
+  // rotation=90 时屏幕位移先逆旋转到世界方向（Δc = -R⁻¹(Δs)/zoom）。
   function panBy(camera, dx, dy) {
     const c = camera || create()
-    return { x: c.x - dx / c.zoom, y: c.y - dy / c.zoom, zoom: c.zoom }
+    const ddx = num(dx, 0)
+    const ddy = num(dy, 0)
+    if (c.rotation === ROT_90) {
+      // R⁻¹(ddx, ddy) = (ddy, -ddx)；Δc = -R⁻¹(Δs)/zoom
+      return { x: c.x - ddy / c.zoom, y: c.y + ddx / c.zoom, zoom: c.zoom, rotation: c.rotation }
+    }
+    return { x: c.x - ddx / c.zoom, y: c.y - ddy / c.zoom, zoom: c.zoom, rotation: c.rotation }
   }
 
-  // 捏合缩放：指距 prevDist → curDist，锚点屏幕坐标 (anchorSx, anchorSy) 处的世界点保持不动
-  function pinchBy(camera, prevDist, curDist, anchorSx, anchorSy) {
+  // 捏合缩放：指距 prevDist → curDist，锚点屏幕坐标 (anchorSx, anchorSy) 处的世界点保持不动。
+  // rotation=90 时锚点屏幕坐标先逆旋转到逻辑屏幕坐标（绕视口中心）再代入。
+  function pinchBy(camera, prevDist, curDist, anchorSx, anchorSy, vw, vh) {
     const c = camera || create()
     if (typeof prevDist !== 'number' || !isFinite(prevDist) || prevDist <= 0) {
-      return { x: c.x, y: c.y, zoom: c.zoom }
+      return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
     }
     const zoom = clampZoom(c.zoom * curDist / prevDist)
-    const ax = num(anchorSx, 0)
-    const ay = num(anchorSy, 0)
+    const w = num(vw, 0)
+    const h = num(vh, 0)
+    let ax = num(anchorSx, 0)
+    let ay = num(anchorSy, 0)
+    if (c.rotation === ROT_90 && w > 0 && h > 0) {
+      // 锚点屏幕坐标逆旋转到逻辑屏幕坐标
+      const lx = (ay - h / 2) + w / 2
+      const ly = -(ax - w / 2) + h / 2
+      ax = lx
+      ay = ly
+    }
     const k = 1 / c.zoom - 1 / zoom
-    return { x: c.x + ax * k, y: c.y + ay * k, zoom: zoom }
+    return { x: c.x + ax * k, y: c.y + ay * k, zoom: zoom, rotation: c.rotation }
   }
 
   // 有限画布钳制：相机视口不能越出世界边界 [0,0]-[worldW, worldH]。
@@ -192,20 +246,38 @@ App.DesktopCamera = (function () {
     return {
       x: Math.min(Math.max(c.x, 0), maxX),
       y: Math.min(Math.max(c.y, 0), maxY),
-      zoom: c.zoom
+      zoom: c.zoom,
+      rotation: c.rotation
     }
   }
 
-  // canvas transform 参数（配合 transform-origin: 0 0）
-  function transform(camera) {
+  // canvas transform 参数（配合 transform-origin: 0 0）。
+  // rotation=90 时画布绕视口中心顺时针旋转：translate 补偿 =
+  //   a = c.y*zoom + (vw+vh)/2，b = -c.x*zoom + (vh-vw)/2
+  // （推导：世界 p → scale → rotate → translate 的矩阵链，见 worldToScreen 注释）。
+  function transform(camera, vw, vh) {
     const c = camera || create()
-    return { tx: -c.x * c.zoom, ty: -c.y * c.zoom, zoom: c.zoom }
+    const w = num(vw, 0)
+    const h = num(vh, 0)
+    if (c.rotation === ROT_90 && w > 0 && h > 0) {
+      return {
+        tx: c.y * c.zoom + (w + h) / 2,
+        ty: -c.x * c.zoom + (h - w) / 2,
+        zoom: c.zoom,
+        rotation: ROT_90
+      }
+    }
+    return { tx: -c.x * c.zoom, ty: -c.y * c.zoom, zoom: c.zoom, rotation: c.rotation }
   }
 
   // 应用 transform 到 DOM（合成层变换，GPU 加速，不触发布局）
-  function applyTo(camera, el) {
+  function applyTo(camera, el, vw, vh) {
     if (!el) return
-    const t = transform(camera)
+    const t = transform(camera, vw, vh)
+    if (t.rotation === ROT_90) {
+      el.style.transform = 'translate3d(' + t.tx + 'px,' + t.ty + 'px,0) rotate(90deg) scale(' + t.zoom + ')'
+      return
+    }
     el.style.transform = 'translate3d(' + t.tx + 'px,' + t.ty + 'px,0) scale(' + t.zoom + ')'
   }
 

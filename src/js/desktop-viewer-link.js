@@ -1,9 +1,12 @@
 /* desktop-viewer-link.js：Viewer 联动 + 布局 key 迁移（App.DesktopViewerLink）。
- * 拆分自 desktop.js 的联动域：Viewer 关闭与锁定管理（closeViewer/closeAllViewers/
+ * 拆分自 desktop.js 的联动域：Viewer 关闭与锁定管理（closeViewer/
  * isLockedPath/getLockedPaths，Windows 式锁定：被 Viewer 打开的文件禁止
  * 复制/剪切/移动/删除/重命名，只允许拖动摆放）、布局 key 迁移
  * （applyRename/applyMoves：positions/bounds/selection 以完整路径为 key，
  * 旧 key → 新 key，否则刷新后回退自动排布丢位置）。
+ * 目录切换时 Viewer 处理：全屏态走 exitFullscreen（close），canvas 态走
+ * suspendCanvas/resumeCanvas（跨目录保留状态），均在 desktop-navigation.js
+ * 的 applyCameraForPath 中完成，不经本模块。
  * 锁定视觉同步经 App.DesktopRender.updateLockedVisual/syncFab；
  * 迁移落盘经 App.DesktopPersist.saveLayout/refresh。
  * 依赖: namespace.js, desktop-core.js, desktop-render.js, desktop-persist.js,
@@ -15,7 +18,8 @@
 App.DesktopViewerLink = (function () {
   const C = App.DesktopCore
 
-  // 关闭「选中的」Viewer + 解除其文件锁定（唯一出口：FAB 关闭预览）。目录切换走 closeAllViewers
+  // 关闭「选中的」Viewer + 解除其文件锁定（唯一出口：FAB 关闭预览）。
+  // 目录切换走 applyCameraForPath → suspendCanvas/resumeCanvas（跨目录保留），不经此处。
   function closeViewer() {
     const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
       ? App.InternalViewer.selectedInstance() : null
@@ -23,19 +27,6 @@ App.DesktopViewerLink = (function () {
     const path = inst.getPath()
     App.InternalViewer.closeById(inst.id)
     if (path) C._lockedPaths.delete(path)
-    App.DesktopRender.updateLockedVisual()
-    App.DesktopRender.syncFab()
-  }
-
-  // 关闭所有 Viewer + 解除全部锁定（目录切换：全屏态先退出）
-  function closeAllViewers() {
-    if (!App.InternalViewer) return
-    const list = App.InternalViewer.list ? App.InternalViewer.list() : []
-    App.InternalViewer.closeAll()
-    list.forEach(function (inst) {
-      const p = inst.getPath()
-      if (p) C._lockedPaths.delete(p)
-    })
     App.DesktopRender.updateLockedVisual()
     App.DesktopRender.syncFab()
   }
@@ -96,7 +87,6 @@ App.DesktopViewerLink = (function () {
 
   return {
     closeViewer: closeViewer,
-    closeAllViewers: closeAllViewers,
     isLockedPath: isLockedPath,
     getLockedPaths: getLockedPaths,
     applyRename: applyRename,

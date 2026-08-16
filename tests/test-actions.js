@@ -29,6 +29,7 @@ const calls = {
 let listResult = []       // FileAPI.list 返回
 let copyShouldReject = false
 let moveShouldReject = false
+let cancelOnFirstProgress = false   // P0 复现：第一个 onProgress 时同步触发取消
 
 function resetCalls() {
   calls.list.length = 0; calls.mkdir.length = 0; calls.write.length = 0
@@ -36,6 +37,8 @@ function resetCalls() {
   calls.refresh = 0; calls.clearSelection = 0; calls.toasts.length = 0
   calls.applyRename = 0; calls.applyMoves = 0; calls.show.length = 0; calls.hide = 0
   calls.dialogOpens.length = 0
+  calls.cancelTransfer = 0
+  cancelOnFirstProgress = false
 }
 
 // ── document 桩（失败汇总弹窗）：元素桩记录 innerHTML/子节点，Dialog.open 可断言 ──
@@ -88,7 +91,14 @@ sandbox.App.FileAPI = {
   del: function (p) { calls.del.push(p); return Promise.resolve(true) },
   move: function (s, d, onProgress) {
     calls.move.push([s, d])
-    if (typeof onProgress === 'function') onProgress({ path: d, done: 50, total: 100 })
+    if (typeof onProgress === 'function') {
+      onProgress({ path: d, done: 50, total: 100 })
+      // P0 复现：第一个 onProgress 时同步触发取消（模拟用户在传输中点取消）
+      if (cancelOnFirstProgress && calls.move.length === 1) {
+        const last = calls.show[calls.show.length - 1]
+        if (last && typeof last.onCancel === 'function') last.onCancel()
+      }
+    }
     return moveShouldReject ? Promise.reject(new Error('模拟移动失败')) : Promise.resolve(true)
   },
   cancelTransfer: function () { calls.cancelTransfer = (calls.cancelTransfer || 0) + 1; return Promise.resolve(true) }
@@ -312,6 +322,27 @@ async function main() {
   check(calls.cancelTransfer === 1, 'onCancel → cancelTransfer 桥调用（取消当前传输）')
   calls.show[0].onCancel()
   check(calls.cancelTransfer === 1, '重复点取消 → 只发一次（防抖）')
+
+  // ── [P0] 批量取消：第 1 个传输中取消 → 剩余项不再调度（3 以后不再启动）──
+  // 修复前：cancelSent 后 chain 仍继续调度剩余 job，桥层每次 move 开头重置取消标志 →
+  // 剩余项全部照常执行。修复后：取消即停止调度，结束态报「已取消」而非失败汇总。
+  resetCalls(); C.clear()
+  C.set('cut', [
+    { path: 'a.txt', isDir: false },
+    { path: 'b.txt', isDir: false },
+    { path: 'c.txt', isDir: false }
+  ])
+  listResult = []
+  cancelOnFirstProgress = true
+  A.paste()
+  await tick()
+  check(calls.move.length === 1,
+    '[P0] 批量取消 → 第 1 个传输中取消后不再调度剩余项（实际调度 ' + calls.move.length + ' 项）')
+  check(calls.cancelTransfer === 1, '[P0] 批量取消 → cancelTransfer 只调 1 次')
+  check(calls.toasts.some(function (t) { return t.indexOf('已取消') >= 0 }),
+    '[P0] 取消结束态 → toast 含「已取消」（而非失败汇总）')
+  check(calls.dialogOpens.length === 0, '[P0] 取消 → 不弹失败列表弹窗')
+  check(calls.clearSelection === 1 && calls.refresh === 1, '[P0] 取消后 clearSelection + refresh')
 
   // ── moveIntoFolder：移动语义（桥 move）+ 不清剪贴板 ──
   resetCalls(); C.clear()

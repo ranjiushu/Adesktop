@@ -205,6 +205,18 @@ App.Actions = (function () {
       let done = 0
       const moved = []      // 成功移动项 [{src, dst}] → 布局 key 迁移
       let cancelSent = false
+      let cancelled = false      // 已请求取消：剩余项不再启动（P0 修复）
+      let cancelledItems = []    // 被取消项（未启动 + 传输中被中止），取消 ≠ 失败
+      // 取消请求（防抖）：置 cancelled → 剩余项不再调度；通知桥层中止当前任务并清理半成品。
+      // 桥层单线程 executor 内 cancelTransfer 直接置 volatile 标志，可打断当前传输。
+      function requestCancel() {
+        if (cancelSent) return
+        cancelSent = true
+        cancelled = true
+        if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
+          App.FileAPI.cancelTransfer()
+        }
+      }
       // 进度回调：桥层字节级进度 → Loading 当前文件行
       function makeOnProgress(job) {
         return function (p) {
@@ -218,13 +230,7 @@ App.Actions = (function () {
               totalDone: done, totalTotal: totalSteps,
               current: { name: p.path, done: p.done, total: p.total },
               cancellable: true,
-              onCancel: function () {
-                if (cancelSent) return
-                cancelSent = true
-                if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
-                  App.FileAPI.cancelTransfer()
-                }
-              }
+              onCancel: requestCancel
             })
           }
         }
@@ -237,20 +243,19 @@ App.Actions = (function () {
           totalLabel: '总进度',
           totalDone: 0, totalTotal: totalSteps,
           cancellable: true,
-          onCancel: function () {
-            if (cancelSent) return
-            cancelSent = true
-            if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
-              App.FileAPI.cancelTransfer()
-            }
-          }
+          onCancel: requestCancel
         })
       }
       // 逐项执行：copy 模式 = 桥 copy；cut 模式 = 桥 move（真移动优先，失败降级 copy+del）
       // 失败不中断（逐项收集），全部结束后统一汇总
+      // [P0] 取消后剩余项不再启动：cancelled 置位后跳过未开始的 job（计入取消项而非失败）
       let chain = Promise.resolve()
       plan.forEach(function (job) {
         chain = chain.then(function () {
+          if (cancelled) {
+            cancelledItems.push(job.dst)
+            return
+          }
           const op = isMove
             ? App.FileAPI.move(job.src, job.dst, makeOnProgress(job))
             : App.FileAPI.copy(job.src, job.dst, makeOnProgress(job))
@@ -266,17 +271,16 @@ App.Actions = (function () {
                 totalLabel: '总进度',
                 totalDone: done, totalTotal: totalSteps,
                 cancellable: true,
-                onCancel: function () {
-                  if (cancelSent) return
-                  cancelSent = true
-                  if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
-                    App.FileAPI.cancelTransfer()
-                  }
-                }
+                onCancel: requestCancel
               })
             }
           }).catch(function (err) {
             done++
+            if (cancelled) {
+              // 取消导致当前任务中止（桥层抛「操作已取消」）：计入取消项，不算失败
+              cancelledItems.push(job.dst)
+              return
+            }
             results.push({ name: job.dst, ok: false, error: err && err.message || String(err) })
             // 失败不中断：继续下一项
           })
@@ -293,7 +297,11 @@ App.Actions = (function () {
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
-        if (failList.length) {
+        if (cancelledItems.length) {
+          // 取消结束态：取消不是失败——报「已取消 N 项」，不弹失败列表
+          App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + okCount +
+            ' 项，已取消 ' + cancelledItems.length + ' 项')
+        } else if (failList.length) {
           // 失败汇总：先 toast 概览，再弹列表（成功 N / 失败 M + 原因）
           App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + okCount + ' 项，失败 ' + failList.length + ' 项')
           _showFailSummary(failList)

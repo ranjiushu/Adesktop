@@ -60,6 +60,9 @@ App.FileAPI = (function () {
     write: function (path, content) { return call('write', [path, content]) },
     mkdir: function (path) { return call('mkdir', [path]) },
     del: function (path) { return call('delete', [path]) },
+    // ⚠️ 注意：del 桥方法 = 永久删除（File.delete / DocumentFile.delete）。
+    // 前端业务删除禁止调用本方法——删除 = 移入回收站（.trash）走 move 管道
+    // （Actions.deleteSelection），本方法仅保留为低层能力（见 docs/bridge-and-data-contract.md 1.4）。
     rename: function (oldPath, newPath) { return call('rename', [oldPath, newPath]) },
     // 复制（长超时：大文件可能远超默认 10s；超时只兜底不取消，避免误报失败）
     // onProgress: ({path, done, total}) => void（字节级进度，桥层节流约 200ms 一次）

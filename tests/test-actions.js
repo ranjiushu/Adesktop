@@ -402,6 +402,7 @@ async function main() {
     'deleteSelection → list(.trash) 检查回收站')
   check(calls.move.length === 1 && calls.move[0][0] === 'a.txt' && calls.move[0][1] === '.trash/a.txt',
     'deleteSelection → 桥 move(a.txt → .trash/a.txt)（真移动，O(1) 秒删大文件夹）')
+  check(calls.del.length === 0, 'deleteSelection 不调用 FileAPI.del()（永久删除桥方法前端业务禁用）')
   check(calls.copy.length === 0 && calls.del.length === 0,
     'deleteSelection → 不拆 copy+del（降级在桥层内部）')
   check(calls.toasts.some(function (t) { return t.indexOf('已删除 1 项') === 0 }),

@@ -25,7 +25,7 @@
 | `FileAPI.read(path)` | `read` | `path` | `string` | 读文本，单次上限 10 MB |
 | `FileAPI.write(path, content)` | `write` | `path, content` | `true` | 原子写（临时文件 + rename） |
 | `FileAPI.mkdir(path)` | `mkdir` | `path` | `boolean` | 建目录，返回是否新建 |
-| `FileAPI.del(path)` | `delete` | `path` | `true` | 移入回收站（安全删除，不彻底删） |
+| `FileAPI.del(path)` | `delete` | `path` | `true` | **永久删除（低层 API，前端业务禁止使用**——回收站 = 前端 move 管道到 `.trash`，见 operation-contract.md 2.5） |
 | `FileAPI.rename(old, newName)` | `rename` | `oldPath, newPath` | `true` | 重命名（**限同目录**：桥层校验 newPath 父目录 = oldPath 父目录，跨目录拒绝；跨目录 = move） |
 | `FileAPI.copy(src, dst)` | `copy` | `srcPath, dstPath` | `true` | 复制 |
 | `FileAPI.move(src, dst)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+del） |
@@ -71,7 +71,10 @@
 - 路径一律**相对根目录**；`''` 表示根目录本身。
 - 桥层拒绝绝对路径与 `..` 逃逸（`resolve()` 内的 `isSafeRelPath` 校验）。
 - `read` 单次上限 10 MB（防大文件整读 OOM）。
-- `delete` = 移入根目录下隐藏文件夹 `.trash`，不做彻底删除。
+- `delete` 桥方法 = **永久删除**（`File.delete()` / `DocumentFile.delete()`），**不是**移入回收站。
+  前端业务删除一律走 `Actions.deleteSelection` → `FileBridge.move` → `.trash`（安全删除）；
+  `FileAPI.del()` 是暴露的低层能力，**前端禁止调用**（无业务调用方，若未来需要彻底删除
+  应新增 `purge` 语义 API，见 operation-contract.md 2.5）。
 
 ## 二、数据契约（元数据形状）
 

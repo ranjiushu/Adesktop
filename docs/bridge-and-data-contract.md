@@ -27,8 +27,9 @@
 | `FileAPI.rename(old, new)` | `rename` | `oldPath, newPath` | `true` | 重命名 / 移动 |
 | `FileAPI.copy(src, dst)` | `copy` | `srcPath, dstPath` | `true` | 复制 |
 | `FileAPI.move(src, dst)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+del） |
-| `FileAPI.copy(src, dst)` | `copy` | `srcPath, dstPath` | `true` | 复制 |
-| `FileAPI.move(src, dst)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+delete） |
+| `FileAPI.copy(src, dst, onProgress)` | `copy` | `srcPath, dstPath` | `true` | 复制（onProgress 可选：字节级进度回调） |
+| `FileAPI.move(src, dst, onProgress)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+delete；onProgress 同上） |
+| `FileAPI.cancelTransfer()` | `cancelTransfer` | 无 | `true` | 取消当前传输（置取消标志，当前任务中止 + 清理半成品） |
 | `FileAPI.resolveUri(path)` | `resolveUri` | `path` | `uri` | 转 WebView 可直接加载的 URI |
 | `FileAPI.thumb(path)` | `thumb` | `path` | `file://` URI | 缩略图（磁盘缓存） |
 | `FileAPI.openExternal(path)` | `openExternal` | `path` | `true` | 交外部应用打开，无可用应用时报错 |
@@ -49,7 +50,11 @@
 - 前端 `FileAPI` 调 `FileBridge[method](...args, cbId)`，`cbId` 由 `file-api.js` 自动生成（`'cb1'`、`'cb2'`…）。
 - Java 完成后执行 `evaluateJavascript("window.__fbResolve('cbId', {ok:true,data:...} | {ok:false,error:'...'})")`。
 - `window.__fbResolve` 由 `file-api.js` 运行时注册，`{ok:false}` 时 `error` 字段透传为 Promise reject 的 message。
-- 前端默认超时 10 秒（`call()` 的 `timeoutMs || 10000`）。
+- 传输进度（copy/move 降级路径）：桥层约 200ms 节流推送
+  `evaluateJavascript("window.__fbProgress('cbId', {path, done, total})")`（字节），
+  `window.__fbProgress` 由 `file-api.js` 注册并转发给当前操作的 `onProgress` 回调（不触发 Promise）。
+- 前端默认超时 10 秒（`call()` 的 `timeoutMs || 10000`）；copy/move 用 300 秒长超时
+  （大文件/大目录降级复制；超时只兜底不取消，避免误报失败）。
 
 ### 1.3 返回形状
 

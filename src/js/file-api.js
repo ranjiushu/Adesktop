@@ -9,14 +9,14 @@ App.FileAPI = (function () {
   let pending = {}
   let seq = 0
 
-  function call(method, args, timeoutMs) {
+  function call(method, args, timeoutMs, onProgress) {
     return new Promise(function (resolve, reject) {
       if (!window.FileBridge) {
         reject(new Error('FileBridge 不可用（当前环境无原生桥）'))
         return
       }
       let id = 'cb' + (++seq)
-      pending[id] = { resolve: resolve, reject: reject }
+      pending[id] = { resolve: resolve, reject: reject, onProgress: onProgress || null }
       let callArgs = args.concat([id])
       try {
         window.FileBridge[method].apply(window.FileBridge, callArgs)
@@ -45,6 +45,14 @@ App.FileAPI = (function () {
     }
   }
 
+  // 进度回调（Java 桥传输中周期性推送）：{path, done, total}（字节）
+  // 桥层节流（约 200ms 一次），前端直接刷新当前文件行，不触发 Promise
+  window.__fbProgress = function (id, payload) {
+    let p = pending[id]
+    if (!p || !p.onProgress || !payload) return
+    p.onProgress(payload)
+  }
+
   return {
     rootInfo: function () { return call('rootInfo', []) },
     list: function (path) { return call('list', [path || '']) },
@@ -53,11 +61,14 @@ App.FileAPI = (function () {
     mkdir: function (path) { return call('mkdir', [path]) },
     del: function (path) { return call('delete', [path]) },
     rename: function (oldPath, newPath) { return call('rename', [oldPath, newPath]) },
-    copy: function (srcPath, dstPath) { return call('copy', [srcPath, dstPath], 300000) },
-    // 长超时（copy/move）：大文件/大目录操作可能远超默认 10s（超时只兜底不取消，避免误报失败）
+    // 复制（长超时：大文件可能远超默认 10s；超时只兜底不取消，避免误报失败）
+    // onProgress: ({path, done, total}) => void（字节级进度，桥层节流约 200ms 一次）
+    copy: function (srcPath, dstPath, onProgress) { return call('copy', [srcPath, dstPath], 300000, onProgress) },
     // 移动（真移动优先，桥层失败自动降级 copy+delete）：剪切粘贴/拖入文件夹/移入回收站共用
-    // 长超时：大文件/大目录降级复制可能远超默认 10s（超时只兜底不取消，避免误报失败）
-    move: function (srcPath, dstPath) { return call('move', [srcPath, dstPath], 300000) },
+    // 长超时 + onProgress 同上
+    move: function (srcPath, dstPath, onProgress) { return call('move', [srcPath, dstPath], 300000, onProgress) },
+    // 取消当前传输（复制/移动降级路径）：桥层置取消标志，当前任务尽快中止并清理半成品
+    cancelTransfer: function () { return call('cancelTransfer', [], 10000) },
     // 文件 → WebView 可直接加载的 URI（content:// 或 file://），媒体流式访问用（不搬入内存）
     resolveUri: function (path) { return call('resolveUri', [path]) },
     // 缩略图：桥层采样解码 / 视频首帧提取 → file:// 缓存 URI（磁盘缓存 + 内存可控）

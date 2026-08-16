@@ -185,6 +185,9 @@ App.Actions = (function () {
   //   原子移动 / SAF 模式 DocumentsContract.moveDocument，失败自动降级 copy+delete）。
   //   风险收益：真移动失败 → 该项整体不动（可重试）；降级复制成功但删源失败 →
   //   目标已生成、源未删（重复，告警提示，不丢数据）。
+  // 进度/取消：copy/move 传 onProgress（桥层 __fbProgress 字节级进度，节流约 200ms），
+  //   刷新 Loading 当前文件行；cancellable 时显示取消按钮（请求桥层取消 + 清理半成品）。
+  // 失败汇总：逐项结果收集，失败不中断，结束后失败项 >0 弹列表（成功 N / 失败 M + 原因）。
   // 移动后布局 key 迁移：positions/bounds 以完整路径为 key，不迁移刷新后丢位置。
   function _transfer(cb, targetDir, opts) {
     opts = opts || {}
@@ -198,37 +201,90 @@ App.Actions = (function () {
       const isMove = cb.mode === 'cut'
       const title = opts.title || (isMove ? '正在移动' : '正在粘贴')
       const totalSteps = plan.length
-      if (App.Loading && typeof App.Loading.show === 'function') {
-        App.Loading.show({
-          title: title,
-          phaseLabel: isMove ? '移动' : '复制',
-          phaseDone: 0, phaseTotal: plan.length,
-          totalLabel: '总进度',
-          totalDone: 0, totalTotal: totalSteps
-        })
-      }
-      // 逐项执行：copy 模式 = 桥 copy；cut 模式 = 桥 move（真移动优先，失败降级 copy+del）
-      let chain = Promise.resolve()
+      let results = []      // 逐项结果 [{name, ok, error}]（失败汇总）
       let done = 0
-      const moved = []   // 成功移动项 [{src, dst}] → 布局 key 迁移
-      plan.forEach(function (job) {
-        chain = chain.then(function () {
-          return isMove ? App.FileAPI.move(job.src, job.dst) : App.FileAPI.copy(job.src, job.dst)
-        }).then(function () {
-          done++
-          if (isMove) moved.push({ src: job.src, dst: job.dst })
+      const moved = []      // 成功移动项 [{src, dst}] → 布局 key 迁移
+      let cancelSent = false
+      // 进度回调：桥层字节级进度 → Loading 当前文件行
+      function makeOnProgress(job) {
+        return function (p) {
+          if (!p || !p.path) return
           if (App.Loading && typeof App.Loading.show === 'function') {
             App.Loading.show({
               title: title,
               phaseLabel: isMove ? '移动' : '复制',
               phaseDone: done, phaseTotal: plan.length,
               totalLabel: '总进度',
-              totalDone: done, totalTotal: totalSteps
+              totalDone: done, totalTotal: totalSteps,
+              current: { name: p.path, done: p.done, total: p.total },
+              cancellable: true,
+              onCancel: function () {
+                if (cancelSent) return
+                cancelSent = true
+                if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
+                  App.FileAPI.cancelTransfer()
+                }
+              }
             })
           }
+        }
+      }
+      if (App.Loading && typeof App.Loading.show === 'function') {
+        App.Loading.show({
+          title: title,
+          phaseLabel: isMove ? '移动' : '复制',
+          phaseDone: 0, phaseTotal: plan.length,
+          totalLabel: '总进度',
+          totalDone: 0, totalTotal: totalSteps,
+          cancellable: true,
+          onCancel: function () {
+            if (cancelSent) return
+            cancelSent = true
+            if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
+              App.FileAPI.cancelTransfer()
+            }
+          }
+        })
+      }
+      // 逐项执行：copy 模式 = 桥 copy；cut 模式 = 桥 move（真移动优先，失败降级 copy+del）
+      // 失败不中断（逐项收集），全部结束后统一汇总
+      let chain = Promise.resolve()
+      plan.forEach(function (job) {
+        chain = chain.then(function () {
+          const op = isMove
+            ? App.FileAPI.move(job.src, job.dst, makeOnProgress(job))
+            : App.FileAPI.copy(job.src, job.dst, makeOnProgress(job))
+          return op.then(function () {
+            done++
+            results.push({ name: job.dst, ok: true, error: null })
+            if (isMove) moved.push({ src: job.src, dst: job.dst })
+            if (App.Loading && typeof App.Loading.show === 'function') {
+              App.Loading.show({
+                title: title,
+                phaseLabel: isMove ? '移动' : '复制',
+                phaseDone: done, phaseTotal: plan.length,
+                totalLabel: '总进度',
+                totalDone: done, totalTotal: totalSteps,
+                cancellable: true,
+                onCancel: function () {
+                  if (cancelSent) return
+                  cancelSent = true
+                  if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
+                    App.FileAPI.cancelTransfer()
+                  }
+                }
+              })
+            }
+          }).catch(function (err) {
+            done++
+            results.push({ name: job.dst, ok: false, error: err && err.message || String(err) })
+            // 失败不中断：继续下一项
+          })
         })
       })
       return chain.then(function () {
+        const okCount = results.filter(function (r) { return r.ok }).length
+        const failList = results.filter(function (r) { return !r.ok })
         if (isMove && moved.length &&
             App.Desktop && typeof App.Desktop.applyMoves === 'function') {
           App.Desktop.applyMoves(moved)
@@ -237,7 +293,13 @@ App.Actions = (function () {
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
-        App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + done + ' 项')
+        if (failList.length) {
+          // 失败汇总：先 toast 概览，再弹列表（成功 N / 失败 M + 原因）
+          App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + okCount + ' 项，失败 ' + failList.length + ' 项')
+          _showFailSummary(failList)
+        } else {
+          App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + okCount + ' 项')
+        }
         // Windows 原则：选中态脆弱——粘贴后源选中路径已失效（cut 源已删 / 目标已生成），
         // 清空选中 + 收起操作栏，避免「幽灵选中」残留
         App.Desktop.clearSelection()
@@ -256,6 +318,43 @@ App.Actions = (function () {
       }
       App.toast.show((opts.failText || (cb.mode === 'cut' ? '移动' : '粘贴')) + '失败: ' + err.message)
     })
+  }
+
+  // 批量操作失败汇总弹窗：列出失败项（名称 + 原因），「知道了」关闭。
+  // 复用 dialog-overlay 结构，仅一次绑定确定按钮。
+  let _failSummaryBound = false
+  function _showFailSummary(failList) {
+    if (!failList || !failList.length) return
+    const overlay = document.getElementById('transfer-fail-overlay')
+    if (!overlay) return
+    const listEl = document.getElementById('transfer-fail-list')
+    if (listEl) {
+      listEl.innerHTML = ''
+      failList.forEach(function (f) {
+        const li = document.createElement('li')
+        const name = document.createElement('span')
+        name.className = 'fail-name'
+        name.textContent = f.name
+        const reason = document.createElement('span')
+        reason.className = 'fail-reason'
+        reason.textContent = f.error || '未知错误'
+        li.appendChild(name)
+        li.appendChild(reason)
+        listEl.appendChild(li)
+      })
+    }
+    const summary = document.getElementById('transfer-fail-summary')
+    if (summary) summary.textContent = '共失败 ' + failList.length + ' 项'
+    if (!_failSummaryBound && App.utils && typeof App.utils.bindPress === 'function') {
+      const okBtn = document.getElementById('transfer-fail-ok')
+      if (okBtn) {
+        App.utils.bindPress(okBtn, function () { App.Dialog.close('transfer-fail-overlay') })
+        _failSummaryBound = true
+      }
+    }
+    if (App.Dialog && typeof App.Dialog.open === 'function') {
+      App.Dialog.open('transfer-fail-overlay')
+    }
   }
 
   // ── 阶段 C+：删除 = 移入回收站（安全删除，不做彻底删除）──

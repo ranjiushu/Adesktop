@@ -34,6 +34,7 @@ const CONTRACT = {
   rename: { bridge: 'rename', args: ['oldPath', 'newPath'] },
   copy: { bridge: 'copy', args: ['srcPath', 'dstPath'] },
   move: { bridge: 'move', args: ['srcPath', 'dstPath'] },
+  cancelTransfer: { bridge: 'cancelTransfer', args: [] },
   move: { bridge: 'move', args: ['srcPath', 'dstPath'] },
   resolveUri: { bridge: 'resolveUri', args: ['path'] },
   thumb: { bridge: 'thumb', args: ['path'] },

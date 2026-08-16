@@ -17,6 +17,36 @@
   pointer-events: auto;
 }
 
+/* ── 拖动手柄：canvas 态 Viewer 底部中心下方的悬浮横条（屏幕层固定尺寸）── */
+.viewer-drag-handle {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(107, 114, 128, 0.55);
+  pointer-events: none;   /* 纯视觉；命中走手势层 handleAt 世界坐标判定 */
+  transition: background 0.15s ease;
+}
+
+.viewer-drag-handle.viewer-drag-handle-active {
+  background: var(--color-accent);
+}
+
+/* ── 拖动手柄：canvas 态 Viewer 卡片底部中心下方的悬浮小横条（辅助拖动入口）──
+   屏幕坐标定位（viewer-layer 内，不随画布 transform 缩放），固定尺寸；
+   命中检测走手势层世界坐标（handleWorldRect 反算），元素本身 pointer-events 穿透
+   （layer 默认 none），不拦截桌面手势。 */
+.viewer-drag-handle {
+  position: absolute;
+  border-radius: 3px;
+  background: rgba(107, 114, 128, 0.5);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  transition: background 0.15s ease;
+}
+
+.viewer-drag-handle.viewer-drag-handle-active {
+  background: var(--color-accent);
+}
+
 /* 卡片：flex 纵向面板（canvas 态世界坐标定位 / fullscreen 态占满内容区） */
 .viewer-card {
   display: flex;

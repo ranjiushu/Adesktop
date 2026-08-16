@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Viewer 拖动手柄（辅助拖动区）（2026-08-16）
+
+- **新增拖动手柄**：每个 canvas 态 Viewer 卡片底部中心下方悬浮 36×6px 小横条
+  （屏幕层固定尺寸不随画布 zoom 缩放，间距 14px，始终可见含未选中，选中变 accent 色）
+- **按住手柄 = 自动选中 + 直接拖动**：不受选中态限制的辅助拖动入口——未选中 Viewer
+  也直接拿起移动实体（不必先点击/长按），拖动结束选中保持、点外部取消；轻点手柄 =
+  仅选中（与点击卡片语义一致，不改变现有选中/框选逻辑）
+- **固定屏幕尺寸实现**：`handleScreenRect`（屏幕坐标渲染）/ `handleWorldRect`（世界
+  坐标命中）纯函数，相机变化由 `syncHandles` 跟随（desktop.js onUpdate 每帧驱动），
+  卡片移动/媒体自适应后 `applyCanvasRect` 同步；目录切换 suspend/resume、全屏进出
+  时手柄同步隐藏/恢复；元素 pointer-events 穿透（命中全走手势层世界坐标判定）
+- 手势接线：`hitTest` 手柄优先命中 → `viewer-handle` 类型；gesture 状态机
+  `viewer-handle` 位移超阈值直接进入拖拽（不进框选）；`handleTap`/`handleLongPress`/
+  `handleDragStart` 处理手柄（自动选中 + beginDrag）
+- 测试/文档：`test-viewer.js` 增 handleScreenRect/handleWorldRect 纯函数断言；
+  `viewer-entity-verify.js` 增 5b（手柄存在固定尺寸/未选中直接拖动/自动选中/轻点仅选中）；
+  `docs/viewer.md` + `docs/interaction.md` 同步
+
 ### 画布缩放范围放宽 0.4~2.5 → 0.3~3（2026-08-16）
 
 - `desktop-camera.js`：`ZOOM_MIN` 0.4 → 0.3、`ZOOM_MAX` 2.5 → 3（双指缩放/相机

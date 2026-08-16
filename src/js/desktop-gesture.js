@@ -74,9 +74,10 @@ App.DesktopGesture = (function () {
         if (browse && (sg.hitType === 'empty' || sg.hitType === 'icon')) {
           return { sg: Object.assign({}, next, { phase: 'pan' }), effect: { type: 'pan-start' } }
         }
-        // 已选中（文件 selected / Viewer viewer-selected）→ 直接拿起移动（不必长按）；
-        // 其余（未选中图标 icon / 未选中 Viewer viewer / 空白 empty）→ 框选（划过触发选中）
-        if (sg.hitType === 'selected' || sg.hitType === 'viewer-selected') {
+        // 已选中（文件 selected / Viewer viewer-selected）或命中拖动手柄（viewer-handle）
+        // → 直接拿起移动（不必长按）；其余（未选中图标 icon / 未选中 Viewer viewer / 空白 empty）
+        // → 框选（划过触发选中）
+        if (sg.hitType === 'selected' || sg.hitType === 'viewer-selected' || sg.hitType === 'viewer-handle') {
           return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y, hitType: sg.hitType } }
         }
         return { sg: Object.assign({}, next, { phase: 'marquee' }), effect: { type: 'marquee-start', x: sg.startX, y: sg.startY } }

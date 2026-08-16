@@ -91,6 +91,25 @@ let vc = V.visualCenter({ x: 100, y: 50, zoom: 2 }, 412, 915)
 check(approx(vc.x, 100 + 412 / 4) && approx(vc.y, 50 + 915 / 4), 'visualCenter = 相机左上角 + 视口/(2·zoom)')
 check(V.visualCenter(null, 412, 915) === null, 'visualCenter 相机缺失 → null 降级')
 
+// ── 拖动手柄：handleScreenRect（屏幕坐标，固定尺寸不随 zoom）──
+// 卡片世界 rect {x:100,y:200,w:200,h:100}，相机 (0,0,1)：手柄屏幕矩形位于卡片底部中心下方
+let hs1 = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1 })
+check(hs1 && hs1.w === 36 && hs1.h === 6, 'handleScreenRect 屏幕尺寸固定 36×6')
+check(approx(hs1.x, 100 + 200 / 2 - 18) && approx(hs1.y, 200 + 100 + 14), 'handleScreenRect 位置 = 卡片底部中心 + 间距 14px')
+// zoom=2：世界→屏幕翻倍，但手柄屏幕尺寸仍 36×6（位置随之缩放，间距 14px 恒定）
+let hs2 = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 2 })
+check(hs2 && hs2.w === 36 && hs2.h === 6, 'handleScreenRect zoom=2 屏幕尺寸仍固定 36×6')
+check(approx(hs2.x, (100 + 100) * 2 - 18) && approx(hs2.y, (200 + 100) * 2 + 14), 'handleScreenRect zoom=2 位置随世界坐标换算')
+check(V.handleScreenRect(null, { x: 0, y: 0, zoom: 1 }) === null, 'handleScreenRect 卡片 rect 缺失 → null')
+
+// ── 拖动手柄：handleWorldRect（世界坐标命中矩形，与屏幕矩形互逆）──
+let hw1 = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1 })
+check(hw1 && approx(hw1.w, 36) && approx(hw1.h, 6), 'handleWorldRect zoom=1 世界尺寸 = 屏幕尺寸')
+check(approx(hw1.x + hw1.w / 2, 200) && approx(hw1.y, 314), 'handleWorldRect 中心 = 卡片底部中心，顶 = 底部+14px')
+let hw2 = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 2 })
+check(hw2 && approx(hw2.w, 18) && approx(hw2.h, 3), 'handleWorldRect zoom=2 世界尺寸 = 屏幕尺寸/zoom（命中矩形随画布缩放）')
+check(approx(hw2.y, 307), 'handleWorldRect zoom=2 间距也按 /zoom（屏幕恒定 14px）')
+
 if (failures > 0) {
   console.error('  [FAIL] viewer 测试 ' + failures + ' 项失败')
   process.exit(1)

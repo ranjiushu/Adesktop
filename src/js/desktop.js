@@ -586,9 +586,12 @@ App.Desktop = (function () {
 
   // ── 手势回调（世界坐标）──
   function handleTap(world) {
-    // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）
-    const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
-      ? App.InternalViewer.topmostAt(world.x, world.y) : null
+    // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）；
+    // 拖动手柄也视为点击卡片本体（手柄是辅助拖动区，点击语义与卡片一致：仅选中）
+    const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
+      ? App.InternalViewer.handleAt(world.x, world.y, camera) : null
+    const hitInst = handleInst || (App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
+      ? App.InternalViewer.topmostAt(world.x, world.y) : null)
     if (hitInst) {
       if (hitInst.getMode() === 'canvas') {
         App.InternalViewer.selectOnly(hitInst.id)
@@ -709,8 +712,15 @@ App.Desktop = (function () {
 
   // 命中类型（desktop 空间）：selected=已选中（可直接拿起）/ icon=未选中图标 / empty=空白
   // viewer-selected = 命中的 Viewer 已被选中（可直接拿起移动实体）；viewer = 命中的 Viewer 未选中（长按/框选触发选中）
+  // viewer-handle = 命中 Viewer 的拖动手柄（辅助拖动入口：未选中也直接拿起，按住即选中+拖动）
   // folder 容器：icon=图标（可框选，不拿起）/ empty=空白（滚动），永不 selected（禁止移动）
   function hitTest(world) {
+    // 手柄优先于卡片本身命中（辅助拖动区，不受选中态限制）
+    const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
+      ? App.InternalViewer.handleAt(world.x, world.y, camera) : null
+    if (handleInst) {
+      return 'viewer-handle'
+    }
     const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
       ? App.InternalViewer.topmostAt(world.x, world.y) : null
     if (hitInst) {
@@ -750,9 +760,12 @@ App.Desktop = (function () {
   }
 
   function handleLongPress(world) {
-    // Viewer 画布实体：长按拿起——单选选中该实例再拿（与文件图标语义一致），已选中直接拿
-    const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
-      ? App.InternalViewer.topmostAt(world.x, world.y) : null
+    // Viewer 画布实体：长按拿起——单选选中该实例再拿（与文件图标语义一致），已选中直接拿；
+    // 拖动手柄命中优先：长按手柄 = 同卡片长按（选中 + 拿起）
+    const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
+      ? App.InternalViewer.handleAt(world.x, world.y, camera) : null
+    const hitInst = handleInst || (App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
+      ? App.InternalViewer.topmostAt(world.x, world.y) : null)
     if (hitInst) {
       if (!hitInst.isSelected()) {
         App.InternalViewer.selectOnly(hitInst.id)
@@ -865,6 +878,17 @@ App.Desktop = (function () {
       const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
         ? App.InternalViewer.selectedInstance() : null
       if (inst) inst.beginDrag(world)
+      return
+    }
+    // 拖动手柄：按住 = 自动选中 + 直接拿起（不受选中态限制的辅助拖动入口）
+    if (hitType === 'viewer-handle') {
+      const inst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
+        ? App.InternalViewer.handleAt(world.x, world.y, camera) : null
+      if (inst) {
+        App.InternalViewer.selectOnly(inst.id)
+        syncFab()
+        inst.beginDrag(world)
+      }
       return
     }
     if (isFolderView()) return
@@ -1251,6 +1275,10 @@ App.Desktop = (function () {
       },
       onUpdate: function (c) {
         camera = c
+        // 相机变化 → 同步 Viewer 拖动手柄屏幕位置（平移/缩放/Home 动画每帧）
+        if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
+          App.InternalViewer.syncHandles(c)
+        }
       },
       // 手势开始 → 打断进行中的 Home 平滑过渡（手势直控优先）
       onGestureStart: cancelCameraAnim,
@@ -1267,6 +1295,10 @@ App.Desktop = (function () {
     })
     // 同步手势层相机 + 模式标志 + 菜单可用态（根目录初始 = desktop 空间）
     applyCameraForPath()
+    // 同步 Viewer 拖动手柄（相机初始化后手柄屏幕位置才可计算）
+    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
+      App.InternalViewer.syncHandles(camera)
+    }
     // 同步高级浏览模式到手势层（initLayout 已从 ViewStore 加载偏好）
     syncBrowseMode()
   }

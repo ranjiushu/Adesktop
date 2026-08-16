@@ -54,6 +54,10 @@ App.FileAPI = (function () {
     del: function (path) { return call('delete', [path]) },
     rename: function (oldPath, newPath) { return call('rename', [oldPath, newPath]) },
     copy: function (srcPath, dstPath) { return call('copy', [srcPath, dstPath]) },
+    // 移动（真移动优先，桥层失败自动降级 copy+delete）：剪切粘贴/拖入文件夹/移入回收站共用
+    move: function (srcPath, dstPath) { return call('move', [srcPath, dstPath]) },
+    // 移动（真移动优先，桥层内部失败时降级 copy+delete；剪切粘贴/拖入文件夹/移入回收站共用）
+    move: function (srcPath, dstPath) { return call('move', [srcPath, dstPath]) },
     // 文件 → WebView 可直接加载的 URI（content:// 或 file://），媒体流式访问用（不搬入内存）
     resolveUri: function (path) { return call('resolveUri', [path]) },
     // 缩略图：桥层采样解码 / 视频首帧提取 → file:// 缓存 URI（磁盘缓存 + 内存可控）

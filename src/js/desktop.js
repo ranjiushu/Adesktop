@@ -356,6 +356,33 @@ App.Desktop = (function () {
     refresh()
   }
 
+  // 批量布局 key 迁移（移动后）：moves = [{src, dst}]（src = 完整相对路径）。
+  // 与 applyRename 同构但不 refresh/saveLayout 逐项执行——由调用方（Actions 移动管道）
+  // 一次 saveLayout + 统一 refresh，避免多文件移动反复重绘。
+  function applyMoves(moves) {
+    if (!moves || !moves.length) return
+    let changed = false
+    moves.forEach(function (m) {
+      if (!m || !m.src || !m.dst || m.src === m.dst) return
+      if (positions[m.src]) {
+        positions[m.dst] = positions[m.src]
+        delete positions[m.src]
+        changed = true
+      }
+      if (bounds[m.src]) {
+        bounds[m.dst] = bounds[m.src]
+        delete bounds[m.src]
+        changed = true
+      }
+      if (selection.has(m.src)) {
+        selection.delete(m.src)
+        selection.add(m.dst)
+        changed = true
+      }
+    })
+    if (changed) saveLayout()
+  }
+
   // ── 打开：文件夹进入 / 文件打开（FileOpener 分派内部查看器 / 外部应用 / 快捷方式）──
   function openItem(full) {
     if (!full) return
@@ -1312,6 +1339,7 @@ App.Desktop = (function () {
     getSelectionNames: getSelectionNames,
     getSelectionEntries: getSelectionEntries,
     applyRename: applyRename,
+    applyMoves: applyMoves,
     openItem: openItem,
     enterFolder: enterFolder,
     goBack: goBack,

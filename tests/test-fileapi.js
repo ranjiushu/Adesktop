@@ -40,7 +40,8 @@ sandbox.window.FileBridge = {
   read: function (p, cbId) { bridgeCalls.push(['read', p]); sandbox.window.__fbResolve(cbId, { ok: true, data: 'hello' }) },
   write: function (p, c, cbId) { bridgeCalls.push(['write', p]); sandbox.window.__fbResolve(cbId, { ok: true, data: true }) },
   delete: function (p, cbId) { bridgeCalls.push(['delete', p]); sandbox.window.__fbResolve(cbId, { ok: false, error: '模拟失败' }) },
-  copy: function (s, d, cbId) { bridgeCalls.push(['copy', s, d]); sandbox.window.__fbResolve(cbId, { ok: true, data: true }) }
+  copy: function (s, d, cbId) { bridgeCalls.push(['copy', s, d]); sandbox.window.__fbResolve(cbId, { ok: true, data: true }) },
+  move: function (s, d, cbId) { bridgeCalls.push(['move', s, d]); sandbox.window.__fbResolve(cbId, { ok: true, data: true }) }
 }
 
 vm.createContext(sandbox)
@@ -90,6 +91,13 @@ const FileAPI = sandbox.window.App.FileAPI
   const copyCall = bridgeCalls.filter(function (c) { return c[0] === 'copy' })
   check(copyCall.length === 1 && copyCall[0][1] === 'a.txt' && copyCall[0][2] === 'a 2.txt',
     'copy 桥参数 (src, dst) 正确')
+
+  // 6. move 桥调用（剪切粘贴/拖入文件夹/移入回收站共用；真移动在桥层，前端只透传）
+  const moveResult = await FileAPI.move('a.txt', 'b.txt')
+  check(moveResult === true, 'move 返回 true')
+  const moveCall = bridgeCalls.filter(function (c) { return c[0] === 'move' })
+  check(moveCall.length === 1 && moveCall[0][1] === 'a.txt' && moveCall[0][2] === 'b.txt',
+    'move 桥参数 (src, dst) 正确')
 
   if (failures > 0) {
     console.error('[fail] FileAPI 测试失败 ' + failures + ' 项')

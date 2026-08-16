@@ -22,18 +22,19 @@ function check(cond, msg) {
 
 // ── 沙箱：App + 桩依赖（每用例前 resetCalls 重置记录）──
 const calls = {
-  list: [], mkdir: [], write: [], rename: [], copy: [], del: [],
-  refresh: 0, clearSelection: 0, toasts: [], applyRename: 0,
+  list: [], mkdir: [], write: [], rename: [], copy: [], del: [], move: [],
+  refresh: 0, clearSelection: 0, toasts: [], applyRename: 0, applyMoves: 0,
   show: [], hide: 0
 }
 let listResult = []       // FileAPI.list 返回
 let copyShouldReject = false
+let moveShouldReject = false
 
 function resetCalls() {
   calls.list.length = 0; calls.mkdir.length = 0; calls.write.length = 0
-  calls.rename.length = 0; calls.copy.length = 0; calls.del.length = 0
+  calls.rename.length = 0; calls.copy.length = 0; calls.del.length = 0; calls.move.length = 0
   calls.refresh = 0; calls.clearSelection = 0; calls.toasts.length = 0
-  calls.applyRename = 0; calls.show.length = 0; calls.hide = 0
+  calls.applyRename = 0; calls.applyMoves = 0; calls.show.length = 0; calls.hide = 0
 }
 
 const sandbox = {
@@ -58,13 +59,18 @@ sandbox.App.FileAPI = {
     calls.copy.push([s, d])
     return copyShouldReject ? Promise.reject(new Error('磁盘空间不足')) : Promise.resolve(true)
   },
-  del: function (p) { calls.del.push(p); return Promise.resolve(true) }
+  del: function (p) { calls.del.push(p); return Promise.resolve(true) },
+  move: function (s, d) {
+    calls.move.push([s, d])
+    return moveShouldReject ? Promise.reject(new Error('模拟移动失败')) : Promise.resolve(true)
+  }
 }
 sandbox.App.Desktop = {
   getCurPath: function () { return '' },
   refresh: function () { calls.refresh++ },
   clearSelection: function () { calls.clearSelection++ },
   applyRename: function (o, n) { calls.applyRename++; calls.rename.push([o, n]) },
+  applyMoves: function (moves) { calls.applyMoves++; calls.lastMoves = moves },
   getTrashName: function () { return '.trash' },
   isTrashPath: function (p) { return p === '.trash' },
   getLockedPaths: function () { return [] }
@@ -190,14 +196,16 @@ async function main() {
     'paste copy toast 已粘贴 2 项')
   check(calls.clearSelection === 1 && calls.refresh === 1, 'paste 后清选中 + refresh')
 
-  // ── 粘贴：cut 模式（copy+delete 源 = 移动；清剪贴板）──
+  // ── 粘贴：cut 模式（真移动语义，桥 move 优先；清剪贴板）──
   resetCalls(); C.clear()
   C.set('cut', [{ path: 'a.txt', isDir: false }])
   listResult = []
   A.paste()
   await tick()
-  check(calls.copy.length === 1 && calls.copy[0][1] === 'a.txt', 'paste cut → copy 到目标')
-  check(calls.del.length === 1 && calls.del[0] === 'a.txt', 'paste cut → del 源（移动语义）')
+  check(calls.move.length === 1 && calls.move[0][0] === 'a.txt' && calls.move[0][1] === 'a.txt',
+    'paste cut → 桥 move(a.txt → a.txt)（真移动优先）')
+  check(calls.copy.length === 0 && calls.del.length === 0,
+    'paste cut → 不再前端拆 copy+del（降级在桥层内部）')
   check(C.has() === false, 'paste cut 后清剪贴板')
   check(calls.toasts.some(function (t) { return t.indexOf('已移动 1 项') === 0 }),
     'paste cut toast 已移动 1 项')
@@ -228,26 +236,26 @@ async function main() {
     'copy 完成：phaseDone=2 totalDone=2')
   check(calls.hide === 1, '完成 → hide 一次')
 
-  // ── 多文件移动（cut）：两阶段进度（复制 2/2 → 删除源 2/2）──
+  // ── 多文件移动（cut）：单阶段进度（移动 1/2 → 2/2）+ 批量布局迁移 ──
   resetCalls(); C.clear()
   C.set('cut', [{ path: 'a.txt', isDir: false }, { path: 'b.txt', isDir: false }])
   listResult = []
   A.paste()
   await tick()
-  check(calls.show.length >= 5, 'cut 两阶段 → show ≥5 次（初始、复制1/2、复制2/2、删源1/2、删源2/2）')
-  const phaseLabels = calls.show.map(function (o) { return o.phaseLabel })
-  check(phaseLabels[1] === '复制' && phaseLabels[3] === '删除源',
-    '阶段标签切换：复制 → 删除源')
-  check(calls.show[2].phaseLabel === '复制' && calls.show[2].phaseDone === 2,
-    '复制阶段完成：phaseDone=2')
-  check(calls.show[4].phaseLabel === '删除源' && calls.show[4].phaseDone === 2,
-    '删除源阶段完成：phaseDone=2')
-  check(calls.show[4].totalDone === 4 && calls.show[4].totalTotal === 4,
-    '总进度 = 跨阶段整体 4/4')
-  check(calls.del.length === 2, 'cut 两阶段 → del 源 2 次')
+  check(calls.show.length === 3, 'cut 单阶段 → show 3 次（初始、1/2、2/2），实际 ' + calls.show.length)
+  const moveLabels = calls.show.map(function (o) { return o.phaseLabel })
+  check(moveLabels[0] === '移动' && moveLabels[1] === '移动' && moveLabels[2] === '移动',
+    '移动单阶段标签：全程 phaseLabel=移动')
+  check(calls.show[2].phaseDone === 2 && calls.show[2].totalDone === 2 && calls.show[2].totalTotal === 2,
+    '移动完成：phaseDone=2 totalDone=2 totalTotal=2（不再 ×2 两阶段）')
+  check(calls.move.length === 2, 'cut 单阶段 → 桥 move 2 次')
+  check(calls.applyMoves === 1 && calls.lastMoves.length === 2 &&
+    calls.lastMoves[0].src === 'a.txt' && calls.lastMoves[0].dst === 'a.txt' &&
+    calls.lastMoves[1].src === 'b.txt' && calls.lastMoves[1].dst === 'b.txt',
+    '移动后批量布局迁移 applyMoves(2 项)')
   check(calls.hide === 1, '移动完成 → hide 一次')
 
-  // ── moveIntoFolder：移动语义（copy+del 源）+ 不清剪贴板 ──
+  // ── moveIntoFolder：移动语义（桥 move）+ 不清剪贴板 ──
   resetCalls(); C.clear()
   C.set('copy', [{ path: 'x.txt', isDir: false }])   // 预置无关剪贴板
   listResult = []                                     // 目标文件夹 docs 内无同名
@@ -255,24 +263,26 @@ async function main() {
   await tick()
   check(calls.list.length >= 1 && calls.list[0] === 'docs',
     'moveIntoFolder → list(docs) 检查目标目录')
-  check(calls.copy.length === 1 && calls.copy[0][0] === 'a.txt' && calls.copy[0][1] === 'docs/a.txt',
-    'moveIntoFolder → copy(a.txt, docs/a.txt)')
-  check(calls.del.length === 1 && calls.del[0] === 'a.txt', 'moveIntoFolder → del 源（移动语义）')
+  check(calls.move.length === 1 && calls.move[0][0] === 'a.txt' && calls.move[0][1] === 'docs/a.txt',
+    'moveIntoFolder → 桥 move(a.txt → docs/a.txt)')
+  check(calls.copy.length === 0 && calls.del.length === 0,
+    'moveIntoFolder → 不拆 copy+del')
   check(C.has() === true, 'moveIntoFolder 不清剪贴板（keepClipboard）')
   check(calls.toasts.some(function (t) { return t.indexOf('已移动 1 项') === 0 }),
     'moveIntoFolder toast 已移动 1 项')
   check(calls.clearSelection === 1 && calls.refresh === 1, 'moveIntoFolder 后清选中 + refresh')
 
-  // ── 删除 = 移入回收站（安全删除）：copy+del 源到 .trash ──
+  // ── 删除 = 移入回收站（安全删除）：桥 move（真移动优先）到 .trash ──
   resetCalls(); C.clear()
   listResult = []   // 回收站 .trash 内无同名
   A.deleteSelection([{ path: 'a.txt', isDir: false }])
   await tick()
   check(calls.list.length >= 1 && calls.list[0] === '.trash',
     'deleteSelection → list(.trash) 检查回收站')
-  check(calls.copy.length === 1 && calls.copy[0][0] === 'a.txt' && calls.copy[0][1] === '.trash/a.txt',
-    'deleteSelection → copy(a.txt, .trash/a.txt)')
-  check(calls.del.length === 1 && calls.del[0] === 'a.txt', 'deleteSelection → del 源（移入回收站）')
+  check(calls.move.length === 1 && calls.move[0][0] === 'a.txt' && calls.move[0][1] === '.trash/a.txt',
+    'deleteSelection → 桥 move(a.txt → .trash/a.txt)（真移动，O(1) 秒删大文件夹）')
+  check(calls.copy.length === 0 && calls.del.length === 0,
+    'deleteSelection → 不拆 copy+del（降级在桥层内部）')
   check(calls.toasts.some(function (t) { return t.indexOf('已删除 1 项') === 0 }),
     'deleteSelection toast 已删除 1 项')
   check(calls.clearSelection === 1 && calls.refresh === 1, 'deleteSelection 后清选中 + refresh')
@@ -281,7 +291,8 @@ async function main() {
   resetCalls(); C.clear()
   A.deleteSelection([{ path: '.trash', isDir: true }])
   await tick()
-  check(calls.copy.length === 0 && calls.del.length === 0, 'deleteSelection 回收站自身 → 不 copy/del')
+  check(calls.move.length === 0 && calls.copy.length === 0 && calls.del.length === 0,
+    'deleteSelection 回收站自身 → 不 move/copy/del')
   check(calls.toasts.some(function (t) { return t.indexOf('回收站不可删除') === 0 }),
     'deleteSelection 回收站自身 → toast 回收站不可删除')
 
@@ -291,7 +302,8 @@ async function main() {
   resetCalls(); C.clear()
   A.deleteSelection([{ path: 'a.txt', isDir: false }])
   await tick()
-  check(calls.copy.length === 0 && calls.del.length === 0, 'deleteSelection 无回收站名 → 不 copy/del')
+  check(calls.move.length === 0 && calls.copy.length === 0 && calls.del.length === 0,
+    'deleteSelection 无回收站名 → 不 move/copy/del')
   check(calls.toasts.some(function (t) { return t.indexOf('回收站不可用') === 0 }),
     'deleteSelection 无回收站名 → toast 回收站不可用')
   sandbox.App.Desktop.getTrashName = savedTrashName
@@ -301,9 +313,10 @@ async function main() {
   listResult = []
   A.deleteSelection([{ path: 'a.txt', isDir: false }, { path: '.trash', isDir: true }])
   await tick()
-  check(calls.copy.length === 1 && calls.copy[0][0] === 'a.txt',
-    'deleteSelection 混入回收站 → 只 copy 非回收站项')
-  check(calls.del.length === 1 && calls.del[0] === 'a.txt', 'deleteSelection 混入回收站 → 只 del 非回收站项')
+  check(calls.move.length === 1 && calls.move[0][0] === 'a.txt',
+    'deleteSelection 混入回收站 → 只 move 非回收站项')
+  check(calls.copy.length === 0 && calls.del.length === 0,
+    'deleteSelection 混入回收站 → 不 copy/del')
 
   if (failures > 0) {
     console.error('  [FAIL] actions 测试 ' + failures + ' 项失败')

@@ -1,6 +1,7 @@
 /* Shortcut File 契约层：真实文件（JSON）→ 快捷方式语义。
  * 统一「快捷方式文件」概念：.desktop 扩展名 + JSON 内容，type 字段区分子类。
  *   - application：引用已安装应用（package），双击经 PackageManager 拉起（本期实现）
+ *   - website：引用网址（url），双击在画布内以 iframe 打开（本期实现）
  *   - file：引用外部文件（持久化 SAF URI），跨目录引用（预留，本期不实现）
  * 纯函数零 DOM，可单测；依赖仅 namespace.js。
  * 导出: App.Shortcut
@@ -50,6 +51,17 @@ App.Shortcut = (function () {
       // File Shortcut 预留：schema 已兼容（避免二次改契约），本期不实现打开
       return { type: 'file', version: 1, label: obj.label || '', uri: obj.uri || '' }
     }
+    if (type === 'website') {
+      if (!obj.url || typeof obj.url !== 'string' || !obj.url.trim()) {
+        throw new Error('网站快捷方式缺少网址')
+      }
+      return {
+        type: 'website',
+        version: typeof obj.version === 'number' ? obj.version : 1,
+        url: obj.url.trim(),
+        label: typeof obj.label === 'string' && obj.label ? obj.label : obj.url.trim()
+      }
+    }
     throw new Error('未知的快捷方式类型: ' + (type || '（缺失）'))
   }
 
@@ -65,6 +77,37 @@ App.Shortcut = (function () {
     }
     if (app.icon && typeof app.icon === 'string') obj.icon = app.icon
     return JSON.stringify(obj)
+  }
+
+  // 构建 Website Shortcut 的 JSON 文本（写入文件用）。
+  function buildWebsiteShortcut(site) {
+    const obj = {
+      type: 'website',
+      version: SCHEMA_VERSION,
+      url: site.url,
+      label: site.label || site.url
+    }
+    return JSON.stringify(obj)
+  }
+
+  // 网址规范化：无协议（http:// https:// 等）时补 https://；已有协议原样保留。
+  // 空 / 非字符串 → 空串（调用方据此拒绝创建）。
+  function normalizeUrl(input) {
+    if (typeof input !== 'string') return ''
+    const s = input.trim()
+    if (!s) return ''
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return s
+    return 'https://' + s
+  }
+
+  // 网址 → 主机名（含端口，不含协议/路径/查询）：https://example.com/a → example.com。
+  // 无法解析（无协议）时原样返回 trim 值（供文件名兜底）。
+  function hostOf(url) {
+    if (typeof url !== 'string') return ''
+    const s = url.trim()
+    if (!s) return ''
+    const m = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(s)
+    return m ? m[1] : s
   }
 
   // 标签 → 安全文件名主名（剥离路径分隔符/非法字符/控制字符/首尾点/折叠空白）。
@@ -89,6 +132,9 @@ App.Shortcut = (function () {
     isShortcutName: isShortcutName,
     parseShortcut: parseShortcut,
     buildAppShortcut: buildAppShortcut,
+    buildWebsiteShortcut: buildWebsiteShortcut,
+    normalizeUrl: normalizeUrl,
+    hostOf: hostOf,
     sanitizeFileName: sanitizeFileName
   }
 })()

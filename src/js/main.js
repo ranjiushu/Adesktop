@@ -37,6 +37,10 @@ App.boot = function boot() {
   if (App.CreateDialog && typeof App.CreateDialog.init === 'function') {
     App.CreateDialog.init()
   }
+  // 新建网站快捷方式对话框（Drawer「新建网站」弹出）
+  if (App.WebsiteDialog && typeof App.WebsiteDialog.init === 'function') {
+    App.WebsiteDialog.init()
+  }
   // 重命名对话框（选中态操作栏弹出）
   if (App.RenameDialog && typeof App.RenameDialog.init === 'function') {
     App.RenameDialog.init()

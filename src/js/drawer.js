@@ -73,6 +73,7 @@ App.Drawer = (function () {
           close()
           if (action === 'switch-root') App.Actions.switchRoot()
           else if (action === 'installed-apps') App.AppList.open()
+          else if (action === 'new-website') App.WebsiteDialog.open()
         })
       }
       // 头部关闭按钮

@@ -36,6 +36,7 @@ const CONTRACT = {
   resolveUri: { bridge: 'resolveUri', args: ['path'] },
   thumb: { bridge: 'thumb', args: ['path'] },
   openExternal: { bridge: 'openExternal', args: ['path'] },
+  openUrl: { bridge: 'openUrl', args: ['url'] },
   listApps: { bridge: 'listApps', args: [] },
   launchApp: { bridge: 'launchApp', args: ['pkg'] },
   appIcon: { bridge: 'appIcon', args: ['pkg'] }
@@ -54,6 +55,7 @@ const FIXTURE = {
   resolveUri: 'file:///a.txt',
   thumb: 'file:///thumb.jpg',
   openExternal: true,
+  openUrl: true,
   listApps: [{ package: 'com.x', label: 'X', isSystem: false }],
   launchApp: true,
   appIcon: 'data:image/png;base64,AAAA'

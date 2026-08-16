@@ -60,6 +60,37 @@ check(iconMeta.icon === 'data:image/png;base64,xx', 'application 解析 icon 字
 const fm = S.parseShortcut(JSON.stringify({ type: 'file', label: 'a.pdf', uri: 'content://x' }))
 check(fm.type === 'file' && fm.uri === 'content://x', 'file 类型预留解析')
 
+// ── parseShortcut: website ──
+const wm = S.parseShortcut(JSON.stringify({ type: 'website', url: 'https://example.com', label: '示例站' }))
+check(wm.type === 'website' && wm.url === 'https://example.com' && wm.label === '示例站',
+  'website 解析字段齐全')
+const wmNoLabel = S.parseShortcut(JSON.stringify({ type: 'website', url: 'https://a.com' }))
+check(wmNoLabel.label === 'https://a.com', 'website 缺 label 回退 url')
+let wthrew = false
+try { S.parseShortcut('{"type":"website"}') } catch (e) { wthrew = true }
+check(wthrew, 'website 缺 url 抛错')
+
+// ── buildWebsiteShortcut ──
+const wbuilt = S.buildWebsiteShortcut({ url: 'https://example.com', label: '示例站' })
+check(wbuilt.indexOf('"type":"website"') >= 0, 'buildWebsiteShortcut 含 type=website')
+check(wbuilt.indexOf('"url":"https://example.com"') >= 0, 'buildWebsiteShortcut 含 url')
+const wbuiltNoLabel = S.buildWebsiteShortcut({ url: 'https://a.com' })
+check(wbuiltNoLabel.indexOf('"label":"https://a.com"') >= 0, 'buildWebsiteShortcut 缺 label 回退 url')
+
+// ── normalizeUrl ──
+check(S.normalizeUrl('example.com') === 'https://example.com', '无协议补 https://')
+check(S.normalizeUrl('  example.com  ') === 'https://example.com', '首尾空白剥离')
+check(S.normalizeUrl('https://example.com') === 'https://example.com', '已有 https 保留')
+check(S.normalizeUrl('http://example.com') === 'http://example.com', '已有 http 保留')
+check(S.normalizeUrl('') === '', '空串 → 空串')
+check(S.normalizeUrl(null) === '', 'null → 空串')
+
+// ── hostOf ──
+check(S.hostOf('https://example.com/a?b=1') === 'example.com', 'hostOf 提取主机名')
+check(S.hostOf('https://example.com:8080/x') === 'example.com:8080', 'hostOf 保留端口')
+check(S.hostOf('example.com') === 'example.com', 'hostOf 无协议原样返回')
+check(S.hostOf('') === '', 'hostOf 空串 → 空串')
+
 // ── buildAppShortcut ──
 const built = S.buildAppShortcut({ package: 'a.b', label: 'A', isSystem: true })
 check(built.indexOf('"type":"application"') >= 0, 'buildAppShortcut 含 type=application')

@@ -66,16 +66,17 @@ check(deep.key === 'deep' && deep.children[0].type === 'array', '嵌套层级递
 
 // ── 三模块映射：text / parsed / media ──
 check(V.moduleFor('text') === 'text', 'moduleFor: text → text')
-check(V.moduleFor('markdown') === 'parsed' && V.moduleFor('json') === 'parsed' && V.moduleFor('html') === 'parsed', 'moduleFor: md/json/html → parsed')
+check(V.moduleFor('markdown') === 'parsed' && V.moduleFor('json') === 'parsed' && V.moduleFor('html') === 'parsed' && V.moduleFor('website') === 'parsed', 'moduleFor: md/json/html/website → parsed')
 check(V.moduleFor('image') === 'media' && V.moduleFor('video') === 'media' && V.moduleFor('audio') === 'media' && V.moduleFor('svg') === 'media', 'moduleFor: 图/视频/音频/svg → media')
 check(V.moduleFor('bogus') === null, 'moduleFor: 未知 → null')
 
 // ── Viewer 态卡片形状：portrait = 3:4 固定（text/parsed/audio）；auto = 原始比例（图/视频/svg）──
 check(V.cardIsPortrait('text') && V.cardIsPortrait('markdown') && V.cardIsPortrait('json') && V.cardIsPortrait('html') && V.cardIsPortrait('audio'), 'cardIsPortrait: 文本/解析/音频 → 3:4')
 check(!V.cardIsPortrait('image') && !V.cardIsPortrait('video') && !V.cardIsPortrait('svg'), 'cardIsPortrait: 图/视频/svg → 原始比例')
+check(!V.cardIsPortrait('website'), 'cardIsPortrait: website → 宽卡片（接近全屏，非 3:4）')
 
 // ── Viewer 态锚点：center = 视觉中心（text/parsed）；file = 文件位置（媒体）──
-check(V.anchorIsCenter('text') && V.anchorIsCenter('markdown') && V.anchorIsCenter('json') && V.anchorIsCenter('html'), 'anchorIsCenter: 文本/解析 → 视觉中心')
+check(V.anchorIsCenter('text') && V.anchorIsCenter('markdown') && V.anchorIsCenter('json') && V.anchorIsCenter('html') && V.anchorIsCenter('website'), 'anchorIsCenter: 文本/解析/网站 → 视觉中心')
 check(!V.anchorIsCenter('image') && !V.anchorIsCenter('video') && !V.anchorIsCenter('audio') && !V.anchorIsCenter('svg'), 'anchorIsCenter: 媒体 → 文件位置')
 
 // ── cardSize34：3:4 竖版卡片（约束视口内，中心不变）──

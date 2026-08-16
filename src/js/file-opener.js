@@ -48,7 +48,7 @@ App.FileOpener = (function () {
     if (!item || !item.path) return null
     const kind = kindFor(item.name || '')
     if (kind === 'shortcut') {
-      return openShortcut(item)
+      return openShortcut(item, anchor, camera, onClose)
     }
     if (kind === 'external') {
       App.FileAPI.openExternal(item.path)
@@ -81,8 +81,11 @@ App.FileOpener = (function () {
   }
 
   // 打开快捷方式文件（.desktop）：读 JSON → 按 type 分派。
-  // application → FileAPI.launchApp；file（预留）→ 暂不支持。失败 toast 不抛出。
-  function openShortcut(item) {
+  // application → FileAPI.launchApp；website → InternalViewer 以 iframe 在画布打开；
+  // file（预留）→ 暂不支持。失败 toast 不抛出。
+  // 返回 true（同步）：website 的 Viewer 打开是异步的，桌面层据 typeof 判定 true 不锁定文件
+  //（MVP 简化：website 快捷方式打开期间允许删除其 .desktop 文件，iframe 已取到 url 不受影响）。
+  function openShortcut(item, anchor, camera, onClose) {
     App.FileAPI.read(item.path).then(function (content) {
       const meta = App.Shortcut.parseShortcut(content)
       if (meta.type === 'application') {
@@ -91,6 +94,25 @@ App.FileOpener = (function () {
             App.toast.show('已启动: ' + meta.label)
           }
         })
+      }
+      if (meta.type === 'website') {
+        if (App.InternalViewer && typeof App.InternalViewer.open === 'function') {
+          App.InternalViewer.open({
+            path: item.path,
+            name: item.name,
+            kind: 'website',
+            url: meta.url,
+            anchor: anchor || null,
+            camera: camera || null,
+            onFallback: function () {   // 网页加载失败 → 交系统浏览器打开
+              App.FileAPI.openUrl(meta.url).catch(function () {})
+            },
+            onClose: typeof onClose === 'function' ? onClose : null
+          })
+        } else {
+          throw new Error('当前环境不支持打开网站')
+        }
+        return
       }
       if (meta.type === 'file') {
         throw new Error('文件快捷方式暂未支持')

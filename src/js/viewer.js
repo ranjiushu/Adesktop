@@ -33,13 +33,14 @@ App.InternalViewer = (function () {
   // ── 三模块映射（kind → 模块语义）──
   const MODULE_OF = {
     text: 'text',
-    markdown: 'parsed', json: 'parsed', html: 'parsed',
+    markdown: 'parsed', json: 'parsed', html: 'parsed', website: 'parsed',
     image: 'media', video: 'media', audio: 'media', svg: 'media'
   }
   // Viewer 态用 3:4 竖版卡片的 kind（text/parsed 全部 + media 的音频）
   const PORTRAIT_KINDS = { text: true, markdown: true, json: true, html: true, audio: true }
   // Viewer 态锚点 = 视觉中心（相机中心世界坐标）的 kind（text/parsed；媒体保持文件位置）
-  const CENTER_KINDS = { text: true, markdown: true, json: true, html: true }
+  // website 不在 PORTRAIT_KINDS（用接近全屏的宽卡片 cardSize），但锚点取视觉中心（级联错位）
+  const CENTER_KINDS = { text: true, markdown: true, json: true, html: true, website: true }
 
   function moduleFor(kind) { return MODULE_OF[kind] || null }
   function cardIsPortrait(kind) { return !!PORTRAIT_KINDS[kind] }
@@ -200,7 +201,7 @@ App.InternalViewer = (function () {
       }
       drag = null
       reader = { scale: 1, wrap: true }
-      state = { open: false, mode: null, fsFrom: null, selected: false, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null, uri: null, rect: null, canvasRect: null }
+      state = { open: false, mode: null, fsFrom: null, selected: false, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null, uri: null, rect: null, canvasRect: null, url: '' }
       // 从管理器实例集合移除自己（exitFullscreen 的 from='folder' 分支也走这里，保证 isAnyOpen 正确）
       const i = indexOf(id)
       if (i >= 0) _instances.splice(i, 1)
@@ -488,6 +489,24 @@ App.InternalViewer = (function () {
             body.appendChild(iframe)
           }).catch(function (err) { showError(err && err.message || '读取失败') })
           break
+        case 'website':
+          // 远程网址：iframe src 直连（非 srcdoc）。安全隔离：不加 allow-same-origin
+          //（保持 opaque origin，隔离顶层 Java 桥 FileBridge）；allow-forms/popups/downloads
+          // /modals 让网页可登录/填表/弹窗/下载。referrerpolicy 防 file:// 路径泄露。
+          body.innerHTML = ''
+          {
+            const wframe = document.createElement('iframe')
+            wframe.className = 'viewer-frame viewer-frame-web'
+            wframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-downloads allow-modals')
+            wframe.setAttribute('referrerpolicy', 'no-referrer')
+            wframe.src = state.url
+            // 仅捕获网络层失败（X-Frame-Options 拒绝会渲染错误页，不触发 error，需用户自行「用浏览器打开」）
+            wframe.addEventListener('error', function () {
+              showError('网页加载失败（网络错误或该网站禁止被嵌入）')
+            })
+            body.appendChild(wframe)
+          }
+          break
         case 'svg':
           App.FileAPI.read(p).then(function (content) {
             body.innerHTML = ''
@@ -610,6 +629,7 @@ App.InternalViewer = (function () {
         path: opts.path || '',
         name: opts.name || '',
         kind: opts.kind || 'text',
+        url: opts.url || '',
         anchor: opts.anchor || null,
         camera: opts.camera || null,
         onFallback: typeof opts.onFallback === 'function' ? opts.onFallback : null,

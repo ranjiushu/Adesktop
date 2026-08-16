@@ -638,6 +638,27 @@ public class FileBridge {
         });
     }
 
+    /* 用系统浏览器打开网址（ACTION_VIEW + http/https Uri）。 */
+    @JavascriptInterface
+    public void openUrl(String url, String cbId) {
+        if (url == null || url.trim().isEmpty()) {
+            resolveErr(cbId, "网址无效");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(intent);
+                resolveOk(cbId, true);
+            } catch (ActivityNotFoundException e) {
+                resolveErr(cbId, "没有可打开网址的应用");
+            } catch (Exception e) {
+                resolveErr(cbId, "无法打开网址: " + (e.getMessage() == null ? url : e.getMessage()));
+            }
+        });
+    }
+
     /* ── 已安装应用 ──
      * listApps：PackageManager 查询 launcher 应用（第三方 + 系统），返回 [{package,label,isSystem}]。
      * launchApp：getLaunchIntentForPackage + startActivity 拉起指定应用。

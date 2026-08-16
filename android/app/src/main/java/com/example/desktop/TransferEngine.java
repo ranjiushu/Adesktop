@@ -291,23 +291,37 @@ class TransferEngine {
         }
     }
 
-    /* SAF 模式移动：DocumentsContract.moveDocument 优先，失败降级 copySaf + delete 源 */
+    /* SAF 模式移动：同名 → moveDocument 真移动；异名 → copy + delete（改名语义）。
+     * DocumentsContract.moveDocument 只表达「移到目标父目录」，不带目标名参数——
+     * 前端重名规划后 dst leaf != src leaf（如 B/foo 2.txt）时，裸 moveDocument 会把
+     * 文件以原名落入目标目录，前端规划的名字被无视（布局迁移/后续操作错位）。
+     * 最小语义（见 docs/operation-contract.md 2.4）：同名才走 provider 真移动（O(1)）；
+     * 需要改名一律 copy + delete（失败安全语义不变：复制失败源保留；删源失败目标已生成）。
+     */
     private void moveSaf(String srcPath, String dstPath, ProgressReporter pr) throws IOException {
         DocumentFile[] sp = resolveSrcAndParent(srcPath);
         DocumentFile src = sp[0];
         DocumentFile srcParent = sp[1];
-        DocumentFile dstParent = resolveOrCreateParent(dstPath);
-        // 1) 真移动：provider 级 moveDocument（API 24 = minSdk，恒可用；provider 不支持时抛异常/返回 null）
-        try {
-            Uri moved = DocumentsContract.moveDocument(
-                    ctx.activity.getContentResolver(), src.getUri(), srcParent.getUri(), dstParent.getUri());
-            if (moved != null) return;
-        } catch (Exception ignored) {
-            // provider 不支持移动 → 降级 copy+delete
+        if (leafOf(srcPath).equals(leafOf(dstPath))) {
+            DocumentFile dstParent = resolveOrCreateParent(dstPath);
+            // 1) 真移动：provider 级 moveDocument（API 24 = minSdk，恒可用；provider 不支持时抛异常/返回 null）
+            try {
+                Uri moved = DocumentsContract.moveDocument(
+                        ctx.activity.getContentResolver(), src.getUri(), srcParent.getUri(), dstParent.getUri());
+                if (moved != null) return;
+            } catch (Exception ignored) {
+                // provider 不支持移动 → 降级 copy+delete
+            }
         }
-        // 2) 降级：copy + delete（失败安全：复制失败源保留；删源失败目标已生成，不丢数据）
+        // 2) 降级 / 异名：copy + delete（失败安全：复制失败源保留；删源失败目标已生成，不丢数据）
         copySaf(src, dstPath, pr);
         if (!src.delete()) throw new IOException("移动失败（复制成功但源删除失败）: " + srcPath);
+    }
+
+    /** 相对路径末段名：'docs/a.txt' → 'a.txt'，'a.txt' → 'a.txt' */
+    private static String leafOf(String path) {
+        int i = path.lastIndexOf('/');
+        return i < 0 ? path : path.substring(i + 1);
     }
 
     /* 私有模式移动：File.renameTo 原子移动（同文件系统 O(1)），失败（跨文件系统 EXDEV 等）降级 copy+delete */

@@ -121,7 +121,7 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 | 失败 | 单项目失败不中断；复制失败源保留（可重试）；删源失败目标已生成（重复，告警）；结束后失败列表弹窗 |
 | 取消 | 当前文件中止 + 清理半成品；**剩余项不再调度**（取消后停止，见 1.3） |
 | UI 状态 | cut 源图标半透明标记（render 时 `Clipboard.isCut`）；Loading + 取消按钮；结束后 clearSelection + refresh |
-| 后端 | `TransferEngine.move`：真移动优先（私有 `renameTo` / SAF `moveDocument`），失败降级 copy+delete；降级路径 mtime 差异见 1.5 |
+| 后端 | `TransferEngine.move`：真移动优先（私有 `renameTo` / SAF `moveDocument`），失败降级 copy+delete；降级路径 mtime 差异见 1.5。**SAF 改名语义（2026-08-17 修复）**：`moveDocument` 无目标名参数，仅当 `src leaf == dst leaf` 时走 provider 真移动；重名规划后需改名（`dst leaf != src leaf`）一律 copy+delete——前端规划的目标名不被 provider 无视 |
 
 ### 2.5 delete（= 移入回收站，安全删除）
 
@@ -133,7 +133,7 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 | 失败 | 同 move 失败语义（复用移动管道，`keepClipboard: true` 不清用户剪贴板） |
 | 取消 | 同 move 取消语义（见 1.3：剩余项不再调度） |
 | UI 状态 | Loading「正在删除」；结束后 clearSelection + refresh |
-| 后端 | 无独立桥方法——前端组装为 `move(entries, .trash)`（真移动优先，O(1) 秒删大文件夹） |
+| 后端 | 无独立桥方法——前端组装为 `move(entries, .trash)`（真移动优先，O(1) 秒删大文件夹）。桥层 `delete` 方法 = **永久删除**（低层能力，前端业务禁止调用，见 bridge-and-data-contract.md 1.4） |
 
 ### 2.6 restore（恢复 = 回收站内 move，无独立 API）
 
@@ -182,7 +182,7 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 | 8 | rename 跨目录拒绝（两后端一致） | test-actions.js（newName 含 / 拒绝）+ FileStore.java 同目录校验 | **已修（2026-08-17）** |
 | 9 | delete 进 .trash 重名加序号 / 回收站自身不可删 / 未授权拒绝 | test-actions.js | 已有 |
 | 10 | open 锁定 / 解锁 | test-desktop-viewerlink-lock.js | 已有 |
-| 11 | SAF/private 双后端等价（Operation Contract Test） | — | [P2] 待评估（Java 侧依赖 Android，建议退化为真机验收矩阵） |
+| 11 | SAF/private 双后端等价（Operation Contract Test） | SAF move 改名语义已修（TransferEngine leafOf 分支）；mtime 差异已文档化接受；Java 侧依赖 Android，退化为真机手工验收矩阵（待生成） | 部分完成 |
 
 ## 五、变更规则
 

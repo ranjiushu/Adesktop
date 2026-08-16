@@ -7,7 +7,7 @@
 //    3. 双指平移 + 捏合偏离 → 长按 Home（650ms）→ 快照写入 localStorage
 //       + home-has-snapshot 类 + toast
 //    4. 再次平移偏离 → 点按 Home → 相机回到快照（transform 数值断言，含 zoom）
-//    5. Drawer「设为默认视角」→ fallback 写入，home 保留
+//    5. 设为默认视角 → fallback 写入，home 保留
 //    6. 全程零 pageerror
 //
 //  用法: DESKTOP_BUNDLE=dist/desktop.bundle.min.html node scripts/verify-home.js
@@ -296,13 +296,10 @@ async function main() {
   }
   await sleep(700)                                 // 等动画结束，避免影响后续场景
 
-  // ── 5. Drawer「设为默认视角」→ fallback 写入且 home 保留 ──
+  // ── 5. 设为默认视角 → fallback 写入且 home 保留 ──
+  //（Drawer 已移除「设为默认视角」按钮，直接调用 API 验证 fallback 写入逻辑）
   await sleep(1500)  // 等上一个 toast 过期
-  const drawerBtn = await rect('#btn-drawer')
-  await tap(client, drawerBtn.x, drawerBtn.y)
-  await sleep(400)  // 等抽屉展开动画（0.28s）落定
-  const setView = await rect('[data-action="set-default-view"]')
-  await tap(client, setView.x, setView.y)
+  await page.evaluate(() => { if (App.Actions && App.Actions.setDefaultView) App.Actions.setDefaultView() })
   await sleep(400)
   const snap2 = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop.home.v1')))
   if (snap2 && snap2.fallback && snap2.home && snap2.home.zoom === snap.home.zoom) {

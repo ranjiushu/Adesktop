@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Drawer/FAB 精简（2026-08-16）
+
+- **Drawer 移除 4 项操作**：新建文件夹、新建文件、刷新、设为默认视角（新建/刷新仍保留在
+  FAB Speed Dial；设为默认视角功能保留为 `App.Actions.setDefaultView` API，仅移除 UI 入口）
+- **FAB Speed Dial 移除「切换根目录」**（保留 Drawer 内「切换根目录」入口）
+- **Drawer 剩余图标 emoji → 矢量图标**：切换根目录（folder-move）、已安装应用（smartphone，新增）、
+  提交与构建（wrench，新增）；sprite 新增 `icon-smartphone`/`icon-wrench` 并登记 icons.js _NAMES
+- 同步适配：drawer.js 移除已删 action 分支；fab-speed-dial.js 移除 switch-root case；
+  verify-home E2E 场景 5 改为直调 `App.Actions.setDefaultView()`（按钮移除后仍验证 fallback 写入）
+
 ### 矢量图标系统移植（2026-08-16）
 
 - **图标系统统一**（移植 LexiCull 同构方案）：`index.html` 顶部新增隐藏 SVG sprite

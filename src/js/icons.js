@@ -50,7 +50,7 @@
     'grid', 'columns', 'layoutTop', 'image', 'sliders', 'filter', 'shuffle', 'swap', 'sortAlpha', 'sortLength', 'sortLines',
     // ── 信息/状态 ──
     'info', 'search', 'settings', 'download', 'eye', 'eyeOff', 'clock', 'history', 'activity', 'barChart',
-    'pin', 'pinOff', 'similar', 'merge', 'target', 'smile', 'sun', 'moon', 'code',
+    'pin', 'pinOff', 'similar', 'merge', 'target', 'smile', 'sun', 'moon', 'code', 'smartphone', 'wrench',
     // ── 学习/媒体 ──
     'bookOpen', 'skipBack', 'play', 'pause', 'skipForward', 'music', 'backup'
   ]

@@ -71,11 +71,7 @@ App.Drawer = (function () {
           let action = this.getAttribute('data-action')
           if (!action) return
           close()
-          if (action === 'new-folder') App.Actions.createFolder()
-          else if (action === 'new-file') App.Actions.createFile()
-          else if (action === 'refresh') App.Actions.refresh()
-          else if (action === 'set-default-view') App.Actions.setDefaultView()
-          else if (action === 'switch-root') App.Actions.switchRoot()
+          if (action === 'switch-root') App.Actions.switchRoot()
           else if (action === 'installed-apps') App.AppList.open()
         })
       }

@@ -1,6 +1,8 @@
 # 桥与数据契约清单
 
-本文件不是新规范，是把散落在 `FileBridge.java`、`src/js/file-api.js`、`src/js/bridge.js`、
+本文件不是新规范，是把散落在 `FileBridge.java`（及其拆分后的实现类：`BridgeContext`/
+`FileStore`/`TransferEngine`/`ThumbnailService`/`AppBridge`/`ExternalOpen`/`UploadBridge`）、
+`src/js/file-api.js`、`src/js/bridge.js`、
 `docs/architecture.md`、`docs/data-integrity.md` 里的规则收拢成一份**可对照的清单**。
 
 用途：改桥协议或数据形状前先看这份清单；改完须同步更新本文件与

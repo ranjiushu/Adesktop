@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### FileBridge 拆分 7 模块（门面 + 委托）（2026-08-17）
+
+- **FileBridge.java 1206 行 → 265 行薄门面**：22 个 `@JavascriptInterface` 方法签名一字
+  不动（`window.FileBridge` API 面不变），实现按职责委托给新模块
+- 新模块：`BridgeContext`（共享上下文 + 回调管道 + 路径工具）、`FileStore`（list/read/
+  write/mkdir/delete/rename）、`TransferEngine`（move/copy/cancel + 进度上报 + 半成品清理）、
+  `ThumbnailService`（缩略图）、`AppBridge`（已安装应用）、`ExternalOpen`（resolveUri/
+  openExternal/openUrl）、`UploadBridge`（网页上传）
+- 关键不变式：文件操作仍全部串行于 `BridgeContext` 同一单线程 executor；`cancelRequested`
+  取消标志与 copy 循环竞态语义原样保留；`cancelTransfer` 仍不进 executor（尽快中止语义）
+- 壳层零改动：`MainActivity` 的 `new FileBridge(this, webView, rootUri)` 签名不变；
+  前端 `bridge.js`/`file-api.js`/测试套件零改动
+- 验证：`verify.sh` 10/10 全绿 + Gradle assembleRelease 构建通过 + APK 归档
+
+## Unreleased
+
 ### Viewer 拖动手柄（辅助拖动区）（2026-08-16）
 
 - **新增拖动手柄**：每个 canvas 态 Viewer 卡片底部中心下方悬浮 36×6px 小横条

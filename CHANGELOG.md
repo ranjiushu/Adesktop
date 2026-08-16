@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 旋转画布 90°（2026-08-17）
+
+- **新增「旋转画布 90°」菜单项**（顶栏「排列与视图」菜单底部，`.view-menu-rotate`）：
+  点一下画布绕视口中心顺时针旋转 90°（含图标/文字/背景点阵一起转，像转一张纸），
+  再点一下逆时针转回 0°；只旋转画布视觉与坐标映射，相机位置/缩放、图标世界坐标、布局数据不变
+- **旋转数学核心**（`desktop-camera.js`）：camera 增加 `rotation` 字段（0/90），
+  `transform/applyTo` 生成 `translate3d(...) rotate(90deg) scale(zoom)` 绕视口中心旋转；
+  `screenToWorld/worldToScreen/panBy/pinchBy` 全链路旋转适配（屏幕↔世界坐标互逆，
+  拖拽跟手、捏合锚点不动），`lerp/lerpCentered/clampToBounds` 透传 rotation
+  （Home 动画/目录切换保持旋转态不闪回正）
+- **坐标换算签名扩展**：`screenToWorld/worldToScreen/applyTo/transform` 增加可选 `vw/vh`
+  （旋转中心 = 视口中心），未传时行为与旧版一致（向后兼容）；手势层/viewer 手柄/框选同步传入
+- **viewer 拖动手柄适配旋转**：`handleScreenRect/handleWorldRect` 按旋转后卡片视觉底部
+  （原右边缘中心）定位/命中
+- **可用性**：根目录（桌面空间）可用，子文件夹（folder 容器）禁用；旋转状态不持久化
+  （临时 toggle，刷新回正）
+- **验证**：`test-desktop-camera`/`test-desktop-gesture`/`test-viewer` 新增旋转用例；
+  新增 `scripts/verify-rotate.js` E2E（旋转 toggle + 勾选态 + folder 禁用）接入 verify.sh
+
 ### FileBridge 拆分 7 模块（门面 + 委托）（2026-08-17）
 
 - **FileBridge.java 1206 行 → 265 行薄门面**：22 个 `@JavascriptInterface` 方法签名一字

@@ -18,7 +18,7 @@ App.ViewMenu = (function () {
     return menu ? menu.querySelectorAll('.view-menu-item') : []
   }
 
-  // 渲染当前选中态：排序项高亮 + 方向箭头，视图项高亮 + 勾，浏览模式勾选
+  // 渲染当前选中态：排序项高亮 + 方向箭头，视图项高亮 + 勾，浏览模式勾选，旋转画布勾选
   function renderState() {
     const menu = _getEl('view-menu')
     if (!menu || !App.Desktop || typeof App.Desktop.getViewPrefs !== 'function') return
@@ -42,6 +42,15 @@ App.ViewMenu = (function () {
         browseItem.classList.add('active')
       } else {
         browseItem.classList.remove('active')
+      }
+    }
+    // 旋转画布勾选态（独立于 setEnabled 置灰，仿高级浏览模式）
+    const rotateItem = menu.querySelector('[data-rotate="toggle"]')
+    if (rotateItem) {
+      if (typeof App.Desktop.isRotated === 'function' && App.Desktop.isRotated()) {
+        rotateItem.classList.add('active')
+      } else {
+        rotateItem.classList.remove('active')
       }
     }
   }
@@ -88,14 +97,22 @@ App.ViewMenu = (function () {
   function isOpen() { return _open }
   function isEnabled() { return _enabled }
 
-  // 目录切换时由 Desktop 调用：根目录置灰（仅提示），子文件夹可选
-  // 高级浏览模式项（.view-menu-browse）始终可用，不受置灰控制
+  // 目录切换时由 Desktop 调用：根目录置灰（仅提示），子文件夹可选。
+  // 高级浏览模式项（.view-menu-browse）始终可用；
+  // 旋转画布项（.view-menu-rotate）与其他项相反——根目录可用，folder 禁用
+  // （旋转只对无限画布有意义，folder 容器是有限画布）。
   function setEnabled(on) {
     _enabled = !!on
     const menu = _getEl('view-menu')
     const items = _queryItems(menu)
     for (let i = 0; i < items.length; i++) {
       if (items[i].classList.contains('view-menu-browse')) continue
+      if (items[i].classList.contains('view-menu-rotate')) {
+        // 根目录（on=false）可用，folder（on=true）禁用
+        if (_enabled) items[i].setAttribute('disabled', '')
+        else items[i].removeAttribute('disabled')
+        continue
+      }
       if (_enabled) items[i].removeAttribute('disabled')
       else items[i].setAttribute('disabled', '')
     }
@@ -134,6 +151,14 @@ App.ViewMenu = (function () {
     close()
   }
 
+  // 旋转画布切换：始终可用（不受 _enabled 限制，folder 容器内由 Desktop 守卫忽略）
+  function _onRotateToggle() {
+    if (!App.Desktop || typeof App.Desktop.toggleRotate !== 'function') return
+    App.Desktop.toggleRotate()
+    renderState()
+    close()
+  }
+
   function init() {
     const btn = _getEl('btn-view-menu')
     if (btn) App.utils.bindPress(btn, toggle)
@@ -142,14 +167,16 @@ App.ViewMenu = (function () {
     const menu = _getEl('view-menu')
     const items = _queryItems(menu)
     for (let i = 0; i < items.length; i++) {
-      // 高级浏览模式项走独立处理器（不受 _enabled 限制）
+      // 高级浏览模式 / 旋转画布项走独立处理器（不受 _enabled 限制）
       if (items[i].classList.contains('view-menu-browse')) {
         App.utils.bindPress(items[i], _onBrowseToggle)
+      } else if (items[i].classList.contains('view-menu-rotate')) {
+        App.utils.bindPress(items[i], _onRotateToggle)
       } else {
         App.utils.bindPress(items[i], _onItemClick)
       }
     }
-    setEnabled(false)   // 初始根目录：置灰
+    setEnabled(false)   // 初始根目录：置灰（旋转/浏览模式项不受影响）
   }
 
   return {

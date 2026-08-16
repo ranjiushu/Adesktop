@@ -35,14 +35,26 @@ App.InternalViewer = (function () {
 
   // 世界坐标 → 屏幕坐标的纯函数（固定屏幕尺寸手柄用：卡片底部中心下方悬浮）
   // 输入卡片世界 rect 与相机，返回手柄屏幕矩形（x/y = 屏幕 px，w/h = 屏幕 px）
-  function handleScreenRect(cardRect, camera) {
+  // rotation=90（画布顺时针转）时卡片视觉底部 = 原右边缘中心；vw/vh = 视口尺寸（旋转中心）
+  function handleScreenRect(cardRect, camera, vw, vh) {
     if (!cardRect) return null
     const c = camera || create()
-    const cx = cardRect.x + cardRect.w / 2
-    const bottom = cardRect.y + cardRect.h
-    const sx = (cx - c.x) * c.zoom
-    const sy = (bottom - c.y) * c.zoom + HANDLE_GAP
-    return { x: sx - HANDLE_W / 2, y: sy, w: HANDLE_W, h: HANDLE_H }
+    const rot = c.rotation === 90
+    // 旋转后卡片视觉底部中心 = 原右边缘中心（顺时针 90°：右→下）
+    const cx = rot ? cardRect.x + cardRect.w : cardRect.x + cardRect.w / 2
+    const bottom = rot ? cardRect.y + cardRect.h / 2 : cardRect.y + cardRect.h
+    const sx0 = (cx - c.x) * c.zoom
+    const sy0 = (bottom - c.y) * c.zoom
+    let sx = sx0
+    let sy = sy0
+    if (rot && vw > 0 && vh > 0) {
+      // 绕视口中心顺时针 90°：(x,y) → (-y, x)
+      const ccx = vw / 2
+      const ccy = vh / 2
+      sx = -(sy0 - ccy) + ccx
+      sy = (sx0 - ccx) + ccy
+    }
+    return { x: sx - HANDLE_W / 2, y: sy + HANDLE_GAP, w: HANDLE_W, h: HANDLE_H }
   }
 
   // 手柄世界矩形（命中测试用）：固定屏幕尺寸反算世界尺寸（/zoom），
@@ -56,8 +68,10 @@ App.InternalViewer = (function () {
     const w = HANDLE_W / z
     const h = HANDLE_H / z
     const gap = HANDLE_GAP / z
-    const cx = cardRect.x + cardRect.w / 2
-    const top = cardRect.y + cardRect.h + gap
+    const rot = c.rotation === 90
+    // 与 handleScreenRect 同一基准：旋转后视觉底部中心 = 原右边缘中心
+    const cx = rot ? cardRect.x + cardRect.w : cardRect.x + cardRect.w / 2
+    const top = rot ? cardRect.y + cardRect.h / 2 + gap : cardRect.y + cardRect.h + gap
     return { x: cx - w / 2, y: top, w: w, h: h }
   }
 
@@ -267,9 +281,10 @@ App.InternalViewer = (function () {
     // 同步手柄屏幕位置：卡片世界 rect 底部中心 → 屏幕坐标 + 固定间距。
     // 手柄固定屏幕尺寸（HANDLE_W/H），不随画布 zoom 缩放；相机变化由
     // 管理器 syncHandles(camera) 统一驱动（gesture onUpdate 每帧调用）。
+    // vw/vh = viewer-layer 视口尺寸（rotation=90 时手柄屏幕位置需绕中心旋转）
     function syncHandle(camera) {
       if (!handleEl || state.mode !== 'canvas' || !state.rect) return
-      const r = handleScreenRect(state.rect, camera)
+      const r = handleScreenRect(state.rect, camera, _layer.clientWidth, _layer.clientHeight)
       if (!r) return
       handleEl.style.left = r.x + 'px'
       handleEl.style.top = r.y + 'px'

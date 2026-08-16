@@ -72,6 +72,26 @@ App.Desktop = (function () {
   // 导航模块依赖注入：目录切换后刷新渲染（persist 域 refresh）
   N.setRefresh(P.refresh)
 
+  // 旋转画布 90°（view-menu 驱动）：桌面空间 0↔90 toggle；folder 容器无意义，忽略。
+  // 旋转是瞬时两态（无过渡动画），只改 camera.rotation 并重应用 transform；
+  // 手势层/Viewer 手柄经 setCamera/onUpdate 自动同步（rotation 随相机对象透传）。
+  function toggleRotate() {
+    if (C.isFolderView()) return false
+    const next = C.camera.rotation === 90 ? 0 : 90
+    C.camera = App.DesktopCamera.create(C.camera.x, C.camera.y, C.camera.zoom, next)
+    if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
+      App.DesktopGesture.setCamera(C.camera)
+    }
+    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
+      App.InternalViewer.syncHandles(C.camera)
+    }
+    return true
+  }
+
+  function isRotated() {
+    return C.camera.rotation === 90
+  }
+
   return {
     refresh: P.refresh,
     render: R.render,
@@ -107,6 +127,8 @@ App.Desktop = (function () {
     goHome: N.goHome,
     setAdvancedBrowse: B.setAdvancedBrowse,
     isAdvancedBrowse: B.isAdvancedBrowse,
-    exitTempMode: B.exitTempMode
+    exitTempMode: B.exitTempMode,
+    toggleRotate: toggleRotate,
+    isRotated: isRotated
   }
 })()

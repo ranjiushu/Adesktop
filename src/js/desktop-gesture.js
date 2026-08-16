@@ -38,9 +38,10 @@ App.DesktopGesture = (function () {
   }
 
   // ── 纯函数：双指一帧的相机更新（先平移质心位移，再按指距缩放，锚点=当前质心）──
-  function panZoomStep(camera, prevCentroid, curCentroid, prevDist, curDist) {
+  // vw/vh = 视口尺寸（rotation=90 时 pinchBy 锚点需绕中心逆旋转）
+  function panZoomStep(camera, prevCentroid, curCentroid, prevDist, curDist, vw, vh) {
     let cam = CAM.panBy(camera, curCentroid.x - prevCentroid.x, curCentroid.y - prevCentroid.y)
-    cam = CAM.pinchBy(cam, prevDist, curDist, curCentroid.x, curCentroid.y)
+    cam = CAM.pinchBy(cam, prevDist, curDist, curCentroid.x, curCentroid.y, vw, vh)
     return cam
   }
 
@@ -163,7 +164,15 @@ App.DesktopGesture = (function () {
   }
 
   function toWorld(x, y) {
-    return CAM.screenToWorld(x, y, _camera)
+    return CAM.screenToWorld(x, y, _camera, _viewportW(), _viewportH())
+  }
+
+  // 视口尺寸（旋转中心用；gesture 缓存 _rect 优先，退化用 clientWidth/Height）
+  function _viewportW() {
+    return (_rect && _rect.width) || (_viewport ? _viewport.clientWidth : 0)
+  }
+  function _viewportH() {
+    return (_rect && _rect.height) || (_viewport ? _viewport.clientHeight : 0)
   }
 
   function firstTwo() {
@@ -179,7 +188,7 @@ App.DesktopGesture = (function () {
   }
 
   function commit() {
-    CAM.applyTo(_camera, _canvas)
+    CAM.applyTo(_camera, _canvas, _viewportW(), _viewportH())
     if (_onUpdate) _onUpdate(_camera)
   }
 
@@ -294,7 +303,7 @@ App.DesktopGesture = (function () {
       if (two.length < 2) return
       const curCentroid = centroid(_contacts)
       const curDist = distance(two[0], two[1])
-      _camera = _applyClamp(panZoomStep(_camera, _prevCentroid, curCentroid, _prevDist, curDist))
+      _camera = _applyClamp(panZoomStep(_camera, _prevCentroid, curCentroid, _prevDist, curDist, _viewportW(), _viewportH()))
       _prevCentroid = curCentroid
       _prevDist = curDist
       commit()

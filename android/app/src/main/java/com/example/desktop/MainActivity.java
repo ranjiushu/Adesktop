@@ -16,6 +16,7 @@ import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -30,11 +31,14 @@ import java.util.Locale;
 public class MainActivity extends Activity {
 
     private static final int REQ_OPEN_DOC_TREE = 1001;
+    private static final int REQ_GET_CONTENT = 1002;
     private static final String PREFS = "desktop_prefs";
     private static final String KEY_ROOT_URI = "root_uri";
 
     private WebView webView;
     private FileBridge fileBridge;
+    // 网页 <input type=file> 触发的文件选择回调（一次一个，网页请求期间有效）
+    private ValueCallback<Uri[]> pendingFileCallback;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -61,6 +65,21 @@ public class MainActivity extends Activity {
                 // 注入当前安全区 CSS 变量。Insets 回调可能早于 JS 环境就绪，
                 // 每次页面加载完成都补注一次（含渲染进程重载场景）。
                 injectSafeAreaInsets(view);
+            }
+        });
+
+        // ── 网页文件上传桥：iframe 内网页触发 <input type=file> → onShowFileChooser。
+        //    存下回调，通知前端 App.WebUpload.onFileRequested()；前端据「待上传文件」状态
+        //    弹确认或让原生弹系统选择器，最终经 FileBridge.completeUpload/choose/cancel
+        //    回传 URI 或 null。return true = 原生接管（不弹默认 WebView 选择器）。
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> filePathCallback,
+                                             FileChooserParams fileChooserParams) {
+                pendingFileCallback = filePathCallback;
+                webView.evaluateJavascript(
+                    "window.App && App.WebUpload && App.WebUpload.onFileRequested()", null);
+                return true;
             }
         });
 
@@ -146,6 +165,34 @@ public class MainActivity extends Activity {
         requestRootAccess();
     }
 
+    /** 回传文件选择结果给网页（供 FileBridge.completeUpload 调用，需 UI 线程）。 */
+    void deliverFileChooser(Uri[] uris) {
+        if (pendingFileCallback != null) {
+            pendingFileCallback.onReceiveValue(uris);
+            pendingFileCallback = null;
+        }
+    }
+
+    /** 取消文件选择（回传 null，网页侧视为用户取消）。 */
+    void cancelFileChooser() {
+        if (pendingFileCallback != null) {
+            pendingFileCallback.onReceiveValue(null);
+            pendingFileCallback = null;
+        }
+    }
+
+    /** 弹系统文件选择器（GET_CONTENT 单选；grant 由系统自动附带）。 */
+    void openSystemFileChooser() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("*/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            startActivityForResult(intent, REQ_GET_CONTENT);
+        } catch (Exception e) {
+            cancelFileChooser();
+        }
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -162,6 +209,13 @@ public class MainActivity extends Activity {
                     "window.App && App.onRootChanged && App.onRootChanged()", null));
             } catch (Exception e) {
                 // 授权失败：保持私有目录兜底
+            }
+        } else if (requestCode == REQ_GET_CONTENT) {
+            // 网页上传的「重新选择」：GET_CONTENT 返回 URI 自带读授权，直接回传网页
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                deliverFileChooser(new Uri[]{ data.getData() });
+            } else {
+                cancelFileChooser();
             }
         }
     }

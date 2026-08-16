@@ -62,6 +62,12 @@ App.FileAPI = (function () {
     openExternal: function (path) { return call('openExternal', [path]) },
     // 用系统浏览器打开网址（ACTION_VIEW http/https；无浏览器时 reject）
     openUrl: function (url) { return call('openUrl', [url]) },
+    // 网页上传桥：回传待上传文件路径（原生 resolveUri 后回传网页；无请求时回传失败）
+    completeUpload: function (paths) { return call('completeUpload', [paths]) },
+    // 网页上传桥：原生弹系统文件选择器（无请求时忽略）
+    chooseUploadFromSystem: function () { return call('chooseUploadFromSystem', []) },
+    // 网页上传桥：取消（回传 null，网页侧视为用户取消）
+    cancelUpload: function () { return call('cancelUpload', []) },
     // 已安装应用：查询 launcher 应用列表（[{package,label,isSystem}]）
     listApps: function () { return call('listApps', []) },
     // 启动指定包名应用（getLaunchIntentForPackage + startActivity）

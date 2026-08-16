@@ -25,7 +25,7 @@ JS_ORDER=(
   desktop-nav.js desktop-selection.js folder-sort.js
   desktop-grid.js folder-layout.js layout-store.js view-store.js home-store.js desktop-camera.js desktop-gesture.js desktop.js
   view-menu.js actions.js app-list.js fab-speed-dial.js drawer.js drawer-swipe.js build-info.js inspector.js
-  ui.js ime-adapter.js bottom-bar.js create-dialog.js rename-dialog.js website-dialog.js main.js
+  ui.js ime-adapter.js bottom-bar.js create-dialog.js rename-dialog.js website-dialog.js web-upload.js main.js
 )
 
 CSS_ORDER=(

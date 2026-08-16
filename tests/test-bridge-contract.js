@@ -37,6 +37,9 @@ const CONTRACT = {
   thumb: { bridge: 'thumb', args: ['path'] },
   openExternal: { bridge: 'openExternal', args: ['path'] },
   openUrl: { bridge: 'openUrl', args: ['url'] },
+  completeUpload: { bridge: 'completeUpload', args: ['paths'] },
+  chooseUploadFromSystem: { bridge: 'chooseUploadFromSystem', args: [] },
+  cancelUpload: { bridge: 'cancelUpload', args: [] },
   listApps: { bridge: 'listApps', args: [] },
   launchApp: { bridge: 'launchApp', args: ['pkg'] },
   appIcon: { bridge: 'appIcon', args: ['pkg'] }
@@ -56,6 +59,9 @@ const FIXTURE = {
   thumb: 'file:///thumb.jpg',
   openExternal: true,
   openUrl: true,
+  completeUpload: true,
+  chooseUploadFromSystem: true,
+  cancelUpload: true,
   listApps: [{ package: 'com.x', label: 'X', isSystem: false }],
   launchApp: true,
   appIcon: 'data:image/png;base64,AAAA'

@@ -659,6 +659,67 @@ public class FileBridge {
         });
     }
 
+    /* 网页上传桥：回传待上传文件路径 → resolveUri → 交 MainActivity 回传网页。
+     * 无 pending 文件选择请求时 resolveErr（前端时序错误）。 */
+    @JavascriptInterface
+    public void completeUpload(String[] paths, String cbId) {
+        executor.execute(() -> {
+            try {
+                if (!(activity instanceof MainActivity)) {
+                    resolveErr(cbId, "宿主不支持网页上传");
+                    return;
+                }
+                MainActivity ma = (MainActivity) activity;
+                if (paths == null || paths.length == 0) {
+                    ma.cancelFileChooser();
+                    resolveOk(cbId, true);
+                    return;
+                }
+                Uri[] uris = new Uri[paths.length];
+                for (int i = 0; i < paths.length; i++) {
+                    Object resolved = resolve(paths[i]);
+                    if (resolved instanceof DocumentFile) {
+                        DocumentFile df = (DocumentFile) resolved;
+                        if (!df.isFile()) throw new IOException("非文件: " + paths[i]);
+                        uris[i] = df.getUri();
+                    } else {
+                        File f = (File) resolved;
+                        if (!f.isFile()) throw new IOException("非文件: " + paths[i]);
+                        uris[i] = Uri.fromFile(f);
+                    }
+                }
+                activity.runOnUiThread(() -> ma.deliverFileChooser(uris));
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /* 网页上传桥：弹系统文件选择器（无 pending 请求时忽略）。 */
+    @JavascriptInterface
+    public void chooseUploadFromSystem(String cbId) {
+        activity.runOnUiThread(() -> {
+            if (!(activity instanceof MainActivity)) {
+                resolveErr(cbId, "宿主不支持网页上传");
+                return;
+            }
+            ((MainActivity) activity).openSystemFileChooser();
+            resolveOk(cbId, true);
+        });
+    }
+
+    /* 网页上传桥：取消（回传 null，网页侧视为用户取消）。 */
+    @JavascriptInterface
+    public void cancelUpload(String cbId) {
+        activity.runOnUiThread(() -> {
+            if (activity instanceof MainActivity) {
+                ((MainActivity) activity).cancelFileChooser();
+            }
+            resolveOk(cbId, true);
+        });
+    }
+
     /* ── 已安装应用 ──
      * listApps：PackageManager 查询 launcher 应用（第三方 + 系统），返回 [{package,label,isSystem}]。
      * launchApp：getLaunchIntentForPackage + startActivity 拉起指定应用。

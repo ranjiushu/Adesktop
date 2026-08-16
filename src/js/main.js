@@ -41,6 +41,10 @@ App.boot = function boot() {
   if (App.WebsiteDialog && typeof App.WebsiteDialog.init === 'function') {
     App.WebsiteDialog.init()
   }
+  // 网页文件上传桥（拖拽到网站 → 待上传 → 网页请求文件时回传）
+  if (App.WebUpload && typeof App.WebUpload.init === 'function') {
+    App.WebUpload.init()
+  }
   // 重命名对话框（选中态操作栏弹出）
   if (App.RenameDialog && typeof App.RenameDialog.init === 'function') {
     App.RenameDialog.init()

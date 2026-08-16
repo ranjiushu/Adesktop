@@ -795,6 +795,14 @@ App.Desktop = (function () {
     }
   }
 
+  // 命中判定：世界坐标 → 命中的 website 类型 Viewer 实例（拖到网页 = 设为待上传），无则 null。
+  function websiteHitAt(world) {
+    const inst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
+      ? App.InternalViewer.topmostAt(world.x, world.y) : null
+    if (inst && typeof inst.getKind === 'function' && inst.getKind() === 'website') return inst
+    return null
+  }
+
   // 命中判定辅助：世界坐标 → 命中的文件夹完整路径（非 dragTargets 自身），无则 null。
   // 供拖入文件夹实时标签与 drop 移动共用。
   // 注意不能直接用 pointHitTest（重叠时后注册者优先）——拖动中图标 bounds 会
@@ -834,8 +842,11 @@ App.Desktop = (function () {
       }
     })
     if (App.Loading && typeof App.Loading.showTag === 'function') {
-      const hit = folderHitAt(world)
-      if (hit && !dragIncludesTrash()) {
+      const hitWebsite = websiteHitAt(world)
+      const hit = hitWebsite ? null : folderHitAt(world)
+      if (hitWebsite) {
+        App.Loading.showTag('松手将 ' + dragTargets.length + ' 个文件设为待上传')
+      } else if (hit && !dragIncludesTrash()) {
         if (isTrashPath(hit)) {
           App.Loading.showTag('将移入回收站')
         } else {
@@ -868,6 +879,22 @@ App.Desktop = (function () {
       return
     }
     if (dragTargets.length) applyDrag(world)
+  }
+
+  // 还原拖拽组到起始位置（拖到网站设待上传 / folder 未命中取消时共用）
+  function restoreDragTargets() {
+    dragTargets.forEach(function (n) {
+      const back = dragStartPositions[n]
+      if (back) {
+        positions[n] = { x: back.x, y: back.y }
+        bounds[n] = { x: back.x, y: back.y, w: bounds[n].w, h: bounds[n].h }
+        const node = iconEls[n]
+        if (node) {
+          node.style.left = back.x + 'px'
+          node.style.top = back.y + 'px'
+        }
+      }
+    })
   }
 
   function handleDrop(world, moved) {
@@ -936,6 +963,27 @@ App.Desktop = (function () {
     }
     // 拖入文件夹：手指下命中文件夹 → 移动文件到文件夹（移动语义，非吸附）
     if (moved && !isFolderView()) {
+      const hitWebsite = websiteHitAt(world)
+      if (hitWebsite) {
+        // 拖到网站：设为待上传（文件不移动，还原起始位）+ toast 提示
+        restoreDragTargets()
+        const paths = dragTargets.slice()
+        if (App.WebUpload && typeof App.WebUpload.setPending === 'function') {
+          App.WebUpload.setPending(paths)
+        }
+        if (App.Loading && typeof App.Loading.hideTag === 'function') {
+          App.Loading.hideTag()
+        }
+        if (App.toast && typeof App.toast.show === 'function') {
+          App.toast.show('已复制 ' + paths.length + ' 个文件，请点网页里的上传按钮')
+        }
+        dragTargets.forEach(function (n) { setPickedUp(n, false) })
+        dragTargets = []
+        dragStartWorld = null
+        dragStartPositions = {}
+        clearSelection()
+        return
+      }
       const hit = folderHitAt(world)
       // 回收站不可移入其他文件夹（锚定根目录）；命中文件夹时仍按重定位处理（不 moveIntoFolder）
       if (hit && !dragIncludesTrash()) {

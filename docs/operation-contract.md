@@ -57,7 +57,8 @@
 | 路径校验 | `isUnderPrivateRoot` | `isSafeRelPath` + resolve | 一致 |
 
 结论：**「move(src,dst) 成功后最终 FS 状态一致」在真移动路径成立，在降级复制路径受
-mtime 差异影响**（[P1] 本轮先文档化接受，不引入新机制）。
+mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本轮不引入新机制
+（SAF 无公开 API 设置 mtime；如未来需要可按 mtime 投影记录元数据，见 `docs/architecture.md` 分层）。
 
 ## 二、操作契约表
 

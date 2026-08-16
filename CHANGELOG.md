@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### 网站快捷方式 + 网页文件上传桥（2026-08-16）
+
+- **网站快捷方式**：`shortcut.js` 契约加 `website` 类型（url/label），新增
+  `normalizeUrl`/`hostOf` 纯函数；`FileOpener.openShortcut` 分派 website →
+  `InternalViewer` 画布内 iframe 打开
+- **Viewer 加 website kind**：iframe `src` 直连远程网址，安全 sandbox 不含
+  `allow-same-origin`（opaque origin 隔离顶层 Java 桥），`referrerpolicy=no-referrer`
+  防 file:// 路径泄露；锚点取视觉中心 + 级联错位，接近全屏宽卡片（非 3:4）
+- **桥层加 openUrl**：ACTION_VIEW 打开网址（网站加载失败兜底系统浏览器）
+- **新建网站对话框**（`website-dialog.js`）：Drawer「新建网站」入口 → 网址 + 可选名称 →
+  写 `<名称>.desktop`（type=website，重名自动加序号）
+- **网页文件上传桥**（`web-upload.js`）：拖拽文件到 website iframe 松手 → 设为待上传 +
+  toast 提示；网页触发 `<input type=file>` → 原生 `onShowFileChooser` 拦截 →
+  弹确认「用待上传文件 / 重新选择」；桥层加 `completeUpload`/`chooseUploadFromSystem`/
+  `cancelUpload`（resolveUri 回传 / 系统 GET_CONTENT 选择器 / 回传 null）
+- 契约锁同步：`test-bridge-contract.js` 登记 openUrl + 三个上传桥方法；
+  `docs/bridge-and-data-contract.md` 同步；新增 `test-web-upload.js`
+
 ### Drawer/FAB 精简（2026-08-16）
 
 - **Drawer 移除 4 项操作**：新建文件夹、新建文件、刷新、设为默认视角（新建/刷新仍保留在

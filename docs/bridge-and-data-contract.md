@@ -30,6 +30,9 @@
 | `FileAPI.thumb(path)` | `thumb` | `path` | `file://` URI | 缩略图（磁盘缓存） |
 | `FileAPI.openExternal(path)` | `openExternal` | `path` | `true` | 交外部应用打开，无可用应用时报错 |
 | `FileAPI.openUrl(url)` | `openUrl` | `url` | `true` | 用系统浏览器打开网址（网站快捷方式加载失败兜底） |
+| `FileAPI.completeUpload(paths)` | `completeUpload` | `paths` | `true` | 网页上传：回传待上传文件路径（resolveUri 后回传网页） |
+| `FileAPI.chooseUploadFromSystem()` | `chooseUploadFromSystem` | 无 | `true` | 网页上传：弹系统文件选择器（GET_CONTENT 单选） |
+| `FileAPI.cancelUpload()` | `cancelUpload` | 无 | `true` | 网页上传：取消（回传 null） |
 | `FileAPI.listApps()` | `listApps` | 无 | `AppEntry[]` | 查询 launcher 应用列表 |
 | `FileAPI.launchApp(pkg)` | `launchApp` | `pkg` | `true` | 启动指定包名应用 |
 | `FileAPI.appIcon(pkg)` | `appIcon` | `pkg` | `data:image/png;base64,...` | 应用图标 base64 |

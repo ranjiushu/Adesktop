@@ -147,6 +147,18 @@
 </div>
 
 
+<!-- ===== 新建网站快捷方式对话框（Drawer「新建网站」弹出）：网址 + 可选名称 ===== -->
+<div id="website-dialog-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="website-dialog-title">
+    <h2 id="website-dialog-title" class="dialog-title">新建网站</h2>
+    <input id="website-url" class="dialog-input" type="text" placeholder="网址（如 example.com）" autocomplete="off" enterkeyhint="next" aria-label="网址">
+    <input id="website-label" class="dialog-input" type="text" placeholder="名称（可选）" autocomplete="off" enterkeyhint="done" aria-label="名称">
+    <div class="dialog-actions">
+      <button id="website-create" class="dialog-btn dialog-btn-primary">创建</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 重命名对话框（选中态操作栏「重命名」弹出）：预填原名，确认后执行 ===== -->
 <div id="rename-dialog-overlay" class="dialog-overlay" aria-hidden="true">
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-dialog-title">
@@ -203,6 +215,9 @@
       </button>
       <button class="drawer-item" data-action="installed-apps">
         <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-smartphone"/></svg></span><span>已安装应用</span>
+      </button>
+      <button class="drawer-item" data-action="new-website">
+        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-external-link"/></svg></span><span>新建网站</span>
       </button>
       <button class="drawer-item" id="btn-build-info">
         <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-wrench"/></svg></span><span>提交与构建</span>

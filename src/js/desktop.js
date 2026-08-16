@@ -18,6 +18,7 @@ App.Desktop = (function () {
   const R = App.DesktopRender
   const N = App.DesktopNavigation
   const B = App.DesktopBrowseMode
+  const P = App.DesktopPersist
 
   // 缩略图渲染：ThumbnailService 已验证 URI（可解码）后回调，创建 <img> 展示；
   // onerror 双保险（极端情况下仍回退类型图标）。缩略图的「判定/缓存/生成」全在 App.Thumbnail。
@@ -67,8 +68,8 @@ App.Desktop = (function () {
       C.selection.delete(oldPath)
       C.selection.add(newPath)
     }
-    saveLayout()
-    refresh()
+    P.saveLayout()
+    P.refresh()
   }
 
   // 批量布局 key 迁移（移动后）：moves = [{src, dst}]（src = 完整相对路径）。
@@ -95,7 +96,7 @@ App.Desktop = (function () {
         changed = true
       }
     })
-    if (changed) saveLayout()
+    if (changed) P.saveLayout()
   }
 
   // ── 打开：文件夹进入 / 文件打开（FileOpener 分派内部查看器 / 外部应用 / 快捷方式）──
@@ -596,7 +597,7 @@ App.Desktop = (function () {
     C.dragTargets = []
     C.dragStartWorld = null
     C.dragStartPositions = {}
-    if (moved) saveLayout()
+    if (moved) P.saveLayout()
   }
 
   // 单指意图取消（1→2 指切换 / touchcancel，由手势层派发）：
@@ -638,139 +639,9 @@ App.Desktop = (function () {
   // 间隙经 App.Loading 显示不确定进度条（条纹滑动），加载完成隐藏，
   // 避免「先切视图再变目录」的空白/错位感。
 
-  function refresh() {
-    const seq = ++C._refreshSeq
-    const path = C.state.curPath   // 快照：发起时的目标路径（list 用快照，不用动态 curPath）
-    if (App.Loading && typeof App.Loading.show === 'function') {
-      App.Loading.show({ title: '加载中' })   // 不确定进度：无 total → 条纹滑动
-    }
-    return App.FileAPI.rootInfo()
-      .then(function (info) {
-        if (seq !== C._refreshSeq) return null   // 过期响应：丢弃，不写状态
-        C.state.rootName = info.rootName
-        C.state.mode = info.mode
-        C.state.trashName = info.trashName || ''
-        if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
-          const base = info.displayPath || info.rootName
-          App.Drawer.updatePath(C.state.curPath ? base + '/' + C.state.curPath : base,
-            info.rootName, info.mode)
-        }
-      })
-      .catch(function () {
-        if (seq !== C._refreshSeq) return
-        C.state.rootName = '无法读取'
-        if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
-          App.Drawer.updatePath(App.NAME, App.NAME, '')
-        }
-      })
-      .then(function () {
-        if (seq !== C._refreshSeq) return null
-        return App.FileAPI.list(path)
-      })
-      .then(function (items) {
-        if (seq !== C._refreshSeq) return null
-        C.state.items = items
-        // 清理失效布局条目（仅 desktop 空间；folder 容器位置是自动的，不存 positions）
-        if (!C.isFolderView()) {
-          const valid = {}
-          items.forEach(function (it) { valid[C.fullPath(it.name)] = true })
-          Object.keys(C.positions).forEach(function (key) {
-            const inCur = key.indexOf('/') < 0
-            if (!inCur) {
-              delete C.positions[key]        // 子文件夹 key 残留清理（folder 自动排布，非桌面布局）
-            } else if (!valid[key]) {
-              delete C.positions[key]        // 根级失效 key（文件已删）
-            }
-          })
-        }
-        R.render()
-        // 后退/前进按钮禁用态随目录切换更新
-        if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
-          App.BottomBar.updateNavButtons()
-        }
-        // 目录加载完成：隐藏对话框
-        if (App.Loading && typeof App.Loading.hide === 'function') {
-          App.Loading.hide()
-        }
-      })
-      .catch(function (err) {
-        if (seq !== C._refreshSeq) return
-        if (App.Loading && typeof App.Loading.hide === 'function') {
-          App.Loading.hide()
-        }
-        if (App.toast && typeof App.toast.show === 'function') {
-          App.toast.show('读取失败: ' + err.message)
-        }
-      })
-  }
-
-  // 加载布局（位置 + 相机视角）+ 视图偏好，无数据/损坏回退默认
-  // 图标位置恢复无条件执行（与相机优先级无关）：自由摆放位置来自 LayoutStore，
-  // Home 快照只决定启动相机，绝不决定图标位置——否则设置快照后重启会丢摆放
-  function initLayout() {
-    const saved = App.LayoutStore.load()
-    if (saved && saved.icons) {
-      Object.keys(saved.icons).forEach(function (key) {
-        C.positions[key] = saved.icons[key]
-      })
-    }
-    // 启动相机：Home 快照 > 默认视角 > 上次布局视角 > 出厂 (0,0,1)。
-    // Home = Camera 的默认起点（空间锚点）：设置过快照后，每次进入桌面空间都落在快照位
-    let cam = null
-    if (App.HomeStore) {
-      const home = App.HomeStore.load()
-      if (home && home.home) {
-        cam = App.DesktopCamera.create(home.home.x, home.home.y, home.home.zoom)
-      } else if (home && home.fallback) {
-        cam = App.DesktopCamera.create(home.fallback.x, home.fallback.y, home.fallback.zoom)
-      }
-    }
-    if (!cam && saved && saved.camera) {
-      cam = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
-    }
-    C.camera = cam || App.DesktopCamera.create()
-    const prefs = App.ViewStore.load()
-    C.state.viewStyle = prefs.viewStyle
-    C.state.sortBy = prefs.sortBy
-    C.state.sortDir = prefs.sortDir
-    C._advancedBrowse = !!prefs.advancedBrowse
-  }
-
-  // 视图/排序偏好变更（顶栏菜单驱动）：保存 + 重渲染
-  function applyViewPrefs(prefs) {
-    if (!prefs) return
-    C.state.viewStyle = prefs.viewStyle
-    C.state.sortBy = prefs.sortBy
-    C.state.sortDir = prefs.sortDir
-    if (!App.ViewStore.save(prefs)) {
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('视图偏好保存失败')
-    }
-    refresh()
-  }
-
-  // 当前视图偏好（ViewMenu 渲染选中态用）
-  function getViewPrefs() {
-    return { viewStyle: C.state.viewStyle, sortBy: C.state.sortBy, sortDir: C.state.sortDir }
-  }
-
-  // 保存布局（位置 + 相机），失败告警（铁律：写入路径失败必须告警）
-  // folder 容器：布局自动排布，不持久化（位置/相机均不写）
-  function saveLayout() {
-    if (C.isFolderView()) return
-    const data = {
-      version: 1,
-      icons: C.positions,
-      camera: { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    }
-    if (!App.LayoutStore.save(data)) {
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败')
-    }
-  }
-
-  // 启动相机 + 手势（pan/zoom + tap/marquee/longpress/drag）
   function initGesture() {
     C.nav = App.DesktopNav.create()
-    initLayout()
+    P.initLayout()
     // 根目录相机基准 = 启动视角（Home 快照 > 默认视角 > 上次布局 > 出厂），
     // 否则 applyCameraForPath 根目录分支 rootCamera=null 会强制回出厂
     C.rootCamera = C.camera
@@ -817,10 +688,10 @@ App.Desktop = (function () {
   }
 
   // 导航模块依赖注入：目录切换后刷新渲染（persist 域 refresh）
-  N.setRefresh(refresh)
+  N.setRefresh(P.refresh)
 
   return {
-    refresh: refresh,
+    refresh: P.refresh,
     render: R.render,
     initGesture: initGesture,
     clearSelection: R.clearSelection,
@@ -846,8 +717,8 @@ App.Desktop = (function () {
     getTrashName: function () { return C.state.trashName },
     viewMode: C.viewMode,
     isFolderView: C.isFolderView,
-    applyViewPrefs: applyViewPrefs,
-    getViewPrefs: getViewPrefs,
+    applyViewPrefs: P.applyViewPrefs,
+    getViewPrefs: P.getViewPrefs,
     captureHome: N.captureHome,
     captureDefaultView: N.captureDefaultView,
     goHome: N.goHome,

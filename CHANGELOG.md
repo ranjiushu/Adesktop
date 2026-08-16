@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Viewer 画布实体：文件名栏移至底部 + 未选中隐藏（2026-08-16）
+
+- **文件名栏移到内容区下方**：canvas 态 Viewer 的 `.viewer-header` 用 CSS `order` 从卡片
+  顶部改到内容区下方（DOM 顺序不变；全屏态 `.viewer-card-fullscreen` 不受影响仍为顶栏，
+  返回按钮 + 工具条不变），分隔线改到栏上方
+- **未选中隐藏文件名栏**：canvas 态未选中（打开初始/点外部取消/框选未命中）时整条文件名
+  栏 `display: none`，内容区占满整卡；选中（点击/框选/长按）时显示——纯 CSS 随
+  `viewer-card-selected` 类驱动，选中与拖动解耦（拖动必然已选中，拖动中保持可见；
+  命中判定基于世界坐标 rect，显隐不影响手势/框选/拖动）
+- 文档同步：`docs/viewer.md`「文件名栏在内容区下方 + 未选中隐藏」；
+  `tools/ui/viewer-entity-verify.js` 增断言（未选中隐藏 / 选中时栏在内容区下方 / 取消隐藏）
+
 ### 网站快捷方式 + 网页文件上传桥（2026-08-16）
 
 - **网站快捷方式**：`shortcut.js` 契约加 `website` 类型（url/label），新增

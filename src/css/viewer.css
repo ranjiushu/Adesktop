@@ -35,6 +35,22 @@
   z-index: 5;
 }
 
+/* 画布实体：文件名栏移到内容区下方（Windows 式空间化——内容为主，文件名作为底部信息条；
+   DOM 顺序不变，仅用 order 调整；全屏态（viewer-card-fullscreen）不受影响仍为顶栏）。
+   分隔线改到栏上方（与内容区之间）。 */
+.viewer-card-canvas .viewer-header {
+  order: 2;
+  border-bottom: none;
+  border-top: 1px solid var(--color-border);
+}
+
+/* 画布实体：未选中时隐藏文件名栏（含边框/背景整条区域）——内容区占满整卡；
+   选中态由点击/框选/长按触发（与文件图标一致的脆弱选中），拖动必然已选中故拖动中保持显示；
+   命中判定基于世界坐标 rect（含整卡区域），显隐不影响手势。 */
+.viewer-card-canvas:not(.viewer-card-selected) .viewer-header {
+  display: none;
+}
+
 /* 顶栏：文件名 + 全屏预览按钮 */
 .viewer-header {
   display: flex;

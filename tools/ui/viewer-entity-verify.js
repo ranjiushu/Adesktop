@@ -46,6 +46,7 @@ async function main() {
   await page.waitForFunction(function () { return document.querySelector('.viewer-card-canvas') }, { timeout: 5000 })
   let r1 = await page.evaluate(function () {
     const lockedIcon = document.querySelector('.desktop-icon-locked')
+    const header = document.querySelector('.viewer-card-canvas .viewer-header')
     return {
       locked: App.Desktop.isLockedPath('readme.md'),
       lockedIcon: lockedIcon && lockedIcon.getAttribute('data-name') === 'readme.md',
@@ -54,7 +55,8 @@ async function main() {
       fileNotSelected: document.querySelectorAll('.desktop-icon.selected').length === 0,
       fsBtnGone: !document.querySelector('.viewer-fs-btn'),
       fabCollapsed: !document.querySelector('.fab-speed-dial-expanded'),
-      count: App.InternalViewer.count()
+      count: App.InternalViewer.count(),
+      headerHidden: header && getComputedStyle(header).display === 'none'
     }
   })
   check(r1.locked && r1.lockedIcon, '打开 → 文件锁定（图标锁标记）')
@@ -62,6 +64,7 @@ async function main() {
   check(r1.fileNotSelected, '文件不进入选中集（锁定 ≠ 选中）')
   check(r1.fsBtnGone && r1.fabCollapsed, '打开未选中 → FAB 收起')
   check(r1.count === 1, '打开后实例数 = 1')
+  check(r1.headerHidden, '打开未选中 → 文件名栏隐藏')
 
   console.log('═══ 2. 点击 Viewer = 选中 ═══')
   const center = await page.evaluate(function () {
@@ -71,28 +74,40 @@ async function main() {
   await page.touchscreen.tap(center.x, center.y)
   await new Promise(function (res) { setTimeout(res, 200) })
   const r2 = await page.evaluate(function () {
+    const header = document.querySelector('.viewer-card-canvas .viewer-header')
+    const body = document.querySelector('.viewer-card-canvas .viewer-body')
+    const h = header.getBoundingClientRect()
+    const b = body.getBoundingClientRect()
     return {
       selected: App.InternalViewer.anySelected(),
       selectedClass: document.querySelector('.viewer-card-canvas').classList.contains('viewer-card-selected'),
       stillOpen: App.InternalViewer.isAnyOpen(),
-      stillLocked: App.Desktop.isLockedPath('readme.md')
+      stillLocked: App.Desktop.isLockedPath('readme.md'),
+      headerVisible: getComputedStyle(header).display !== 'none',
+      headerBelowBody: h.top >= b.bottom - 1,
+      headerTopAligned: Math.abs(h.top - b.bottom) < 2
     }
   })
   check(r2.selected && r2.selectedClass, '点击 Viewer → 选中（脆弱/临时态）')
   check(r2.stillOpen && r2.stillLocked, 'Viewer 保持打开、文件保持锁定')
+  check(r2.headerVisible, '选中 → 文件名栏显示')
+  check(r2.headerBelowBody && r2.headerTopAligned, '文件名栏在内容区下方（底栏）')
 
   console.log('═══ 3. 点击外部 = 取消选中（Viewer 保持打开） ═══')
   await page.touchscreen.tap(5, 120)
   await new Promise(function (res) { setTimeout(res, 200) })
   const r3 = await page.evaluate(function () {
+    const header = document.querySelector('.viewer-card-canvas .viewer-header')
     return {
       selected: App.InternalViewer.anySelected(),
       stillOpen: App.InternalViewer.isAnyOpen(),
-      stillLocked: App.Desktop.isLockedPath('readme.md')
+      stillLocked: App.Desktop.isLockedPath('readme.md'),
+      headerHidden: header && getComputedStyle(header).display === 'none'
     }
   })
   check(!r3.selected, '点击外部 → Viewer 取消选中（选中态脆弱/临时）')
   check(r3.stillOpen && r3.stillLocked, 'Viewer 保持打开、文件保持锁定（取消选中 ≠ 关闭）')
+  check(r3.headerHidden, '取消选中 → 文件名栏重新隐藏')
 
   console.log('═══ 4. 锁定拦截：复制/重命名拒绝 ═══')
   const r5 = await page.evaluate(function () {

@@ -65,9 +65,11 @@ class UploadBridge {
 
     void cancelUpload(String cbId) {
         ctx.activity.runOnUiThread(() -> {
-            if (ctx.activity instanceof MainActivity) {
-                ((MainActivity) ctx.activity).cancelFileChooser();
+            if (!(ctx.activity instanceof MainActivity)) {
+                ctx.resolveErr(cbId, "宿主不支持网页上传");
+                return;
             }
+            ((MainActivity) ctx.activity).cancelFileChooser();
             ctx.resolveOk(cbId, true);
         });
     }

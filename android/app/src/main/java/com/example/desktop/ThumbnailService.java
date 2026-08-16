@@ -80,21 +80,22 @@ class ThumbnailService {
 
     /** 图片采样解码：先探测尺寸，再按 THUMB_MAX_DIM*2 采样（大图不全量加载，控制内存） */
     private Bitmap decodeImageThumb(Object resolved) throws IOException {
-        java.io.InputStream is1 = openThumbStream(resolved);
-        BitmapFactory.Options bounds = new BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        BitmapFactory.decodeStream(is1, null, bounds);
-        is1.close();
-        int w = bounds.outWidth, h = bounds.outHeight;
+        int w, h;
+        try (java.io.InputStream is1 = openThumbStream(resolved)) {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeStream(is1, null, bounds);
+            w = bounds.outWidth;
+            h = bounds.outHeight;
+        }
         if (w <= 0 || h <= 0) return null;
         int sample = 1;
         while (Math.max(w, h) / sample > THUMB_MAX_DIM * 2) sample *= 2;
-        java.io.InputStream is2 = openThumbStream(resolved);
-        BitmapFactory.Options opts = new BitmapFactory.Options();
-        opts.inSampleSize = sample;
-        Bitmap bmp = BitmapFactory.decodeStream(is2, null, opts);
-        is2.close();
-        return bmp;
+        try (java.io.InputStream is2 = openThumbStream(resolved)) {
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            return BitmapFactory.decodeStream(is2, null, opts);
+        }
     }
 
     /** 视频首帧提取（MediaMetadataRetriever，系统原生）；失败返回 null（前端回退类型图标） */

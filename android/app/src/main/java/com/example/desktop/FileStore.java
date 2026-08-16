@@ -52,10 +52,10 @@ class FileStore {
             if (df.length() > BridgeContext.MAX_READ_BYTES) {
                 throw new IOException("文件过大(>" + (BridgeContext.MAX_READ_BYTES / 1024 / 1024) + "MB): " + path);
             }
-            java.io.InputStream is = ctx.activity.getContentResolver().openInputStream(df.getUri());
-            if (is == null) throw new IOException("无法打开: " + path);
-            content = new String(ctx.readAll(is), StandardCharsets.UTF_8);
-            is.close();
+            try (java.io.InputStream is = ctx.activity.getContentResolver().openInputStream(df.getUri())) {
+                if (is == null) throw new IOException("无法打开: " + path);
+                content = new String(ctx.readAll(is), StandardCharsets.UTF_8);
+            }
         } else {
             File f = (File) resolved;
             if (!f.isFile()) throw new IOException("非文件: " + path);

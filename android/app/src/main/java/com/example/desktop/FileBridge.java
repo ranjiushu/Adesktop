@@ -717,25 +717,20 @@ public class FileBridge {
             DocumentFile dst = cur.findFile(name);
             if (dst == null) dst = cur.createFile(mimeFor(name), name);
             if (dst == null) throw new IOException("无法创建文件: " + name);
-            java.io.InputStream is = activity.getContentResolver().openInputStream(src.getUri());
-            if (is == null) throw new IOException("无法读取源文件");
-            java.io.OutputStream os = activity.getContentResolver().openOutputStream(dst.getUri(), "wt");
-            if (os == null) {
-                is.close();
-                throw new IOException("无法写入: " + dstPath);
+            try (java.io.InputStream is = activity.getContentResolver().openInputStream(src.getUri());
+                 java.io.OutputStream os = activity.getContentResolver().openOutputStream(dst.getUri(), "wt")) {
+                if (is == null) throw new IOException("无法读取源文件");
+                if (os == null) throw new IOException("无法写入: " + dstPath);
+                long total = src.length();
+                long done = 0;
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) != -1) {
+                    os.write(buf, 0, n);
+                    done += n;
+                    pr.tick(dstPath, done, total);
+                }
             }
-            long total = src.length();
-            long done = 0;
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = is.read(buf)) != -1) {
-                os.write(buf, 0, n);
-                done += n;
-                pr.tick(dstPath, done, total);
-            }
-            os.flush();
-            os.close();
-            is.close();
             // 私有模式保留 mtime；SAF 模式：DocumentsContract 公开 API 无设置 mtime 的方法
             // （updateDocument 为隐藏 API，反射有非 SDK 接口政策风险），故 SAF 复制不保留时间戳
         }

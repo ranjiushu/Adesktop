@@ -61,7 +61,8 @@ App.Loading = (function () {
     function fmt(n) {
       if (n < 1024) return Math.round(n) + ' B'
       if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
-      return (n / 1024 / 1024).toFixed(1) + ' MB'
+      if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB'
+      return (n / 1024 / 1024 / 1024).toFixed(1) + ' GB'
     }
     return fmt(done) + ' / ' + fmt(total)
   }
@@ -166,6 +167,10 @@ App.Loading = (function () {
     }
     let tbar = _el(TOTAL_BAR_ID)
     if (tbar) tbar.style.width = '0%'
+    let plab = _el(PHASE_LABEL_ID)
+    if (plab) plab.textContent = ''
+    let tlab = _el(TOTAL_LABEL_ID)
+    if (tlab) tlab.textContent = ''
     let cnt = _el(PHASE_COUNT_ID)
     if (cnt) cnt.textContent = ''
     let tcnt = _el(TOTAL_COUNT_ID)

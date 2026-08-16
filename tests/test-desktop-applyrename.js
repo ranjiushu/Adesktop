@@ -123,6 +123,8 @@ vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-navigation.js'), 'utf8')
   { filename: 'desktop-navigation.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-persist.js'), 'utf8'), sandbox,
   { filename: 'desktop-persist.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-viewer-link.js'), 'utf8'), sandbox,
+  { filename: 'desktop-viewer-link.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop.js'), 'utf8'), sandbox,
   { filename: 'desktop.js' })
 

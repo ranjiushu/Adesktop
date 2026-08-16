@@ -19,87 +19,10 @@ App.Desktop = (function () {
   const N = App.DesktopNavigation
   const B = App.DesktopBrowseMode
   const P = App.DesktopPersist
+  const V = App.DesktopViewerLink
 
   // 缩略图渲染：ThumbnailService 已验证 URI（可解码）后回调，创建 <img> 展示；
   // onerror 双保险（极端情况下仍回退类型图标）。缩略图的「判定/缓存/生成」全在 App.Thumbnail。
-  function closeViewer() {
-    const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
-      ? App.InternalViewer.selectedInstance() : null
-    if (!inst) return
-    const path = inst.getPath()
-    App.InternalViewer.closeById(inst.id)
-    if (path) C._lockedPaths.delete(path)
-    R.updateLockedVisual()
-    R.syncFab()
-  }
-
-  // 关闭所有 Viewer + 解除全部锁定（目录切换：全屏态先退出）
-  function closeAllViewers() {
-    if (!App.InternalViewer) return
-    const list = App.InternalViewer.list ? App.InternalViewer.list() : []
-    App.InternalViewer.closeAll()
-    list.forEach(function (inst) {
-      const p = inst.getPath()
-      if (p) C._lockedPaths.delete(p)
-    })
-    R.updateLockedVisual()
-    R.syncFab()
-  }
-
-  // 锁定视觉：被 Viewer 打开的文件图标加锁标记
-  function isLockedPath(path) {
-    return C._lockedPaths.has(path)
-  }
-
-  function getLockedPaths() { return Array.from(C._lockedPaths) }
-
-  // 当前选中完整路径列表（复制/剪切/重命名用）
-  function applyRename(oldPath, newPath) {
-    if (!oldPath || !newPath || oldPath === newPath) return
-    if (C.positions[oldPath]) {
-      C.positions[newPath] = C.positions[oldPath]
-      delete C.positions[oldPath]
-    }
-    if (C.bounds[oldPath]) {
-      C.bounds[newPath] = C.bounds[oldPath]
-      delete C.bounds[oldPath]
-    }
-    if (C.selection.has(oldPath)) {
-      C.selection.delete(oldPath)
-      C.selection.add(newPath)
-    }
-    P.saveLayout()
-    P.refresh()
-  }
-
-  // 批量布局 key 迁移（移动后）：moves = [{src, dst}]（src = 完整相对路径）。
-  // 与 applyRename 同构但不 refresh/saveLayout 逐项执行——由调用方（Actions 移动管道）
-  // 一次 saveLayout + 统一 refresh，避免多文件移动反复重绘。
-  function applyMoves(moves) {
-    if (!moves || !moves.length) return
-    let changed = false
-    moves.forEach(function (m) {
-      if (!m || !m.src || !m.dst || m.src === m.dst) return
-      if (C.positions[m.src]) {
-        C.positions[m.dst] = C.positions[m.src]
-        delete C.positions[m.src]
-        changed = true
-      }
-      if (C.bounds[m.src]) {
-        C.bounds[m.dst] = C.bounds[m.src]
-        delete C.bounds[m.src]
-        changed = true
-      }
-      if (C.selection.has(m.src)) {
-        C.selection.delete(m.src)
-        C.selection.add(m.dst)
-        changed = true
-      }
-    })
-    if (changed) P.saveLayout()
-  }
-
-  // ── 打开：文件夹进入 / 文件打开（FileOpener 分派内部查看器 / 外部应用 / 快捷方式）──
   function handleTap(world) {
     // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）；
     // 拖动手柄也视为点击卡片本体（手柄是辅助拖动区，点击语义与卡片一致：仅选中）
@@ -698,8 +621,8 @@ App.Desktop = (function () {
     hasSelection: R.hasSelection,
     getSelectionNames: R.getSelectionNames,
     getSelectionEntries: R.getSelectionEntries,
-    applyRename: applyRename,
-    applyMoves: applyMoves,
+    applyRename: V.applyRename,
+    applyMoves: V.applyMoves,
     openItem: N.openItem,
     enterFolder: N.enterFolder,
     goBack: N.goBack,
@@ -709,9 +632,9 @@ App.Desktop = (function () {
     canGoForward: N.canGoForward,
     canGoUp: N.canGoUp,
     getCurPath: N.getCurPath,
-    getLockedPaths: getLockedPaths,
-    isLockedPath: isLockedPath,
-    closeViewer: closeViewer,
+    getLockedPaths: V.getLockedPaths,
+    isLockedPath: V.isLockedPath,
+    closeViewer: V.closeViewer,
     isTrashPath: C.isTrashPath,
     inTrash: C.inTrash,
     getTrashName: function () { return C.state.trashName },

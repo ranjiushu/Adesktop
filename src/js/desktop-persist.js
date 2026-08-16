@@ -126,6 +126,12 @@ App.DesktopPersist = (function () {
   function _reloadLayoutForRoot() {
     _loadLayoutAndCamera()
     if (C.rootCamera) C.rootCamera = C.camera   // 同步根目录相机基准（applyCameraForPath 用）
+    // 重新应用相机到 DOM + 同步手势层引用（applyCameraForPath 内部 setCamera+commit）：
+    // 否则启动画面停留在初始视角（不能缩放/移动到 Home），且 goHome 的 from=C.camera
+    // 已是目标值 → 无动画（回归测试：test-desktop-layout-reload.js）
+    if (App.DesktopNavigation && typeof App.DesktopNavigation.applyCameraForPath === 'function') {
+      App.DesktopNavigation.applyCameraForPath()
+    }
   }
 
   // 启动布局加载（位置 + 相机视角）+ 视图偏好，无数据/损坏回退默认

@@ -180,10 +180,11 @@ const P = sandbox.App.DesktopPersist
   check(!store['desktop.layout.v1'] && !!store['desktop.layout.rootX.v1'],
     '旧 key 已迁移到 desktop.layout.rootX.v1 并删除旧 key')
 
-  // ── 第二次启动复现：内存重置（rootId 未就绪、positions 空、相机默认）──
+  // ── 第二次启动复现：内存重置（rootId 未就绪、positions 空、相机默认、DOM 全新初始）──
   C.state.rootId = ''
   Object.keys(C.positions).forEach(function (k) { delete C.positions[k] })
   C.camera = sandbox.App.DesktopCamera.create()
+  els['desktop-canvas'].style.transform = ''   // 模拟全新加载：canvas transform 未应用
   // initLayout（rootId=''）→ 读旧 key（已被迁移删除）→ null → 布局空（= 用户看到的 3*n 网格）
   P.initLayout()
   check(!C.positions['a.txt'], '复现：rootId 就绪前 initLayout 读不到布局（旧 key 已删）')
@@ -194,6 +195,10 @@ const P = sandbox.App.DesktopPersist
     '修复：rootId 就绪后从 rootId key 重载布局（第二次启动不丢摆放）')
   check(C.positions['docs'] && C.positions['docs'].x === 200, '重载后多图标位置完整')
   check(C.camera && C.camera.x === 5 && C.camera.zoom === 1.5, '重载后相机从 rootId key 恢复')
+  check(C.rootCamera && C.rootCamera.x === 5 && C.rootCamera.zoom === 1.5,
+    '修复：rootCamera 同步 Home（根目录相机基准）')
+  check(els['desktop-canvas'].style.transform.indexOf('scale(1.5)') >= 0,
+    '修复：相机重新应用到 DOM（画面落在 Home 缩放位，实际 ' + els['desktop-canvas'].style.transform + '）')
 
   if (failures > 0) {
     console.error('  [FAIL] layout-reload 测试 ' + failures + ' 项失败')

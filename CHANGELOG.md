@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### 旋转画布 review 修复（2026-08-17）
+
+- **P0 修复：goHome 横屏闪回竖屏**：`goHome()` 创建目标相机时未传 rotation
+  （`DesktopCamera.create()` 第四参缺省 → rotation=0），横屏点 Home 动画落点
+  rotation=0 导致画布闪回竖屏。修复：传 `C.camera.rotation`；`animateCameraTo`
+  改为浅拷贝 target 防 mutate 调用方对象
+- **P1 修复：saveLayout 不持久化 rotation**：`saveLayout` 写入相机缺 rotation 字段，
+  崩溃恢复后按 rotation=0 重建相机——横屏状态下 app 被杀重启，相机 x/y 是横屏视角
+  但 rotation=0，视口显示完全不同的区域。修复：写入 `rotation` + `_loadLayoutAndCamera`
+  恢复时透传 `saved.camera.rotation`
+- **P1 修复：handleWorldRect 旋转命中矩形错乱**：rotation=90 时返回的矩形
+  宽=HANDLE_W/z 高=HANDLE_H/z（轴对齐横条），但实际手柄在世界空间是竖条
+  （屏幕逆旋转后宽高互换）。修复：`handleWorldRect` 增加 `vw/vh` 参数，旋转态
+  先算屏幕矩形再逆变换回世界坐标（精确互逆）；`handleHitTest` 级联传视口尺寸；
+  无 vw/vh 时退化旧逻辑（防御路径）
+- **P2 修复**：folder clamp 构造的对象缺 `rotation` 字段（补 `rotation: 0`）；
+  CSS `.view-menu-check` 残留 `font-style`/`font-weight`（SVG 图标无需）
+- **E2E 新增场景 4.6**：横屏下点 Home 按钮 → 断言 rotation 保持 90 + 落在横屏槽位
+  （P0-1 回归守卫，此前 E2E 仅用菜单切换方向未覆盖 goHome 路径）
+
 ### 切换画布方向：落在目标方向槽位（2026-08-17）
 
 - **修正落位语义**：此前切换方向读的是**当前方向**槽位再旋转（旋转后落在「当前

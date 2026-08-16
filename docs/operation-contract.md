@@ -66,6 +66,10 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
   fullPath，切根 A→B 不得继承 A 的布局/相机/Home。
 - 存储 key 带 rootId（2026-08-17 修复）：`desktop.layout.<rootId>.v1` / `desktop.home.<rootId>.v1`；
   `rootId` 由 rootInfo 返回（SAF = tree uri / 私有 = `'private'`）。
+- 启动时序契约：`initLayout` 在 rootInfo 就绪前同步执行（rootId='' → 读旧 key），
+  **refresh 拿到 rootId 后必须用 rootId key 重载布局/相机**（`_reloadLayoutForRoot`）——
+  否则旧 key 被迁移删除后，第二次启动起布局丢失回自动排布（回归测试：
+  `tests/test-desktop-layout-reload.js`）。切 root 场景同样触发重载。
 - 旧版单根 key（`desktop.layout.v1` / `desktop.home.v1`）经 `migrateLegacy(rootId)`
   一次性迁移：首见 root 吸收旧数据后删除旧 key（幂等，测试：test-layout-store.js / test-home-store.js）。
 

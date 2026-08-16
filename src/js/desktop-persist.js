@@ -35,6 +35,9 @@ App.DesktopPersist = (function () {
           C.state.rootId = info.rootId
           App.LayoutStore.migrateLegacy(C.state.rootId)
           App.HomeStore.migrateLegacy(C.state.rootId)
+          // [修复] rootId 就绪前 initLayout 用旧 key 加载（旧 key 迁移后删除）——
+          // 必须用 rootId key 重载，否则后续启动布局丢失（回自动排布，见 test-desktop-layout-reload.js）
+          _reloadLayoutForRoot()
         }
         if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
           const base = info.displayPath || info.rootName
@@ -90,18 +93,17 @@ App.DesktopPersist = (function () {
       })
   }
 
-  // 加载布局（位置 + 相机视角）+ 视图偏好，无数据/损坏回退默认
-  // 图标位置恢复无条件执行（与相机优先级无关）：自由摆放位置来自 LayoutStore，
-  // Home 快照只决定启动相机，绝不决定图标位置——否则设置快照后重启会丢摆放
-  function initLayout() {
+  // 加载布局（positions）+ 相机（Home 快照 > 布局相机）——initLayout 与 rootId 就绪后重载共用。
+  // 清空 positions 保持引用不变（外部持有 C.positions 引用，替换会留下幽灵投影）。
+  function _loadLayoutAndCamera() {
     const saved = App.LayoutStore.load(C.state.rootId)
+    Object.keys(C.positions).forEach(function (k) { delete C.positions[k] })
     if (saved && saved.icons) {
       Object.keys(saved.icons).forEach(function (key) {
         C.positions[key] = saved.icons[key]
       })
     }
-    // 启动相机：Home 快照 > 默认视角 > 上次布局视角 > 出厂 (0,0,1)。
-    // Home = Camera 的默认起点（空间锚点）：设置过快照后，每次进入桌面空间都落在快照位
+    // 相机优先级：Home 快照 > 默认视角 > 上次布局视角（与 initLayout 原语义一致）
     let cam = null
     if (App.HomeStore) {
       const home = App.HomeStore.load(C.state.rootId)
@@ -114,7 +116,24 @@ App.DesktopPersist = (function () {
     if (!cam && saved && saved.camera) {
       cam = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
     }
-    C.camera = cam || App.DesktopCamera.create()
+    if (cam) C.camera = cam
+  }
+
+  // rootId 就绪后重载布局/相机（Bug 修复，2026-08-17）：
+  // initLayout 在 rootId 就绪前同步执行（rootId='' → 读旧 key），而 migrateLegacy 会删除
+  // 旧 key——第二次启动起 initLayout 永远读不到旧 key → 布局丢回自动排布（3*n）。
+  // 这里用 rootId key 重载；切 root 场景（rootId A→B）同样触发重载 B 的布局。
+  function _reloadLayoutForRoot() {
+    _loadLayoutAndCamera()
+    if (C.rootCamera) C.rootCamera = C.camera   // 同步根目录相机基准（applyCameraForPath 用）
+  }
+
+  // 启动布局加载（位置 + 相机视角）+ 视图偏好，无数据/损坏回退默认
+  // 图标位置恢复无条件执行（与相机优先级无关）：自由摆放位置来自 LayoutStore，
+  // Home 快照只决定启动相机，绝不决定图标位置——否则设置快照后重启会丢摆放
+  function initLayout() {
+    _loadLayoutAndCamera()
+    C.camera = C.camera || App.DesktopCamera.create()
     const prefs = App.ViewStore.load()
     C.state.viewStyle = prefs.viewStyle
     C.state.sortBy = prefs.sortBy

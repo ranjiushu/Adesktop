@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -76,6 +77,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> filePathCallback,
                                              FileChooserParams fileChooserParams) {
+                Log.d("DesktopWebUpload", "onShowFileChooser 触发, mode=" + fileChooserParams.getMode());
                 pendingFileCallback = filePathCallback;
                 webView.evaluateJavascript(
                     "window.App && App.WebUpload && App.WebUpload.onFileRequested()", null);
@@ -167,6 +169,7 @@ public class MainActivity extends Activity {
 
     /** 回传文件选择结果给网页（供 FileBridge.completeUpload 调用，需 UI 线程）。 */
     void deliverFileChooser(Uri[] uris) {
+        Log.d("DesktopWebUpload", "deliverFileChooser 回传 " + (uris == null ? "null" : (uris.length + " 个 URI")));
         if (pendingFileCallback != null) {
             pendingFileCallback.onReceiveValue(uris);
             pendingFileCallback = null;
@@ -175,6 +178,7 @@ public class MainActivity extends Activity {
 
     /** 取消文件选择（回传 null，网页侧视为用户取消）。 */
     void cancelFileChooser() {
+        Log.d("DesktopWebUpload", "cancelFileChooser 取消");
         if (pendingFileCallback != null) {
             pendingFileCallback.onReceiveValue(null);
             pendingFileCallback = null;
@@ -183,12 +187,14 @@ public class MainActivity extends Activity {
 
     /** 弹系统文件选择器（GET_CONTENT 单选；grant 由系统自动附带）。 */
     void openSystemFileChooser() {
+        Log.d("DesktopWebUpload", "openSystemFileChooser 调用");
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         try {
             startActivityForResult(intent, REQ_GET_CONTENT);
         } catch (Exception e) {
+            Log.w("DesktopWebUpload", "openSystemFileChooser 失败: " + e.getMessage());
             cancelFileChooser();
         }
     }

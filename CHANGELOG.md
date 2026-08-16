@@ -14,8 +14,12 @@
 - **新建网站对话框**（`website-dialog.js`）：Drawer「新建网站」入口 → 网址 + 可选名称 →
   写 `<名称>.desktop`（type=website，重名自动加序号）
 - **网站信任开关**：website 快捷方式加 `trusted` 字段；新建对话框勾选「信任该网站」→
-  `allow-same-origin` 完整加载（可读写授权目录，用户显式接受风险）；未勾选保持 opaque
-  origin 安全隔离（复杂 SPA 因 localStorage/cookie 被拒而白屏）
+  完整加载（可读写授权目录，用户显式接受风险）；未勾选保持 opaque origin 安全隔离
+  （复杂 SPA 因 localStorage/cookie 被拒而白屏）
+- **修复网页上传阻断**：sandbox 会阻止 iframe 内 `<input type=file>` 触发文件选择器
+  （onShowFileChooser 不回调）；信任网站改为完全移除 sandbox（第三方 https iframe 与
+  file:// 顶层跨域，同源策略天然隔离 Java 桥），恢复 localStorage/cookie/file chooser；
+  加 logcat 诊断日志（tag `DesktopWebUpload`）
 - **网页文件上传桥**（`web-upload.js`）：拖拽文件到 website iframe 松手 → 设为待上传 +
   toast 提示；网页触发 `<input type=file>` → 原生 `onShowFileChooser` 拦截 →
   弹确认「用待上传文件 / 重新选择」；桥层加 `completeUpload`/`chooseUploadFromSystem`/

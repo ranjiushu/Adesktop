@@ -113,6 +113,8 @@ sandbox.App.bridge = { vibrate: function () {} }
 sandbox.App.ViewMenu = { setEnabled: function () {} }
 sandbox.App.DesktopGesture = { init: function () {}, setCamera: function () {} }
 
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-core.js'), 'utf8'), sandbox,
+  { filename: 'desktop-core.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop.js'), 'utf8'), sandbox,
   { filename: 'desktop.js' })
 

@@ -16,63 +16,8 @@ App.Desktop = (function () {
   const DOUBLE_TAP_MS = 300   // 双击窗口（interaction.md §7）
   const HOME_ANIM_MS = 400    // Home 平滑过渡时长（zoom 不变=easeInOutCubic 缓入缓出；zoom 变化=easeOut 弧长，见 desktop-camera.js）
 
-  // RAF 驱动（无 RAF 环境兜底 setTimeout ~16ms）
-  function _raf(cb) {
-    if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(cb)
-    return setTimeout(function () { cb() }, 16)
-  }
-  function _caf(id) {
-    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id)
-    else clearTimeout(id)
-  }
-  function _now() {
-    return (typeof performance === 'object' && typeof performance.now === 'function')
-      ? performance.now() : Date.now()
-  }
-
-  let state = {
-    rootName: '…',
-    mode: 'unknown',
-    items: [],
-    curPath: '',          // 当前目录（相对根，'' = 根）
-    trashName: '',        // 回收站文件夹名（rootInfo 返回，'' = 未知/未初始化）
-    viewStyle: 'grid',    // folder 容器视图：grid（4 列）| list（单列）
-    sortBy: 'name',       // folder 容器排序：name | mtime | type | size
-    sortDir: 1,           // 1 升序 | -1 降序
-    canvasH: 0            // folder 容器画布高（滚动下界钳制用）
-  }
-
-  let nav = null             // App.DesktopNav 历史栈
-  let camera = null
-  let rootCamera = null      // 根目录相机快照（进入子文件夹前保存，返回根时恢复）
-  let positions = {}   // fullPath → {x, y}（世界坐标，移动后保留；仅 desktop 空间）
-  let bounds = {}      // fullPath → {x, y, w, h}（世界坐标 AABB，命中测试用）
-  let selection = new Set()
-  let iconEls = {}     // fullPath → DOM 元素
-  let dragTargets = []        // 移动的图标 fullPath 列表（组移动）
-  let dragStartWorld = null   // 手指起始世界坐标
-  let dragStartPositions = {} // fullPath → 起始世界坐标（保持组内相对位置）
-  // 文件锁定（Windows 式）：被 Viewer 打开的文件禁止复制/剪切/移动/删除/重命名，
-  // 只允许拖动摆放（桌面空间布局）；关闭对应 Viewer 即解除。多实例：Set 存所有锁定路径
-  let _lockedPaths = new Set()
-  // Viewer 选中态由 InternalViewer 实例管理（单选：最多一个选中，脆弱/临时）
-
-  // 双击窗口状态
-  let _tapState = null            // App.DoubleTap 状态
-  let _pendingDeselect = null     // { name } 待反选（双击窗口确认）
-  let _deselectTimer = null
-
-  // 高级浏览模式 + 临时操作模式
-  let _advancedBrowse = false     // 高级浏览模式开关（持久化）
-  let _tempNormalMode = false     // 临时操作模式（双击空白进入，打断退出）
-  let _emptyTapTime = 0           // 空白区域双击窗口计时
-
-  function el(tag, className, text) {
-    let node = document.createElement(tag)
-    if (className) node.className = className
-    if (text != null) node.textContent = text
-    return node
-  }
+  // 共享状态与纯工具集中管理（拆分自 desktop.js 原闭包，见 desktop-core.js）
+  const C = App.DesktopCore
 
   // 缩略图渲染：ThumbnailService 已验证 URI（可解码）后回调，创建 <img> 展示；
   // onerror 双保险（极端情况下仍回退类型图标）。缩略图的「判定/缓存/生成」全在 App.Thumbnail。
@@ -91,66 +36,24 @@ App.Desktop = (function () {
     iconEl.appendChild(img)
   }
 
-  function viewportWidth() {
-    let vp = document.getElementById('desktop-viewport')
-    return (vp && vp.clientWidth) || 360
-  }
-
-  function viewportHeight() {
-    let vp = document.getElementById('desktop-viewport')
-    return (vp && vp.clientHeight) || 640
-  }
-
-  // 视图模式：根目录 = Desktop（空间，无限画布）；子文件夹 = Folder（容器，有限画布）
-  function isFolderView() { return !!state.curPath }
-  function viewMode() { return isFolderView() ? 'folder' : 'desktop' }
-
-  // 文件大小人性化（列表视图 meta）
-  function fmtSize(size) {
-    if (typeof size !== 'number' || size < 0) return ''
-    if (size < 1024) return size + ' B'
-    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
-    return (size / 1024 / 1024).toFixed(1) + ' MB'
-  }
-
-  // 完整路径（布局 key）：根目录下 = 短名，子目录 = curPath/name
-  function fullPath(name) {
-    return App.DesktopNav.join(state.curPath, name)
-  }
-
-  // 回收站：根目录下固定名文件夹（桥层 rootInfo 返回 trashName），只锚定根目录。
-  // 完整路径恒等于 trashName（无子目录前缀），供删除目标 / 守卫 / 渲染特判共用。
-  function isTrashPath(path) {
-    return !!state.trashName && path === state.trashName
-  }
-
-  // 当前视图是否已进入回收站（folder 容器，curPath === trashName）
-  function inTrash() {
-    return !!state.trashName && state.curPath === state.trashName
-  }
-
-  // 拖动组是否包含回收站（允许重定位，禁止移入其他文件夹）
-  function dragIncludesTrash() {
-    return !!state.trashName && dragTargets.indexOf(state.trashName) >= 0
-  }
 
   // 自动排布：
   //   desktop 空间：世界坐标按网格铺开（已有位置优先，位置来自 LayoutStore 持久化）
   //   folder 容器：排序后固定排布（网格 4 列自适应 / 列表单列），不读持久化位置
   function layout(items) {
-    if (isFolderView()) {
-      const sorted = App.FolderSort.sort(items, state.sortBy, state.sortDir)
-      const pts = state.viewStyle === 'list'
+    if (C.isFolderView()) {
+      const sorted = App.FolderSort.sort(items, C.state.sortBy, C.state.sortDir)
+      const pts = C.state.viewStyle === 'list'
         ? App.FolderLayout.listPositions(sorted.length)
-        : App.FolderLayout.gridPositions(sorted.length, viewportWidth())
+        : App.FolderLayout.gridPositions(sorted.length, C.viewportWidth())
       return sorted.map(function (item, i) {
-        return { item: item, key: fullPath(item.name), x: pts[i].x, y: pts[i].y }
+        return { item: item, key: C.fullPath(item.name), x: pts[i].x, y: pts[i].y }
       })
     }
-    let cols = Math.max(3, Math.min(8, Math.floor(viewportWidth() / App.DesktopGrid.GRID_W)))
+    let cols = Math.max(3, Math.min(8, Math.floor(C.viewportWidth() / App.DesktopGrid.GRID_W)))
     return items.map(function (item, i) {
-      const key = fullPath(item.name)
-      let pos = positions[key]
+      const key = C.fullPath(item.name)
+      let pos = C.positions[key]
       if (!pos) {
         pos = App.DesktopGrid.cellToWorld(i % cols, Math.floor(i / cols))
       }
@@ -162,36 +65,36 @@ App.Desktop = (function () {
     let gridEl = document.getElementById('desktop-grid')
     if (!gridEl) return
     gridEl.innerHTML = ''
-    iconEls = {}
-    bounds = {}   // 清空重建，防止已删/不可见文件（如隐藏文件）的旧 bounds 残留导致命中测试选中幽灵项
+    C.iconEls = {}
+    C.bounds = {}   // 清空重建，防止已删/不可见文件（如隐藏文件）的旧 bounds 残留导致命中测试选中幽灵项
 
     // folder 容器：画布尺寸 = 内容（滚动边界的基础；无卡片视觉）
     const canvasEl = document.getElementById('desktop-canvas')
-    if (isFolderView()) {
-      const size = App.FolderLayout.canvasSize(state.items.length, viewportWidth(), state.viewStyle)
-      state.canvasH = size.h
+    if (C.isFolderView()) {
+      const size = App.FolderLayout.canvasSize(C.state.items.length, C.viewportWidth(), C.state.viewStyle)
+      C.state.canvasH = size.h
       gridEl.style.width = size.w + 'px'
       gridEl.style.height = size.h + 'px'
       if (canvasEl) canvasEl.classList.add('folder-canvas')
     } else {
-      state.canvasH = 0
+      C.state.canvasH = 0
       gridEl.style.width = ''
       gridEl.style.height = ''
       if (canvasEl) canvasEl.classList.remove('folder-canvas')
     }
 
-    let placed = layout(state.items)
+    let placed = layout(C.state.items)
     placed.forEach(function (p) {
-      positions[p.key] = { x: p.x, y: p.y }
-      bounds[p.key] = { x: p.x, y: p.y, w: ICON_W, h: ICON_H }
-      const isTrashItem = p.item.isDir && isTrashPath(p.key)
-      let card = el('div', 'desktop-icon' + (p.item.isDir ? ' is-dir' : '') + (isTrashItem ? ' is-trash' : ''))
-      if (isFolderView()) {
-        if (state.viewStyle === 'list') {
+      C.positions[p.key] = { x: p.x, y: p.y }
+      C.bounds[p.key] = { x: p.x, y: p.y, w: ICON_W, h: ICON_H }
+      const isTrashItem = p.item.isDir && C.isTrashPath(p.key)
+      let card = C.el('div', 'desktop-icon' + (p.item.isDir ? ' is-dir' : '') + (isTrashItem ? ' is-trash' : ''))
+      if (C.isFolderView()) {
+        if (C.state.viewStyle === 'list') {
           card.classList.add('desktop-list-row')
         } else {
           // 网格 4 列：图标宽自适应列宽（列间留 8px 空隙，不裁切）
-          card.style.width = App.FolderLayout.iconWidth(viewportWidth()) + 'px'
+          card.style.width = App.FolderLayout.iconWidth(C.viewportWidth()) + 'px'
         }
       }
       card.setAttribute('data-name', p.item.name)
@@ -200,7 +103,7 @@ App.Desktop = (function () {
       if (App.Clipboard && App.Clipboard.isCut(p.key)) {
         card.classList.add('clip-cut')
       }
-      let icon = el('div', 'desktop-icon-glyph')
+      let icon = C.el('div', 'desktop-icon-glyph')
       const kind = App.TypeIcons ? App.TypeIcons.kindFor(p.item.name, p.item.isDir) : 'unknown'
       if (isTrashItem) {
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor('trash') : '🗑️'
@@ -226,26 +129,26 @@ App.Desktop = (function () {
       } else if (!p.item.isDir && App.Shortcut && App.Shortcut.isShortcutName(p.item.name)) {
         displayName = p.item.name.slice(0, p.item.name.lastIndexOf('.'))
       }
-      let name = el('div', 'desktop-icon-name', displayName)
+      let name = C.el('div', 'desktop-icon-name', displayName)
       card.appendChild(icon)
       card.appendChild(name)
       // 列表视图：右侧元信息（文件夹 / 文件大小）
-      if (isFolderView() && state.viewStyle === 'list') {
-        const meta = el('div', 'desktop-list-meta', p.item.isDir ? '文件夹' : fmtSize(p.item.size))
+      if (C.isFolderView() && C.state.viewStyle === 'list') {
+        const meta = C.el('div', 'desktop-list-meta', p.item.isDir ? '文件夹' : C.fmtSize(p.item.size))
         card.appendChild(meta)
       }
       card.style.left = p.x + 'px'
       card.style.top = p.y + 'px'
-      if (selection.has(p.key)) card.classList.add('selected')
-      iconEls[p.key] = card
+      if (C.selection.has(p.key)) card.classList.add('selected')
+      C.iconEls[p.key] = card
       gridEl.appendChild(card)
     })
 
     // 用实测高度校准命中边界（宽度 CSS 固定 84，高度由内容撑开）
-    Object.keys(iconEls).forEach(function (key) {
-      const node = iconEls[key]
-      bounds[key].w = node.offsetWidth || ICON_W
-      bounds[key].h = node.offsetHeight || ICON_H
+    Object.keys(C.iconEls).forEach(function (key) {
+      const node = C.iconEls[key]
+      C.bounds[key].w = node.offsetWidth || ICON_W
+      C.bounds[key].h = node.offsetHeight || ICON_H
     })
     // 渲染后恢复锁定视觉（网格重建会丢失 class）
     updateLockedVisual()
@@ -254,9 +157,9 @@ App.Desktop = (function () {
   // ── 选中态同步：图标 class + FAB 操作栏路由 ──
   // FAB 展开条件 = 文件选中 或 Viewer 实体选中（二者其一，互斥出现）
   function applySelection() {
-    Object.keys(iconEls).forEach(function (key) {
-      if (selection.has(key)) iconEls[key].classList.add('selected')
-      else iconEls[key].classList.remove('selected')
+    Object.keys(C.iconEls).forEach(function (key) {
+      if (C.selection.has(key)) C.iconEls[key].classList.add('selected')
+      else C.iconEls[key].classList.remove('selected')
     })
     syncFab()
   }
@@ -265,18 +168,18 @@ App.Desktop = (function () {
     if (App.fabSpeedDial && typeof App.fabSpeedDial.setSelection === 'function') {
       const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
         App.InternalViewer.anySelected()
-      App.fabSpeedDial.setSelection(selection.size > 0 || viewerSel)
+      App.fabSpeedDial.setSelection(C.selection.size > 0 || viewerSel)
     }
   }
 
   // 取消文件选中（Viewer 保持打开、文件保持锁定——选中与查看解绑）
   function clearSelection() {
-    selection = new Set()
+    C.selection = new Set()
     applySelection()
   }
 
   // 是否有文件选中（返回键取消选中用）
-  function hasSelection() { return selection.size > 0 }
+  function hasSelection() { return C.selection.size > 0 }
 
   // 关闭「选中的」Viewer + 解除其文件锁定（唯一出口：FAB 关闭预览）。目录切换走 closeAllViewers
   function closeViewer() {
@@ -285,7 +188,7 @@ App.Desktop = (function () {
     if (!inst) return
     const path = inst.getPath()
     App.InternalViewer.closeById(inst.id)
-    if (path) _lockedPaths.delete(path)
+    if (path) C._lockedPaths.delete(path)
     updateLockedVisual()
     syncFab()
   }
@@ -297,7 +200,7 @@ App.Desktop = (function () {
     App.InternalViewer.closeAll()
     list.forEach(function (inst) {
       const p = inst.getPath()
-      if (p) _lockedPaths.delete(p)
+      if (p) C._lockedPaths.delete(p)
     })
     updateLockedVisual()
     syncFab()
@@ -305,32 +208,32 @@ App.Desktop = (function () {
 
   // 锁定视觉：被 Viewer 打开的文件图标加锁标记
   function updateLockedVisual() {
-    Object.keys(iconEls).forEach(function (key) {
-      const node = iconEls[key]
+    Object.keys(C.iconEls).forEach(function (key) {
+      const node = C.iconEls[key]
       if (!node) return
-      if (_lockedPaths.has(key)) node.classList.add('desktop-icon-locked')
+      if (C._lockedPaths.has(key)) node.classList.add('desktop-icon-locked')
       else node.classList.remove('desktop-icon-locked')
     })
   }
 
   // 锁定判断（actions.js 用）：路径是否被任一 Viewer 锁定
   function isLockedPath(path) {
-    return _lockedPaths.has(path)
+    return C._lockedPaths.has(path)
   }
 
-  function getLockedPaths() { return Array.from(_lockedPaths) }
+  function getLockedPaths() { return Array.from(C._lockedPaths) }
 
   // 当前选中完整路径列表（复制/剪切/重命名用）
   function getSelectionNames() {
-    return Array.from(selection)
+    return Array.from(C.selection)
   }
 
   // 当前选中条目 [{path, isDir}]（剪贴板跨目录粘贴需要源类型）
   function getSelectionEntries() {
-    return Array.from(selection).map(function (path) {
+    return Array.from(C.selection).map(function (path) {
       let isDir = false
-      state.items.forEach(function (it) {
-        if (fullPath(it.name) === path) isDir = it.isDir
+      C.state.items.forEach(function (it) {
+        if (C.fullPath(it.name) === path) isDir = it.isDir
       })
       return { path: path, isDir: isDir }
     })
@@ -340,17 +243,17 @@ App.Desktop = (function () {
   // 旧 key → 新 key，否则新名字刷新后回退自动排布丢位置。随后重绘。
   function applyRename(oldPath, newPath) {
     if (!oldPath || !newPath || oldPath === newPath) return
-    if (positions[oldPath]) {
-      positions[newPath] = positions[oldPath]
-      delete positions[oldPath]
+    if (C.positions[oldPath]) {
+      C.positions[newPath] = C.positions[oldPath]
+      delete C.positions[oldPath]
     }
-    if (bounds[oldPath]) {
-      bounds[newPath] = bounds[oldPath]
-      delete bounds[oldPath]
+    if (C.bounds[oldPath]) {
+      C.bounds[newPath] = C.bounds[oldPath]
+      delete C.bounds[oldPath]
     }
-    if (selection.has(oldPath)) {
-      selection.delete(oldPath)
-      selection.add(newPath)
+    if (C.selection.has(oldPath)) {
+      C.selection.delete(oldPath)
+      C.selection.add(newPath)
     }
     saveLayout()
     refresh()
@@ -364,19 +267,19 @@ App.Desktop = (function () {
     let changed = false
     moves.forEach(function (m) {
       if (!m || !m.src || !m.dst || m.src === m.dst) return
-      if (positions[m.src]) {
-        positions[m.dst] = positions[m.src]
-        delete positions[m.src]
+      if (C.positions[m.src]) {
+        C.positions[m.dst] = C.positions[m.src]
+        delete C.positions[m.src]
         changed = true
       }
-      if (bounds[m.src]) {
-        bounds[m.dst] = bounds[m.src]
-        delete bounds[m.src]
+      if (C.bounds[m.src]) {
+        C.bounds[m.dst] = C.bounds[m.src]
+        delete C.bounds[m.src]
         changed = true
       }
-      if (selection.has(m.src)) {
-        selection.delete(m.src)
-        selection.add(m.dst)
+      if (C.selection.has(m.src)) {
+        C.selection.delete(m.src)
+        C.selection.add(m.dst)
         changed = true
       }
     })
@@ -386,8 +289,8 @@ App.Desktop = (function () {
   // ── 打开：文件夹进入 / 文件打开（FileOpener 分派内部查看器 / 外部应用 / 快捷方式）──
   function openItem(full) {
     if (!full) return
-    const item = state.items.filter(function (it) {
-      return fullPath(it.name) === full
+    const item = C.state.items.filter(function (it) {
+      return C.fullPath(it.name) === full
     })[0]
     if (!item) return
     if (item.isDir) {
@@ -398,12 +301,12 @@ App.Desktop = (function () {
       // 拖动摆放仍可）；文件不进入选中集——Viewer 实体自身有独立选中态（脆弱/临时）。
       // 多实例：每个打开的 Viewer 各自锁定其文件。
       // FileOpener.open 返回实例 id（数字）→ 锁定；true（外部/快捷方式）→ 只清选中不锁定。
-      const result = App.FileOpener.open({ name: item.name, path: full }, isFolderView() ? null : (positions[full] || null), camera, function onClose(path) {
-        if (path) _lockedPaths.delete(path)
+      const result = App.FileOpener.open({ name: item.name, path: full }, C.isFolderView() ? null : (C.positions[full] || null), C.camera, function onClose(path) {
+        if (path) C._lockedPaths.delete(path)
         updateLockedVisual()
       })
       if (typeof result === 'number') {
-        _lockedPaths.add(full)
+        C._lockedPaths.add(full)
         clearSelection()
         updateLockedVisual()
       } else if (result) {
@@ -417,9 +320,9 @@ App.Desktop = (function () {
   // 进入子目录：压栈历史 + 切换视图（folder 容器相机重置到顶）
   function enterFolder(full) {
     exitTempMode()   // 进入文件夹 → 退出临时操作模式
-    if (!isFolderView()) rootCamera = camera   // 从根进入：快照根视角，返回时恢复
-    nav = App.DesktopNav.enter(nav, full)
-    state.curPath = full
+    if (!C.isFolderView()) C.rootCamera = C.camera   // 从根进入：快照根视角，返回时恢复
+    C.nav = App.DesktopNav.enter(C.nav, full)
+    C.state.curPath = full
     applyCameraForPath()
     refresh()
   }
@@ -432,32 +335,32 @@ App.Desktop = (function () {
     const fs = App.InternalViewer && App.InternalViewer.fullscreenInstance ? App.InternalViewer.fullscreenInstance() : null
     if (fs) {
       fs.exitFullscreen()   // folder 打开的全屏：退出 = close（见 exitFullscreen 的 from='folder' 分支）
-      if (fs.getPath && _lockedPaths.has(fs.getPath())) _lockedPaths.delete(fs.getPath())
+      if (fs.getPath && C._lockedPaths.has(fs.getPath())) C._lockedPaths.delete(fs.getPath())
     }
-    if (isFolderView()) {
+    if (C.isFolderView()) {
       // 进入 folder：隐藏 canvas 态 Viewer（保留状态，退回根目录恢复）
       if (App.InternalViewer && App.InternalViewer.suspendCanvas) App.InternalViewer.suspendCanvas()
-      camera = App.DesktopCamera.create(0, 0, 1)
+      C.camera = App.DesktopCamera.create(0, 0, 1)
     } else {
       // 回到根目录：恢复 canvas 态 Viewer
       if (App.InternalViewer && App.InternalViewer.resumeCanvas) App.InternalViewer.resumeCanvas()
-      camera = rootCamera || App.DesktopCamera.create()
+      C.camera = C.rootCamera || App.DesktopCamera.create()
     }
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
-      App.DesktopGesture.setCamera(camera)
+      App.DesktopGesture.setCamera(C.camera)
     }
     if (App.ViewMenu && typeof App.ViewMenu.setEnabled === 'function') {
-      App.ViewMenu.setEnabled(isFolderView())
+      App.ViewMenu.setEnabled(C.isFolderView())
     }
   }
 
   // 退回到上级目录（父目录，压栈导航——与历史后退区分；Windows「向上」语义）
   function goUp() {
     exitTempMode()
-    if (!isFolderView()) return false
-    const target = App.DesktopNav.parent(state.curPath)
-    nav = App.DesktopNav.enter(nav, target)
-    state.curPath = target
+    if (!C.isFolderView()) return false
+    const target = App.DesktopNav.parent(C.state.curPath)
+    C.nav = App.DesktopNav.enter(C.nav, target)
+    C.state.curPath = target
     applyCameraForPath()
     refresh()
     return true
@@ -466,10 +369,10 @@ App.Desktop = (function () {
   // 后退 / 前进（底栏按钮驱动）
   // 后退：临时操作模式下消费此次按键退出临时模式（不导航）
   function goBack() {
-    if (_tempNormalMode) { exitTempMode(); return true }
-    if (!App.DesktopNav.canBack(nav)) return false
-    nav = App.DesktopNav.back(nav)
-    state.curPath = App.DesktopNav.current(nav)
+    if (C._tempNormalMode) { exitTempMode(); return true }
+    if (!App.DesktopNav.canBack(C.nav)) return false
+    C.nav = App.DesktopNav.back(C.nav)
+    C.state.curPath = App.DesktopNav.current(C.nav)
     applyCameraForPath()
     refresh()
     return true
@@ -477,25 +380,25 @@ App.Desktop = (function () {
 
   function goForward() {
     exitTempMode()
-    if (!App.DesktopNav.canForward(nav)) return false
-    nav = App.DesktopNav.forward(nav)
-    state.curPath = App.DesktopNav.current(nav)
+    if (!App.DesktopNav.canForward(C.nav)) return false
+    C.nav = App.DesktopNav.forward(C.nav)
+    C.state.curPath = App.DesktopNav.current(C.nav)
     applyCameraForPath()
     refresh()
     return true
   }
 
-  function canGoBack() { return App.DesktopNav.canBack(nav) }
-  function canGoForward() { return App.DesktopNav.canForward(nav) }
-  function canGoUp() { return isFolderView() }
-  function getCurPath() { return state.curPath }
+  function canGoBack() { return App.DesktopNav.canBack(C.nav) }
+  function canGoForward() { return App.DesktopNav.canForward(C.nav) }
+  function canGoUp() { return C.isFolderView() }
+  function getCurPath() { return C.state.curPath }
 
   // ── Home：空间锚点（位置快照 + 默认视角）──
   // 长按底栏 Home = 记录当前相机为快照；点按 Home = 回快照（无则默认视角，再无则出厂 (0,0,1)）。
   // 默认视角 = 用户经 Drawer「设为默认视角」设置的兜底视角。仅桌面空间（根目录）有意义。
   function captureHome() {
-    if (isFolderView()) return false
-    const cam = { x: camera.x, y: camera.y, zoom: camera.zoom }
+    if (C.isFolderView()) return false
+    const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
     if (!App.HomeStore.saveHome(cam)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('Home 视角保存失败')
       return false
@@ -510,8 +413,8 @@ App.Desktop = (function () {
 
   // 设为默认视角（Drawer 操作项）：Home 无快照时的兜底视角
   function captureDefaultView() {
-    if (isFolderView()) return false
-    const cam = { x: camera.x, y: camera.y, zoom: camera.zoom }
+    if (C.isFolderView()) return false
+    const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
     if (!App.HomeStore.saveFallback(cam)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('默认视角保存失败')
       return false
@@ -525,7 +428,7 @@ App.Desktop = (function () {
   // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera——
   // 从文件夹返回仍恢复进文件夹前的视角，Home 只负责「现在」的空间锚点。
   function goHome() {
-    if (isFolderView()) return
+    if (C.isFolderView()) return
     let target = App.DesktopCamera.create()
     const data = App.HomeStore.load()
     if (data && data.home) {
@@ -537,12 +440,11 @@ App.Desktop = (function () {
   }
 
   // ── 相机平滑过渡（Home 复位用，可被手势/目录切换打断）──
-  let _animRaf = null
 
   function cancelCameraAnim() {
-    if (_animRaf !== null) {
-      _caf(_animRaf)
-      _animRaf = null
+    if (C._animRaf !== null) {
+      C._caf(C._animRaf)
+      C._animRaf = null
     }
   }
 
@@ -555,33 +457,33 @@ App.Desktop = (function () {
   // （无分段断续）；zoom 不变退化为与 lerp 一致（纯平移动画不受影响）。
   function animateCameraTo(target, durationMs) {
     cancelCameraAnim()
-    const from = { x: camera.x, y: camera.y, zoom: camera.zoom }
+    const from = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
     const dur = (durationMs && durationMs > 0) ? durationMs : HOME_ANIM_MS
-    const vw = viewportWidth()
-    const vh = viewportHeight()
+    const vw = C.viewportWidth()
+    const vh = C.viewportHeight()
     // 视口尺寸动画中快照：中途旋转/尺寸变化只影响轨迹形状，落点精确
     // （终点公式中 w/h 项数学抵消，k=1 恒等于 target）
-    const t0 = _now()
+    const t0 = C._now()
     function frame() {
-      const k = Math.min(1, (_now() - t0) / dur)
+      const k = Math.min(1, (C._now() - t0) / dur)
       // lerpCentered 收真实时间比例 k（内部统一缓动 + 按 k 分段）——
       // 不得预缓动传入，否则段边界错位致平移段被压缩（真机「震感」）
       const c = App.DesktopCamera.lerpCentered(from, target, k, vw, vh)
-      camera = c
+      C.camera = c
       if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
-        App.DesktopGesture.setCamera(camera)
+        App.DesktopGesture.setCamera(C.camera)
       }
-      if (k >= 1) { _animRaf = null; return }
-      _animRaf = _raf(frame)
+      if (k >= 1) { C._animRaf = null; return }
+      C._animRaf = C._raf(frame)
     }
-    _animRaf = _raf(frame)
+    C._animRaf = C._raf(frame)
   }
 
   // ── 高级浏览模式 + 临时操作模式 ──
 
   // 同步浏览模式到手势层：effective = 高级浏览 ON 且非临时操作模式
   function syncBrowseMode() {
-    const effective = _advancedBrowse && !_tempNormalMode
+    const effective = C._advancedBrowse && !C._tempNormalMode
     if (App.DesktopGesture && typeof App.DesktopGesture.setBrowseMode === 'function') {
       App.DesktopGesture.setBrowseMode(effective)
     }
@@ -589,8 +491,8 @@ App.Desktop = (function () {
 
   // 退出临时操作模式（打断条件：返回/Drawer/目录导航/再次双击空白）
   function exitTempMode() {
-    if (!_tempNormalMode) return
-    _tempNormalMode = false
+    if (!C._tempNormalMode) return
+    C._tempNormalMode = false
     syncBrowseMode()
     if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
     if (App.toast && typeof App.toast.show === 'function') App.toast.show('已退出临时操作模式')
@@ -598,25 +500,25 @@ App.Desktop = (function () {
 
   // 设置高级浏览模式（ViewMenu 切换驱动）
   function setAdvancedBrowse(on) {
-    _advancedBrowse = !!on
-    _tempNormalMode = false   // 切换模式时清空临时态
+    C._advancedBrowse = !!on
+    C._tempNormalMode = false   // 切换模式时清空临时态
     syncBrowseMode()
     // 持久化：合并到 ViewStore 现有偏好
     const prefs = App.ViewStore.load()
-    prefs.advancedBrowse = _advancedBrowse
+    prefs.advancedBrowse = C._advancedBrowse
     if (!App.ViewStore.save(prefs)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('浏览模式保存失败')
     }
   }
 
-  function isAdvancedBrowse() { return _advancedBrowse }
+  function isAdvancedBrowse() { return C._advancedBrowse }
 
   // ── 手势回调（世界坐标）──
   function handleTap(world) {
     // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）；
     // 拖动手柄也视为点击卡片本体（手柄是辅助拖动区，点击语义与卡片一致：仅选中）
     const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-      ? App.InternalViewer.handleAt(world.x, world.y, camera) : null
+      ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
     const hitInst = handleInst || (App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
       ? App.InternalViewer.topmostAt(world.x, world.y) : null)
     if (hitInst) {
@@ -631,55 +533,55 @@ App.Desktop = (function () {
       App.InternalViewer.deselectAll()
       syncFab()
     }
-    const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
+    const name = App.DesktopSelection.pointHitTest(world.x, world.y, C.bounds)
     const now = Date.now()
 
     // 双击空白区域：高级浏览模式下切换临时操作模式（进入/退出）
-    if (!name && _advancedBrowse) {
-      if (now - _emptyTapTime <= DOUBLE_TAP_MS) {
-        _emptyTapTime = 0
-        if (_tempNormalMode) {
+    if (!name && C._advancedBrowse) {
+      if (now - C._emptyTapTime <= DOUBLE_TAP_MS) {
+        C._emptyTapTime = 0
+        if (C._tempNormalMode) {
           exitTempMode()
         } else {
-          _tempNormalMode = true
+          C._tempNormalMode = true
           syncBrowseMode()
           if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
           if (App.toast && typeof App.toast.show === 'function') App.toast.show('临时操作模式')
         }
         return
       }
-      _emptyTapTime = now
+      C._emptyTapTime = now
     }
 
-    const r = App.DoubleTap.hit(_tapState, name, now, DOUBLE_TAP_MS)
-    _tapState = r.state
+    const r = App.DoubleTap.hit(C._tapState, name, now, DOUBLE_TAP_MS)
+    C._tapState = r.state
     if (r.double) {
       // 双击：取消待反选，打开
-      if (_deselectTimer) { clearTimeout(_deselectTimer); _deselectTimer = null }
-      _pendingDeselect = null
+      if (C._deselectTimer) { clearTimeout(C._deselectTimer); C._deselectTimer = null }
+      C._pendingDeselect = null
       openItem(name)
       return
     }
     if (name) {
-      if (!selection.has(name)) {
+      if (!C.selection.has(name)) {
         // 未选中 → 立即选中（视觉即时）
-        selection = App.DesktopSelection.selectOnly(name)
+        C.selection = App.DesktopSelection.selectOnly(name)
         applySelection()
       } else {
         // 已选中 → 反选延迟（双击窗口确认，防止双击时先反选再打开）
-        _pendingDeselect = { name: name }
-        if (_deselectTimer) clearTimeout(_deselectTimer)
-        _deselectTimer = setTimeout(function () {
-          _deselectTimer = null
-          if (_pendingDeselect && selection.has(_pendingDeselect.name)) {
-            selection = App.DesktopSelection.toggle(selection, _pendingDeselect.name)
+        C._pendingDeselect = { name: name }
+        if (C._deselectTimer) clearTimeout(C._deselectTimer)
+        C._deselectTimer = setTimeout(function () {
+          C._deselectTimer = null
+          if (C._pendingDeselect && C.selection.has(C._pendingDeselect.name)) {
+            C.selection = App.DesktopSelection.toggle(C.selection, C._pendingDeselect.name)
             applySelection()
           }
-          _pendingDeselect = null
+          C._pendingDeselect = null
         }, DOUBLE_TAP_MS)
       }
     } else {
-      selection = App.DesktopSelection.clear()
+      C.selection = App.DesktopSelection.clear()
       applySelection()
     }
   }
@@ -687,8 +589,8 @@ App.Desktop = (function () {
   function showMarquee(startWorld, currentWorld) {
     const mq = document.getElementById('desktop-marquee')
     if (!mq) return
-    const a = App.DesktopCamera.worldToScreen(startWorld.x, startWorld.y, camera)
-    const b = App.DesktopCamera.worldToScreen(currentWorld.x, currentWorld.y, camera)
+    const a = App.DesktopCamera.worldToScreen(startWorld.x, startWorld.y, C.camera)
+    const b = App.DesktopCamera.worldToScreen(currentWorld.x, currentWorld.y, C.camera)
     mq.style.left = Math.min(a.x, b.x) + 'px'
     mq.style.top = Math.min(a.y, b.y) + 'px'
     mq.style.width = Math.abs(b.x - a.x) + 'px'
@@ -708,10 +610,10 @@ App.Desktop = (function () {
     hideMarquee()
     const rect = App.DesktopSelection.rectFromPoints(start.x, start.y, cur.x, cur.y)
     // 框选命中：被 Viewer 覆盖的文件图标不参与（Viewer 遮挡语义）
-    const files = App.DesktopSelection.marqueeHitTest(rect, bounds).filter(function (name) {
-      return !isCoveredByViewer(bounds[name])
+    const files = App.DesktopSelection.marqueeHitTest(rect, C.bounds).filter(function (name) {
+      return !isCoveredByViewer(C.bounds[name])
     })
-    selection = new Set(files)
+    C.selection = new Set(files)
     // 框选命中 Viewer → 单选选中它；未命中 → 取消 Viewer 选中（替换选择语义）
     const hitInst = App.InternalViewer && typeof App.InternalViewer.rectHit === 'function'
       ? App.InternalViewer.rectHit(rect) : null
@@ -730,7 +632,7 @@ App.Desktop = (function () {
   }
 
   function setPickedUp(name, on) {
-    const node = iconEls[name]
+    const node = C.iconEls[name]
     if (node) {
       if (on) node.classList.add('picked-up')
       else node.classList.remove('picked-up')
@@ -744,7 +646,7 @@ App.Desktop = (function () {
   function hitTest(world) {
     // 手柄优先于卡片本身命中（辅助拖动区，不受选中态限制）
     const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-      ? App.InternalViewer.handleAt(world.x, world.y, camera) : null
+      ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
     if (handleInst) {
       return 'viewer-handle'
     }
@@ -753,16 +655,16 @@ App.Desktop = (function () {
     if (hitInst) {
       return hitInst.isSelected() ? 'viewer-selected' : 'viewer'
     }
-    if (isFolderView()) {
-      const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
+    if (C.isFolderView()) {
+      const name = App.DesktopSelection.pointHitTest(world.x, world.y, C.bounds)
       return name ? 'icon' : 'empty'
     }
-    const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
+    const name = App.DesktopSelection.pointHitTest(world.x, world.y, C.bounds)
     if (name) {
-      return selection.has(name) ? 'selected' : 'icon'
+      return C.selection.has(name) ? 'selected' : 'icon'
     }
-    if (selection.size > 0) {
-      const rect = App.DesktopSelection.unionRect(bounds, Array.from(selection))
+    if (C.selection.size > 0) {
+      const rect = App.DesktopSelection.unionRect(C.bounds, Array.from(C.selection))
       if (App.DesktopSelection.pointInRect(world.x, world.y, rect)) {
         return 'selected'
       }
@@ -774,13 +676,13 @@ App.Desktop = (function () {
   function startGroupDrag(world) {
     // 过滤掉 positions/bounds 缺失的幽灵项（文件已删/不可见），避免访问 undefined 中断拖动；
     // 回收站可重定位（拖到空白处改布局位置），但不可移入其他文件夹（handleDrop 守卫）
-    dragTargets = Array.from(selection).filter(function (n) {
-      return positions[n] && bounds[n]
+    C.dragTargets = Array.from(C.selection).filter(function (n) {
+      return C.positions[n] && C.bounds[n]
     })
-    dragStartWorld = { x: world.x, y: world.y }
-    dragStartPositions = {}
-    dragTargets.forEach(function (n) {
-      dragStartPositions[n] = { x: positions[n].x, y: positions[n].y }
+    C.dragStartWorld = { x: world.x, y: world.y }
+    C.dragStartPositions = {}
+    C.dragTargets.forEach(function (n) {
+      C.dragStartPositions[n] = { x: C.positions[n].x, y: C.positions[n].y }
       setPickedUp(n, true)
     })
     if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
@@ -790,7 +692,7 @@ App.Desktop = (function () {
     // Viewer 画布实体：长按拿起——单选选中该实例再拿（与文件图标语义一致），已选中直接拿；
     // 拖动手柄命中优先：长按手柄 = 同卡片长按（选中 + 拿起）
     const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-      ? App.InternalViewer.handleAt(world.x, world.y, camera) : null
+      ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
     const hitInst = handleInst || (App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
       ? App.InternalViewer.topmostAt(world.x, world.y) : null)
     if (hitInst) {
@@ -804,11 +706,11 @@ App.Desktop = (function () {
       return
     }
     // folder 容器：长按 = 拿起选中（拖动移入文件夹语义），实时标签由 applyDrag 负责
-    if (isFolderView()) {
-      const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
+    if (C.isFolderView()) {
+      const name = App.DesktopSelection.pointHitTest(world.x, world.y, C.bounds)
       if (name) {
-        if (!selection.has(name)) {
-          selection = App.DesktopSelection.selectOnly(name)
+        if (!C.selection.has(name)) {
+          C.selection = App.DesktopSelection.selectOnly(name)
           applySelection()
         }
         if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
@@ -817,18 +719,18 @@ App.Desktop = (function () {
       return
     }
     // 1. 多选组：拿取判定覆盖整个组合区域（union AABB，含组内空隙，一整块）
-    if (selection.size > 1) {
-      const rect = App.DesktopSelection.unionRect(bounds, Array.from(selection))
+    if (C.selection.size > 1) {
+      const rect = App.DesktopSelection.unionRect(C.bounds, Array.from(C.selection))
       if (App.DesktopSelection.pointInRect(world.x, world.y, rect)) {
         startGroupDrag(world)
         return
       }
     }
     // 2. 单个图标命中：未选中则先单选，再拿
-    const name = App.DesktopSelection.pointHitTest(world.x, world.y, bounds)
+    const name = App.DesktopSelection.pointHitTest(world.x, world.y, C.bounds)
     if (name) {
-      if (!selection.has(name)) {
-        selection = App.DesktopSelection.selectOnly(name)
+      if (!C.selection.has(name)) {
+        C.selection = App.DesktopSelection.selectOnly(name)
         applySelection()
       }
       startGroupDrag(world)
@@ -850,17 +752,17 @@ App.Desktop = (function () {
   // 命中判定**跳过拖拽项自身**，只认手指下的非拖拽文件夹。
   function folderHitAt(world) {
     let hit = null
-    Object.keys(bounds).forEach(function (key) {
-      const b = bounds[key]
+    Object.keys(C.bounds).forEach(function (key) {
+      const b = C.bounds[key]
       if (world.x >= b.x && world.x <= b.x + b.w &&
           world.y >= b.y && world.y <= b.y + b.h) {
-        if (dragTargets.indexOf(key) < 0) hit = key
+        if (C.dragTargets.indexOf(key) < 0) hit = key
       }
     })
     if (!hit) return null
     let isDir = false
-    state.items.forEach(function (it) {
-      if (fullPath(it.name) === hit) isDir = it.isDir
+    C.state.items.forEach(function (it) {
+      if (C.fullPath(it.name) === hit) isDir = it.isDir
     })
     return isDir ? hit : null
   }
@@ -868,14 +770,14 @@ App.Desktop = (function () {
   // 拖动过程：无极跟随（不吸附），放置时再吸附 + 避让。
   // 拖入文件夹：手指下命中文件夹 → 实时标签「文件将移入 XXX 文件夹」（顶栏靠下）
   function applyDrag(world) {
-    const dx = world.x - dragStartWorld.x
-    const dy = world.y - dragStartWorld.y
-    dragTargets.forEach(function (n) {
-      const x = dragStartPositions[n].x + dx
-      const y = dragStartPositions[n].y + dy
-      positions[n] = { x: x, y: y }
-      bounds[n] = { x: x, y: y, w: bounds[n].w, h: bounds[n].h }
-      const node = iconEls[n]
+    const dx = world.x - C.dragStartWorld.x
+    const dy = world.y - C.dragStartWorld.y
+    C.dragTargets.forEach(function (n) {
+      const x = C.dragStartPositions[n].x + dx
+      const y = C.dragStartPositions[n].y + dy
+      C.positions[n] = { x: x, y: y }
+      C.bounds[n] = { x: x, y: y, w: C.bounds[n].w, h: C.bounds[n].h }
+      const node = C.iconEls[n]
       if (node) {
         node.style.left = x + 'px'
         node.style.top = y + 'px'
@@ -885,9 +787,9 @@ App.Desktop = (function () {
       const hitWebsite = websiteHitAt(world)
       const hit = hitWebsite ? null : folderHitAt(world)
       if (hitWebsite) {
-        App.Loading.showTag('松手将 ' + dragTargets.length + ' 个文件设为待上传')
-      } else if (hit && !dragIncludesTrash()) {
-        if (isTrashPath(hit)) {
+        App.Loading.showTag('松手将 ' + C.dragTargets.length + ' 个文件设为待上传')
+      } else if (hit && !C.dragIncludesTrash()) {
+        if (C.isTrashPath(hit)) {
           App.Loading.showTag('将移入回收站')
         } else {
           App.Loading.showTag('文件将移入 ' + App.DesktopNav.basename(hit) + ' 文件夹')
@@ -910,7 +812,7 @@ App.Desktop = (function () {
     // 拖动手柄：按住 = 自动选中 + 直接拿起（不受选中态限制的辅助拖动入口）
     if (hitType === 'viewer-handle') {
       const inst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-        ? App.InternalViewer.handleAt(world.x, world.y, camera) : null
+        ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
       if (inst) {
         App.InternalViewer.selectOnly(inst.id)
         syncFab()
@@ -918,8 +820,8 @@ App.Desktop = (function () {
       }
       return
     }
-    if (isFolderView()) return
-    if (selection.size > 0) startGroupDrag(world)
+    if (C.isFolderView()) return
+    if (C.selection.size > 0) startGroupDrag(world)
   }
 
   function handleDrag(world) {
@@ -929,17 +831,17 @@ App.Desktop = (function () {
       dragInst.moveBy(world)
       return
     }
-    if (dragTargets.length) applyDrag(world)
+    if (C.dragTargets.length) applyDrag(world)
   }
 
   // 还原拖拽组到起始位置（拖到网站设待上传 / folder 未命中取消时共用）
   function restoreDragTargets() {
-    dragTargets.forEach(function (n) {
-      const back = dragStartPositions[n]
+    C.dragTargets.forEach(function (n) {
+      const back = C.dragStartPositions[n]
       if (back) {
-        positions[n] = { x: back.x, y: back.y }
-        bounds[n] = { x: back.x, y: back.y, w: bounds[n].w, h: bounds[n].h }
-        const node = iconEls[n]
+        C.positions[n] = { x: back.x, y: back.y }
+        C.bounds[n] = { x: back.x, y: back.y, w: C.bounds[n].w, h: C.bounds[n].h }
+        const node = C.iconEls[n]
         if (node) {
           node.style.left = back.x + 'px'
           node.style.top = back.y + 'px'
@@ -955,22 +857,22 @@ App.Desktop = (function () {
       dragInst.endDrag()
       return
     }
-    if (!dragTargets.length) return
+    if (!C.dragTargets.length) return
     // Windows 式锁定：被 Viewer 打开的文件禁止移动（拖入文件夹），但拖动摆放（改布局位置）仍可
     function lockedMoveBlocked() {
-      return dragTargets.some(function (n) { return _lockedPaths.has(n) })
+      return C.dragTargets.some(function (n) { return C._lockedPaths.has(n) })
     }
     // folder 容器：移入文件夹语义——命中文件夹 → moveIntoFolder；
     // 未命中 → 还原起始位（folder 位置自动排布，不吸附不落盘）
-    if (isFolderView()) {
+    if (C.isFolderView()) {
       if (moved) {
         const hit = folderHitAt(world)
         if (hit) {
           if (lockedMoveBlocked()) {
-            dragTargets.forEach(function (n) { setPickedUp(n, false) })
-            dragTargets = []
-            dragStartWorld = null
-            dragStartPositions = {}
+            C.dragTargets.forEach(function (n) { setPickedUp(n, false) })
+            C.dragTargets = []
+            C.dragStartWorld = null
+            C.dragStartPositions = {}
             if (App.toast && typeof App.toast.show === 'function') {
               App.toast.show('文件正在预览（锁定），不可移动')
             }
@@ -979,10 +881,10 @@ App.Desktop = (function () {
           if (App.Loading && typeof App.Loading.hideTag === 'function') {
             App.Loading.hideTag()
           }
-          const entries = dragTargets.map(function (n) {
+          const entries = C.dragTargets.map(function (n) {
             let isDir = false
-            state.items.forEach(function (it) {
-              if (fullPath(it.name) === n) isDir = it.isDir
+            C.state.items.forEach(function (it) {
+              if (C.fullPath(it.name) === n) isDir = it.isDir
             })
             return { path: n, isDir: isDir }
           })
@@ -992,12 +894,12 @@ App.Desktop = (function () {
           clearSelection()
         } else {
           // 未命中：还原（取消语义）
-          dragTargets.forEach(function (n) {
-            const back = dragStartPositions[n]
+          C.dragTargets.forEach(function (n) {
+            const back = C.dragStartPositions[n]
             if (back) {
-              positions[n] = { x: back.x, y: back.y }
-              bounds[n] = { x: back.x, y: back.y, w: bounds[n].w, h: bounds[n].h }
-              const node = iconEls[n]
+              C.positions[n] = { x: back.x, y: back.y }
+              C.bounds[n] = { x: back.x, y: back.y, w: C.bounds[n].w, h: C.bounds[n].h }
+              const node = C.iconEls[n]
               if (node) {
                 node.style.left = back.x + 'px'
                 node.style.top = back.y + 'px'
@@ -1006,19 +908,19 @@ App.Desktop = (function () {
           })
         }
       }
-      dragTargets.forEach(function (n) { setPickedUp(n, false) })
-      dragTargets = []
-      dragStartWorld = null
-      dragStartPositions = {}
+      C.dragTargets.forEach(function (n) { setPickedUp(n, false) })
+      C.dragTargets = []
+      C.dragStartWorld = null
+      C.dragStartPositions = {}
       return
     }
     // 拖入文件夹：手指下命中文件夹 → 移动文件到文件夹（移动语义，非吸附）
-    if (moved && !isFolderView()) {
+    if (moved && !C.isFolderView()) {
       const hitWebsite = websiteHitAt(world)
       if (hitWebsite) {
         // 拖到网站：设为待上传（文件不移动，还原起始位）+ toast 提示
         restoreDragTargets()
-        const paths = dragTargets.slice()
+        const paths = C.dragTargets.slice()
         if (App.WebUpload && typeof App.WebUpload.setPending === 'function') {
           App.WebUpload.setPending(paths)
         }
@@ -1028,22 +930,22 @@ App.Desktop = (function () {
         if (App.toast && typeof App.toast.show === 'function') {
           App.toast.show('已复制 ' + paths.length + ' 个文件，请点网页里的上传按钮')
         }
-        dragTargets.forEach(function (n) { setPickedUp(n, false) })
-        dragTargets = []
-        dragStartWorld = null
-        dragStartPositions = {}
+        C.dragTargets.forEach(function (n) { setPickedUp(n, false) })
+        C.dragTargets = []
+        C.dragStartWorld = null
+        C.dragStartPositions = {}
         clearSelection()
         return
       }
       const hit = folderHitAt(world)
       // 回收站不可移入其他文件夹（锚定根目录）；命中文件夹时仍按重定位处理（不 moveIntoFolder）
-      if (hit && !dragIncludesTrash()) {
+      if (hit && !C.dragIncludesTrash()) {
         // 锁定文件（正在预览）禁止移动
         if (lockedMoveBlocked()) {
-          dragTargets.forEach(function (n) { setPickedUp(n, false) })
-          dragTargets = []
-          dragStartWorld = null
-          dragStartPositions = {}
+          C.dragTargets.forEach(function (n) { setPickedUp(n, false) })
+          C.dragTargets = []
+          C.dragStartWorld = null
+          C.dragStartPositions = {}
           if (App.toast && typeof App.toast.show === 'function') {
             App.toast.show('文件正在预览（锁定），不可移动')
           }
@@ -1053,10 +955,10 @@ App.Desktop = (function () {
         if (App.Loading && typeof App.Loading.hideTag === 'function') {
           App.Loading.hideTag()
         }
-        const entries = dragTargets.map(function (n) {
+        const entries = C.dragTargets.map(function (n) {
           let isDir = false
-          state.items.forEach(function (it) {
-            if (fullPath(it.name) === n) isDir = it.isDir
+          C.state.items.forEach(function (it) {
+            if (C.fullPath(it.name) === n) isDir = it.isDir
           })
           return { path: n, isDir: isDir }
         })
@@ -1064,10 +966,10 @@ App.Desktop = (function () {
         if (App.Actions && typeof App.Actions.moveIntoFolder === 'function') {
           App.Actions.moveIntoFolder(entries, dirPath)
         }
-        dragTargets.forEach(function (n) { setPickedUp(n, false) })
-        dragTargets = []
-        dragStartWorld = null
-        dragStartPositions = {}
+        C.dragTargets.forEach(function (n) { setPickedUp(n, false) })
+        C.dragTargets = []
+        C.dragStartWorld = null
+        C.dragStartPositions = {}
         // Windows 原则：选中态脆弱——移动完成即失效
         clearSelection()
         return
@@ -1075,28 +977,28 @@ App.Desktop = (function () {
     }
     if (moved) {
       // 1. 移动组期望位：snap 到网格
-      const dx = world.x - dragStartWorld.x
-      const dy = world.y - dragStartWorld.y
-      const moving = dragTargets.map(function (n) {
-        const raw = { x: dragStartPositions[n].x + dx, y: dragStartPositions[n].y + dy }
+      const dx = world.x - C.dragStartWorld.x
+      const dy = world.y - C.dragStartWorld.y
+      const moving = C.dragTargets.map(function (n) {
+        const raw = { x: C.dragStartPositions[n].x + dx, y: C.dragStartPositions[n].y + dy }
         const snapped = App.DesktopGrid.snapToGrid(raw.x, raw.y)
         return { name: n, x: snapped.x, y: snapped.y }
       })
       // 2. 静止图标（非移动组）
-      const movingSet = new Set(dragTargets)
+      const movingSet = new Set(C.dragTargets)
       // 静止图标仅取当前视图内的（bounds 是权威）；positions 可能残留子文件夹 key，
       // 过滤掉 bounds 未命中项，避免 resolvePlacement 结果里出现无 bounds 的幽灵条目
-      const statics = Object.keys(positions).filter(function (n) {
-        return !movingSet.has(n) && bounds[n]
+      const statics = Object.keys(C.positions).filter(function (n) {
+        return !movingSet.has(n) && C.bounds[n]
       }).map(function (n) {
-        return { name: n, x: positions[n].x, y: positions[n].y }
+        return { name: n, x: C.positions[n].x, y: C.positions[n].y }
       })
       // 3. 避让解析：移动组放期望位，冲突的静止图标让位到最近空位
       const resolved = App.DesktopGrid.resolvePlacement(moving, statics)
       Object.keys(resolved).forEach(function (n) {
-        positions[n] = resolved[n]
-        bounds[n] = { x: resolved[n].x, y: resolved[n].y, w: bounds[n].w, h: bounds[n].h }
-        const node = iconEls[n]
+        C.positions[n] = resolved[n]
+        C.bounds[n] = { x: resolved[n].x, y: resolved[n].y, w: C.bounds[n].w, h: C.bounds[n].h }
+        const node = C.iconEls[n]
         if (node) {
           node.style.left = resolved[n].x + 'px'
           node.style.top = resolved[n].y + 'px'
@@ -1105,10 +1007,10 @@ App.Desktop = (function () {
       // Windows 原则：选中态是临时/脆弱状态——移动完成即失效（清空选中 + 收起 FAB 操作栏）
       clearSelection()
     }
-    dragTargets.forEach(function (n) { setPickedUp(n, false) })
-    dragTargets = []
-    dragStartWorld = null
-    dragStartPositions = {}
+    C.dragTargets.forEach(function (n) { setPickedUp(n, false) })
+    C.dragTargets = []
+    C.dragStartWorld = null
+    C.dragStartPositions = {}
     if (moved) saveLayout()
   }
 
@@ -1125,13 +1027,13 @@ App.Desktop = (function () {
     if (App.Loading && typeof App.Loading.hideTag === 'function') {
       App.Loading.hideTag()
     }
-    if (!dragTargets.length) return
-    dragTargets.forEach(function (n) {
-      const back = dragStartPositions[n]
+    if (!C.dragTargets.length) return
+    C.dragTargets.forEach(function (n) {
+      const back = C.dragStartPositions[n]
       if (back) {
-        positions[n] = { x: back.x, y: back.y }
-        bounds[n] = { x: back.x, y: back.y, w: bounds[n].w, h: bounds[n].h }
-        const node = iconEls[n]
+        C.positions[n] = { x: back.x, y: back.y }
+        C.bounds[n] = { x: back.x, y: back.y, w: C.bounds[n].w, h: C.bounds[n].h }
+        const node = C.iconEls[n]
         if (node) {
           node.style.left = back.x + 'px'
           node.style.top = back.y + 'px'
@@ -1139,9 +1041,9 @@ App.Desktop = (function () {
       }
       setPickedUp(n, false)
     })
-    dragTargets = []
-    dragStartWorld = null
-    dragStartPositions = {}
+    C.dragTargets = []
+    C.dragStartWorld = null
+    C.dragStartPositions = {}
   }
 
   // refresh 代际守卫：异步链完成时若期间又发起了新 refresh（快速连续导航），
@@ -1150,50 +1052,49 @@ App.Desktop = (function () {
   // 视图模式（isFolderView）由 curPath 同步切换，但 items 异步加载——
   // 间隙经 App.Loading 显示不确定进度条（条纹滑动），加载完成隐藏，
   // 避免「先切视图再变目录」的空白/错位感。
-  let _refreshSeq = 0
 
   function refresh() {
-    const seq = ++_refreshSeq
-    const path = state.curPath   // 快照：发起时的目标路径（list 用快照，不用动态 curPath）
+    const seq = ++C._refreshSeq
+    const path = C.state.curPath   // 快照：发起时的目标路径（list 用快照，不用动态 curPath）
     if (App.Loading && typeof App.Loading.show === 'function') {
       App.Loading.show({ title: '加载中' })   // 不确定进度：无 total → 条纹滑动
     }
     return App.FileAPI.rootInfo()
       .then(function (info) {
-        if (seq !== _refreshSeq) return null   // 过期响应：丢弃，不写状态
-        state.rootName = info.rootName
-        state.mode = info.mode
-        state.trashName = info.trashName || ''
+        if (seq !== C._refreshSeq) return null   // 过期响应：丢弃，不写状态
+        C.state.rootName = info.rootName
+        C.state.mode = info.mode
+        C.state.trashName = info.trashName || ''
         if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
           const base = info.displayPath || info.rootName
-          App.Drawer.updatePath(state.curPath ? base + '/' + state.curPath : base,
+          App.Drawer.updatePath(C.state.curPath ? base + '/' + C.state.curPath : base,
             info.rootName, info.mode)
         }
       })
       .catch(function () {
-        if (seq !== _refreshSeq) return
-        state.rootName = '无法读取'
+        if (seq !== C._refreshSeq) return
+        C.state.rootName = '无法读取'
         if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
           App.Drawer.updatePath(App.NAME, App.NAME, '')
         }
       })
       .then(function () {
-        if (seq !== _refreshSeq) return null
+        if (seq !== C._refreshSeq) return null
         return App.FileAPI.list(path)
       })
       .then(function (items) {
-        if (seq !== _refreshSeq) return null
-        state.items = items
+        if (seq !== C._refreshSeq) return null
+        C.state.items = items
         // 清理失效布局条目（仅 desktop 空间；folder 容器位置是自动的，不存 positions）
-        if (!isFolderView()) {
+        if (!C.isFolderView()) {
           const valid = {}
-          items.forEach(function (it) { valid[fullPath(it.name)] = true })
-          Object.keys(positions).forEach(function (key) {
+          items.forEach(function (it) { valid[C.fullPath(it.name)] = true })
+          Object.keys(C.positions).forEach(function (key) {
             const inCur = key.indexOf('/') < 0
             if (!inCur) {
-              delete positions[key]        // 子文件夹 key 残留清理（folder 自动排布，非桌面布局）
+              delete C.positions[key]        // 子文件夹 key 残留清理（folder 自动排布，非桌面布局）
             } else if (!valid[key]) {
-              delete positions[key]        // 根级失效 key（文件已删）
+              delete C.positions[key]        // 根级失效 key（文件已删）
             }
           })
         }
@@ -1208,7 +1109,7 @@ App.Desktop = (function () {
         }
       })
       .catch(function (err) {
-        if (seq !== _refreshSeq) return
+        if (seq !== C._refreshSeq) return
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
@@ -1225,7 +1126,7 @@ App.Desktop = (function () {
     const saved = App.LayoutStore.load()
     if (saved && saved.icons) {
       Object.keys(saved.icons).forEach(function (key) {
-        positions[key] = saved.icons[key]
+        C.positions[key] = saved.icons[key]
       })
     }
     // 启动相机：Home 快照 > 默认视角 > 上次布局视角 > 出厂 (0,0,1)。
@@ -1242,20 +1143,20 @@ App.Desktop = (function () {
     if (!cam && saved && saved.camera) {
       cam = App.DesktopCamera.create(saved.camera.x, saved.camera.y, saved.camera.zoom)
     }
-    camera = cam || App.DesktopCamera.create()
+    C.camera = cam || App.DesktopCamera.create()
     const prefs = App.ViewStore.load()
-    state.viewStyle = prefs.viewStyle
-    state.sortBy = prefs.sortBy
-    state.sortDir = prefs.sortDir
-    _advancedBrowse = !!prefs.advancedBrowse
+    C.state.viewStyle = prefs.viewStyle
+    C.state.sortBy = prefs.sortBy
+    C.state.sortDir = prefs.sortDir
+    C._advancedBrowse = !!prefs.advancedBrowse
   }
 
   // 视图/排序偏好变更（顶栏菜单驱动）：保存 + 重渲染
   function applyViewPrefs(prefs) {
     if (!prefs) return
-    state.viewStyle = prefs.viewStyle
-    state.sortBy = prefs.sortBy
-    state.sortDir = prefs.sortDir
+    C.state.viewStyle = prefs.viewStyle
+    C.state.sortBy = prefs.sortBy
+    C.state.sortDir = prefs.sortDir
     if (!App.ViewStore.save(prefs)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('视图偏好保存失败')
     }
@@ -1264,17 +1165,17 @@ App.Desktop = (function () {
 
   // 当前视图偏好（ViewMenu 渲染选中态用）
   function getViewPrefs() {
-    return { viewStyle: state.viewStyle, sortBy: state.sortBy, sortDir: state.sortDir }
+    return { viewStyle: C.state.viewStyle, sortBy: C.state.sortBy, sortDir: C.state.sortDir }
   }
 
   // 保存布局（位置 + 相机），失败告警（铁律：写入路径失败必须告警）
   // folder 容器：布局自动排布，不持久化（位置/相机均不写）
   function saveLayout() {
-    if (isFolderView()) return
+    if (C.isFolderView()) return
     const data = {
       version: 1,
-      icons: positions,
-      camera: { x: camera.x, y: camera.y, zoom: camera.zoom }
+      icons: C.positions,
+      camera: { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
     }
     if (!App.LayoutStore.save(data)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败')
@@ -1283,25 +1184,25 @@ App.Desktop = (function () {
 
   // 启动相机 + 手势（pan/zoom + tap/marquee/longpress/drag）
   function initGesture() {
-    nav = App.DesktopNav.create()
+    C.nav = App.DesktopNav.create()
     initLayout()
     // 根目录相机基准 = 启动视角（Home 快照 > 默认视角 > 上次布局 > 出厂），
     // 否则 applyCameraForPath 根目录分支 rootCamera=null 会强制回出厂
-    rootCamera = camera
+    C.rootCamera = C.camera
     App.DesktopGesture.init({
       viewport: document.getElementById('desktop-viewport'),
       canvas: document.getElementById('desktop-canvas'),
-      camera: camera,
+      camera: C.camera,
       // folder 容器：双指 pan 每帧钳制——zoom 锁 1、x 锁 0、y 限画布内
       // （只能上下滚动且有上下边界；钳制在 gesture 层保证 transform 同步）
       onClamp: function (c) {
-        if (!isFolderView()) return c
+        if (!C.isFolderView()) return c
         return App.DesktopCamera.clampToBounds(
           { x: 0, y: c.y, zoom: 1 },
-          viewportWidth(), state.canvasH, viewportWidth(), viewportHeight())
+          C.viewportWidth(), C.state.canvasH, C.viewportWidth(), C.viewportHeight())
       },
       onUpdate: function (c) {
-        camera = c
+        C.camera = c
         // 相机变化 → 同步 Viewer 拖动手柄屏幕位置（平移/缩放/Home 动画每帧）
         if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
           App.InternalViewer.syncHandles(c)
@@ -1324,7 +1225,7 @@ App.Desktop = (function () {
     applyCameraForPath()
     // 同步 Viewer 拖动手柄（相机初始化后手柄屏幕位置才可计算）
     if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
-      App.InternalViewer.syncHandles(camera)
+      App.InternalViewer.syncHandles(C.camera)
     }
     // 同步高级浏览模式到手势层（initLayout 已从 ViewStore 加载偏好）
     syncBrowseMode()
@@ -1352,11 +1253,11 @@ App.Desktop = (function () {
     getLockedPaths: getLockedPaths,
     isLockedPath: isLockedPath,
     closeViewer: closeViewer,
-    isTrashPath: isTrashPath,
-    inTrash: inTrash,
-    getTrashName: function () { return state.trashName },
-    viewMode: viewMode,
-    isFolderView: isFolderView,
+    isTrashPath: C.isTrashPath,
+    inTrash: C.inTrash,
+    getTrashName: function () { return C.state.trashName },
+    viewMode: C.viewMode,
+    isFolderView: C.isFolderView,
     applyViewPrefs: applyViewPrefs,
     getViewPrefs: getViewPrefs,
     captureHome: captureHome,

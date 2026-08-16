@@ -37,6 +37,8 @@ App.WebsiteDialog = (function () {
       }, 120)
     }
     if (label) label.value = ''
+    const trusted = _getEl('website-trusted')
+    if (trusted) trusted.checked = false
   }
 
   function close() {
@@ -62,6 +64,8 @@ App.WebsiteDialog = (function () {
       return
     }
     const label = labelEl ? labelEl.value.trim() : ''
+    const trustedEl = _getEl('website-trusted')
+    const trusted = !!(trustedEl && trustedEl.checked)
     const dir = _curPath()
     close()
     const stem = App.Shortcut.sanitizeFileName(label || App.Shortcut.hostOf(url), url)
@@ -81,7 +85,8 @@ App.WebsiteDialog = (function () {
       }
       return App.FileAPI.write(_join(name), App.Shortcut.buildWebsiteShortcut({
         url: url,
-        label: label || url
+        label: label || url,
+        trusted: trusted
       })).then(function () { return name })
     }).then(function (name) {
       App.toast.show('已创建网站快捷方式: ' + name)

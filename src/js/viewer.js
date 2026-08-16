@@ -201,7 +201,7 @@ App.InternalViewer = (function () {
       }
       drag = null
       reader = { scale: 1, wrap: true }
-      state = { open: false, mode: null, fsFrom: null, selected: false, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null, uri: null, rect: null, canvasRect: null, url: '' }
+      state = { open: false, mode: null, fsFrom: null, selected: false, path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null, uri: null, rect: null, canvasRect: null, url: '', trusted: false }
       // 从管理器实例集合移除自己（exitFullscreen 的 from='folder' 分支也走这里，保证 isAnyOpen 正确）
       const i = indexOf(id)
       if (i >= 0) _instances.splice(i, 1)
@@ -490,14 +490,18 @@ App.InternalViewer = (function () {
           }).catch(function (err) { showError(err && err.message || '读取失败') })
           break
         case 'website':
-          // 远程网址：iframe src 直连（非 srcdoc）。安全隔离：不加 allow-same-origin
-          //（保持 opaque origin，隔离顶层 Java 桥 FileBridge）；allow-forms/popups/downloads
-          // /modals 让网页可登录/填表/弹窗/下载。referrerpolicy 防 file:// 路径泄露。
+          // 远程网址：iframe src 直连（非 srcdoc）。sandbox 分两档：
+          //   - 未信任（默认）：不含 allow-same-origin（opaque origin，隔离顶层 Java 桥 FileBridge）
+          //     但 localStorage/cookie 被拒 → 复杂 SPA（豆包/Kimi 等）会白屏/不可交互
+          //   - 信任（用户显式勾选）：含 allow-same-origin（完整加载，可读写授权目录——用户自担风险）
+          // referrerpolicy 防 file:// 路径泄露。
           body.innerHTML = ''
           {
             const wframe = document.createElement('iframe')
             wframe.className = 'viewer-frame viewer-frame-web'
-            wframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-downloads allow-modals')
+            wframe.setAttribute('sandbox', state.trusted
+              ? 'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals'
+              : 'allow-scripts allow-forms allow-popups allow-downloads allow-modals')
             wframe.setAttribute('referrerpolicy', 'no-referrer')
             wframe.src = state.url
             // 仅捕获网络层失败（X-Frame-Options 拒绝会渲染错误页，不触发 error，需用户自行「用浏览器打开」）
@@ -630,6 +634,7 @@ App.InternalViewer = (function () {
         name: opts.name || '',
         kind: opts.kind || 'text',
         url: opts.url || '',
+        trusted: !!opts.trusted,
         anchor: opts.anchor || null,
         camera: opts.camera || null,
         onFallback: typeof opts.onFallback === 'function' ? opts.onFallback : null,

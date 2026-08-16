@@ -153,6 +153,10 @@
     <h2 id="website-dialog-title" class="dialog-title">新建网站</h2>
     <input id="website-url" class="dialog-input" type="text" placeholder="网址（如 example.com）" autocomplete="off" enterkeyhint="next" aria-label="网址">
     <input id="website-label" class="dialog-input" type="text" placeholder="名称（可选）" autocomplete="off" enterkeyhint="done" aria-label="名称">
+    <label class="website-trust">
+      <input type="checkbox" id="website-trusted">
+      <span>信任该网站（允许完整功能，可读写授权目录）</span>
+    </label>
     <div class="dialog-actions">
       <button id="website-create" class="dialog-btn dialog-btn-primary">创建</button>
     </div>

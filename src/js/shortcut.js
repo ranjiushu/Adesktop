@@ -59,7 +59,8 @@ App.Shortcut = (function () {
         type: 'website',
         version: typeof obj.version === 'number' ? obj.version : 1,
         url: obj.url.trim(),
-        label: typeof obj.label === 'string' && obj.label ? obj.label : obj.url.trim()
+        label: typeof obj.label === 'string' && obj.label ? obj.label : obj.url.trim(),
+        trusted: !!obj.trusted
       }
     }
     throw new Error('未知的快捷方式类型: ' + (type || '（缺失）'))
@@ -80,6 +81,7 @@ App.Shortcut = (function () {
   }
 
   // 构建 Website Shortcut 的 JSON 文本（写入文件用）。
+  // trusted=true 时内嵌标记（网站以 allow-same-origin 完整加载，可读写授权目录——用户显式信任）。
   function buildWebsiteShortcut(site) {
     const obj = {
       type: 'website',
@@ -87,6 +89,7 @@ App.Shortcut = (function () {
       url: site.url,
       label: site.label || site.url
     }
+    if (site.trusted) obj.trusted = true
     return JSON.stringify(obj)
   }
 

@@ -46,15 +46,6 @@
   （`tests/test-icons.js` 双向校验 sprite symbol 与 _NAMES 一一对应，缺一即 FAIL）
 - 规范：24×24 viewBox、2px stroke、`currentColor`、round caps/joins（Material Design Outlined 风格）
 
-## 图标系统（sprite + App.icons）
-
-- **单一事实来源**：`src/index.html` 顶部隐藏 SVG sprite（`<symbol id="icon-{kebab}">`）
-- **生成器**：`src/js/icons.js`（`App.icons.get(name, opts)` 与命名访问 `App.icons.<name>`，
-  输出 `<svg><use href="#icon-xxx"/></svg>`），移植自 LexiCull 同构方案
-- **新增图标两步**：在 sprite 加 `<symbol id="icon-xxx">` + 在 `icons.js` 的 `_NAMES` 登记 camelCase 名
-  （`tests/test-icons.js` 双向校验 sprite symbol 与 _NAMES 一一对应，缺一即 FAIL）
-- 规范：24×24 viewBox、2px stroke、`currentColor`、round caps/joins（Material Design Outlined 风格）
-
 ## 构建注入
 
 build-web.sh 每次构建注入到 JS 尾部（`var` 声明，避免被 minify mangle 影响）：

@@ -12,11 +12,12 @@
 
 App.Desktop = (function () {
   const DOUBLE_TAP_MS = 300   // 双击窗口（interaction.md §7）
-  const HOME_ANIM_MS = 400    // Home 平滑过渡时长（zoom 不变=easeInOutCubic 缓入缓出；zoom 变化=easeOut 弧长，见 desktop-camera.js）
 
   // 共享状态与纯工具集中管理（拆分自 desktop.js 原闭包，见 desktop-core.js）
   const C = App.DesktopCore
   const R = App.DesktopRender
+  const N = App.DesktopNavigation
+  const B = App.DesktopBrowseMode
 
   // 缩略图渲染：ThumbnailService 已验证 URI（可解码）后回调，创建 <img> 展示；
   // onerror 双保险（极端情况下仍回退类型图标）。缩略图的「判定/缓存/生成」全在 App.Thumbnail。
@@ -98,233 +99,6 @@ App.Desktop = (function () {
   }
 
   // ── 打开：文件夹进入 / 文件打开（FileOpener 分派内部查看器 / 外部应用 / 快捷方式）──
-  function openItem(full) {
-    if (!full) return
-    const item = C.state.items.filter(function (it) {
-      return C.fullPath(it.name) === full
-    })[0]
-    if (!item) return
-    if (item.isDir) {
-      R.clearSelection()
-      enterFolder(full)
-    } else if (App.FileOpener && typeof App.FileOpener.open === 'function') {
-      // Windows 式锁定：文件被 Viewer 打开 = 锁定（禁复制/剪切/移动/删除/重命名，
-      // 拖动摆放仍可）；文件不进入选中集——Viewer 实体自身有独立选中态（脆弱/临时）。
-      // 多实例：每个打开的 Viewer 各自锁定其文件。
-      // FileOpener.open 返回实例 id（数字）→ 锁定；true（外部/快捷方式）→ 只清选中不锁定。
-      const result = App.FileOpener.open({ name: item.name, path: full }, C.isFolderView() ? null : (C.positions[full] || null), C.camera, function onClose(path) {
-        if (path) C._lockedPaths.delete(path)
-        R.updateLockedVisual()
-      })
-      if (typeof result === 'number') {
-        C._lockedPaths.add(full)
-        R.clearSelection()
-        R.updateLockedVisual()
-      } else if (result) {
-        R.clearSelection()
-      }
-    } else if (App.toast) {
-      App.toast.show('打开文件（查看器未就绪）')
-    }
-  }
-
-  // 进入子目录：压栈历史 + 切换视图（folder 容器相机重置到顶）
-  function enterFolder(full) {
-    exitTempMode()   // 进入文件夹 → 退出临时操作模式
-    if (!C.isFolderView()) C.rootCamera = C.camera   // 从根进入：快照根视角，返回时恢复
-    C.nav = App.DesktopNav.enter(C.nav, full)
-    C.state.curPath = full
-    applyCameraForPath()
-    refresh()
-  }
-
-  // 目录切换后的相机与手势策略：
-  //   根 = 恢复根相机（无限画布）；folder = 重置 (0,0,1)（滚动到顶）
-  function applyCameraForPath() {
-    cancelCameraAnim()   // 目录切换即打断 Home 动画，避免动画覆盖新路径相机
-    // 目录切换：先退出全屏态 Viewer（folder 打开的全屏预览），保留 canvas 态 Viewer（跨目录保留）
-    const fs = App.InternalViewer && App.InternalViewer.fullscreenInstance ? App.InternalViewer.fullscreenInstance() : null
-    if (fs) {
-      fs.exitFullscreen()   // folder 打开的全屏：退出 = close（见 exitFullscreen 的 from='folder' 分支）
-      if (fs.getPath && C._lockedPaths.has(fs.getPath())) C._lockedPaths.delete(fs.getPath())
-    }
-    if (C.isFolderView()) {
-      // 进入 folder：隐藏 canvas 态 Viewer（保留状态，退回根目录恢复）
-      if (App.InternalViewer && App.InternalViewer.suspendCanvas) App.InternalViewer.suspendCanvas()
-      C.camera = App.DesktopCamera.create(0, 0, 1)
-    } else {
-      // 回到根目录：恢复 canvas 态 Viewer
-      if (App.InternalViewer && App.InternalViewer.resumeCanvas) App.InternalViewer.resumeCanvas()
-      C.camera = C.rootCamera || App.DesktopCamera.create()
-    }
-    if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
-      App.DesktopGesture.setCamera(C.camera)
-    }
-    if (App.ViewMenu && typeof App.ViewMenu.setEnabled === 'function') {
-      App.ViewMenu.setEnabled(C.isFolderView())
-    }
-  }
-
-  // 退回到上级目录（父目录，压栈导航——与历史后退区分；Windows「向上」语义）
-  function goUp() {
-    exitTempMode()
-    if (!C.isFolderView()) return false
-    const target = App.DesktopNav.parent(C.state.curPath)
-    C.nav = App.DesktopNav.enter(C.nav, target)
-    C.state.curPath = target
-    applyCameraForPath()
-    refresh()
-    return true
-  }
-
-  // 后退 / 前进（底栏按钮驱动）
-  // 后退：临时操作模式下消费此次按键退出临时模式（不导航）
-  function goBack() {
-    if (C._tempNormalMode) { exitTempMode(); return true }
-    if (!App.DesktopNav.canBack(C.nav)) return false
-    C.nav = App.DesktopNav.back(C.nav)
-    C.state.curPath = App.DesktopNav.current(C.nav)
-    applyCameraForPath()
-    refresh()
-    return true
-  }
-
-  function goForward() {
-    exitTempMode()
-    if (!App.DesktopNav.canForward(C.nav)) return false
-    C.nav = App.DesktopNav.forward(C.nav)
-    C.state.curPath = App.DesktopNav.current(C.nav)
-    applyCameraForPath()
-    refresh()
-    return true
-  }
-
-  function canGoBack() { return App.DesktopNav.canBack(C.nav) }
-  function canGoForward() { return App.DesktopNav.canForward(C.nav) }
-  function canGoUp() { return C.isFolderView() }
-  function getCurPath() { return C.state.curPath }
-
-  // ── Home：空间锚点（位置快照 + 默认视角）──
-  // 长按底栏 Home = 记录当前相机为快照；点按 Home = 回快照（无则默认视角，再无则出厂 (0,0,1)）。
-  // 默认视角 = 用户经 Drawer「设为默认视角」设置的兜底视角。仅桌面空间（根目录）有意义。
-  function captureHome() {
-    if (C.isFolderView()) return false
-    const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveHome(cam)) {
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('Home 视角保存失败')
-      return false
-    }
-    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
-    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已记录 Home 视角')
-    if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
-      App.BottomBar.updateHomeState()
-    }
-    return true
-  }
-
-  // 设为默认视角（Drawer 操作项）：Home 无快照时的兜底视角
-  function captureDefaultView() {
-    if (C.isFolderView()) return false
-    const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveFallback(cam)) {
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('默认视角保存失败')
-      return false
-    }
-    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
-    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已设置默认视角（无快照时 Home 回此视角）')
-    return true
-  }
-
-  // 回到 Home：快照优先，其次默认视角，最后出厂 (0,0,1)。
-  // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera——
-  // 从文件夹返回仍恢复进文件夹前的视角，Home 只负责「现在」的空间锚点。
-  function goHome() {
-    if (C.isFolderView()) return
-    let target = App.DesktopCamera.create()
-    const data = App.HomeStore.load()
-    if (data && data.home) {
-      target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom)
-    } else if (data && data.fallback) {
-      target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom)
-    }
-    animateCameraTo(target)
-  }
-
-  // ── 相机平滑过渡（Home 复位用，可被手势/目录切换打断）──
-
-  function cancelCameraAnim() {
-    if (C._animRaf !== null) {
-      C._caf(C._animRaf)
-      C._animRaf = null
-    }
-  }
-
-  // 从当前相机平滑飞行到 target（van Wijk & Nuij，Leaflet flyTo 同款）；动画中再次调用会从当前位置重新起播。
-  // 手势开始（onGestureStart）与目录切换（applyCameraForPath）都会打断，
-  // 保证「动画永不与手势抢相机」——用户一碰就归手势直控。
-  // lerpCentered 契约：收真实时间比例 k（内部按分支缓动：zoom 不变=easeInOutCubic，
-  // zoom 变化=flightPath 内部 easeOut 弧长参数化，Leaflet 同款手感；调用方一律不得预缓动）——
-  // 曾因预缓动传入导致段边界错位（真机「震感」）。zoom 变化走单一连续飞行曲线
-  // （无分段断续）；zoom 不变退化为与 lerp 一致（纯平移动画不受影响）。
-  function animateCameraTo(target, durationMs) {
-    cancelCameraAnim()
-    const from = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    const dur = (durationMs && durationMs > 0) ? durationMs : HOME_ANIM_MS
-    const vw = C.viewportWidth()
-    const vh = C.viewportHeight()
-    // 视口尺寸动画中快照：中途旋转/尺寸变化只影响轨迹形状，落点精确
-    // （终点公式中 w/h 项数学抵消，k=1 恒等于 target）
-    const t0 = C._now()
-    function frame() {
-      const k = Math.min(1, (C._now() - t0) / dur)
-      // lerpCentered 收真实时间比例 k（内部统一缓动 + 按 k 分段）——
-      // 不得预缓动传入，否则段边界错位致平移段被压缩（真机「震感」）
-      const c = App.DesktopCamera.lerpCentered(from, target, k, vw, vh)
-      C.camera = c
-      if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
-        App.DesktopGesture.setCamera(C.camera)
-      }
-      if (k >= 1) { C._animRaf = null; return }
-      C._animRaf = C._raf(frame)
-    }
-    C._animRaf = C._raf(frame)
-  }
-
-  // ── 高级浏览模式 + 临时操作模式 ──
-
-  // 同步浏览模式到手势层：effective = 高级浏览 ON 且非临时操作模式
-  function syncBrowseMode() {
-    const effective = C._advancedBrowse && !C._tempNormalMode
-    if (App.DesktopGesture && typeof App.DesktopGesture.setBrowseMode === 'function') {
-      App.DesktopGesture.setBrowseMode(effective)
-    }
-  }
-
-  // 退出临时操作模式（打断条件：返回/Drawer/目录导航/再次双击空白）
-  function exitTempMode() {
-    if (!C._tempNormalMode) return
-    C._tempNormalMode = false
-    syncBrowseMode()
-    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
-    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已退出临时操作模式')
-  }
-
-  // 设置高级浏览模式（ViewMenu 切换驱动）
-  function setAdvancedBrowse(on) {
-    C._advancedBrowse = !!on
-    C._tempNormalMode = false   // 切换模式时清空临时态
-    syncBrowseMode()
-    // 持久化：合并到 ViewStore 现有偏好
-    const prefs = App.ViewStore.load()
-    prefs.advancedBrowse = C._advancedBrowse
-    if (!App.ViewStore.save(prefs)) {
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('浏览模式保存失败')
-    }
-  }
-
-  function isAdvancedBrowse() { return C._advancedBrowse }
-
-  // ── 手势回调（世界坐标）──
   function handleTap(world) {
     // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）；
     // 拖动手柄也视为点击卡片本体（手柄是辅助拖动区，点击语义与卡片一致：仅选中）
@@ -352,10 +126,10 @@ App.Desktop = (function () {
       if (now - C._emptyTapTime <= DOUBLE_TAP_MS) {
         C._emptyTapTime = 0
         if (C._tempNormalMode) {
-          exitTempMode()
+          B.exitTempMode()
         } else {
           C._tempNormalMode = true
-          syncBrowseMode()
+          B.syncBrowseMode()
           if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
           if (App.toast && typeof App.toast.show === 'function') App.toast.show('临时操作模式')
         }
@@ -370,7 +144,7 @@ App.Desktop = (function () {
       // 双击：取消待反选，打开
       if (C._deselectTimer) { clearTimeout(C._deselectTimer); C._deselectTimer = null }
       C._pendingDeselect = null
-      openItem(name)
+      N.openItem(name)
       return
     }
     if (name) {
@@ -1020,7 +794,7 @@ App.Desktop = (function () {
         }
       },
       // 手势开始 → 打断进行中的 Home 平滑过渡（手势直控优先）
-      onGestureStart: cancelCameraAnim,
+      onGestureStart: N.cancelCameraAnim,
       onHitTest: hitTest,
       onTap: handleTap,
       onMarqueeStart: handleMarqueeStart,
@@ -1033,14 +807,17 @@ App.Desktop = (function () {
       onSingleCancel: handleSingleCancel
     })
     // 同步手势层相机 + 模式标志 + 菜单可用态（根目录初始 = desktop 空间）
-    applyCameraForPath()
+    N.applyCameraForPath()
     // 同步 Viewer 拖动手柄（相机初始化后手柄屏幕位置才可计算）
     if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
       App.InternalViewer.syncHandles(C.camera)
     }
     // 同步高级浏览模式到手势层（initLayout 已从 ViewStore 加载偏好）
-    syncBrowseMode()
+    B.syncBrowseMode()
   }
+
+  // 导航模块依赖注入：目录切换后刷新渲染（persist 域 refresh）
+  N.setRefresh(refresh)
 
   return {
     refresh: refresh,
@@ -1052,15 +829,15 @@ App.Desktop = (function () {
     getSelectionEntries: R.getSelectionEntries,
     applyRename: applyRename,
     applyMoves: applyMoves,
-    openItem: openItem,
-    enterFolder: enterFolder,
-    goBack: goBack,
-    goForward: goForward,
-    goUp: goUp,
-    canGoBack: canGoBack,
-    canGoForward: canGoForward,
-    canGoUp: canGoUp,
-    getCurPath: getCurPath,
+    openItem: N.openItem,
+    enterFolder: N.enterFolder,
+    goBack: N.goBack,
+    goForward: N.goForward,
+    goUp: N.goUp,
+    canGoBack: N.canGoBack,
+    canGoForward: N.canGoForward,
+    canGoUp: N.canGoUp,
+    getCurPath: N.getCurPath,
     getLockedPaths: getLockedPaths,
     isLockedPath: isLockedPath,
     closeViewer: closeViewer,
@@ -1071,11 +848,11 @@ App.Desktop = (function () {
     isFolderView: C.isFolderView,
     applyViewPrefs: applyViewPrefs,
     getViewPrefs: getViewPrefs,
-    captureHome: captureHome,
-    captureDefaultView: captureDefaultView,
-    goHome: goHome,
-    setAdvancedBrowse: setAdvancedBrowse,
-    isAdvancedBrowse: isAdvancedBrowse,
-    exitTempMode: exitTempMode
+    captureHome: N.captureHome,
+    captureDefaultView: N.captureDefaultView,
+    goHome: N.goHome,
+    setAdvancedBrowse: B.setAdvancedBrowse,
+    isAdvancedBrowse: B.isAdvancedBrowse,
+    exitTempMode: B.exitTempMode
   }
 })()

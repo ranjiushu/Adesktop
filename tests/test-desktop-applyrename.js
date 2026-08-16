@@ -117,6 +117,10 @@ vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-core.js'), 'utf8'), sand
   { filename: 'desktop-core.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-render.js'), 'utf8'), sandbox,
   { filename: 'desktop-render.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-browse-mode.js'), 'utf8'), sandbox,
+  { filename: 'desktop-browse-mode.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-navigation.js'), 'utf8'), sandbox,
+  { filename: 'desktop-navigation.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop.js'), 'utf8'), sandbox,
   { filename: 'desktop.js' })
 

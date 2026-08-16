@@ -166,7 +166,7 @@ sandbox.App.DesktopSelection = {
 sandbox.App.DesktopGesture = { init: function () {}, setCamera: function () {} }
 
 vm.createContext(sandbox)
-for (const f of ['namespace.js', 'desktop-nav.js', 'double-tap.js', 'desktop-selection.js', 'desktop-grid.js', 'layout-store.js', 'desktop-camera.js', 'desktop-gesture.js', 'desktop-core.js', 'desktop-render.js', 'clipboard.js', 'desktop.js']) {
+for (const f of ['namespace.js', 'desktop-nav.js', 'double-tap.js', 'desktop-selection.js', 'desktop-grid.js', 'layout-store.js', 'desktop-camera.js', 'desktop-gesture.js', 'desktop-core.js', 'desktop-render.js', 'desktop-browse-mode.js', 'desktop-navigation.js', 'clipboard.js', 'desktop.js']) {
   vm.runInContext(fs.readFileSync(path.join(SRC_DIR, f), 'utf8'), sandbox, { filename: f })
 }
 

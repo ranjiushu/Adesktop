@@ -532,8 +532,9 @@ public class FileBridge {
 
     /* SAF 模式移动：DocumentsContract.moveDocument 优先，失败降级 copySaf + delete 源 */
     private void moveSaf(String srcPath, String dstPath, ProgressReporter pr) throws IOException {
-        DocumentFile src = (DocumentFile) resolve(srcPath);
-        DocumentFile srcParent = resolveParent(srcPath);
+        DocumentFile[] sp = resolveSrcAndParent(srcPath);
+        DocumentFile src = sp[0];
+        DocumentFile srcParent = sp[1];
         DocumentFile dstParent = resolveOrCreateParent(dstPath);
         // 1) 真移动：provider 级 moveDocument（API 24 = minSdk，恒可用；provider 不支持时抛异常/返回 null）
         try {
@@ -637,15 +638,45 @@ public class FileBridge {
         }
     }
 
-    /** 清理本次创建的目标（递归删除；SAF 的 DocumentFile.delete 对目录递归，私有模式手工递归） */
+    /** 清理本次创建的目标（递归删除）+ 向上清理 resolveOrCreateParent 创建的空父目录 */
     private void cleanupDst(String dstPath) {
         if (rootUri != null) {
             try {
                 DocumentFile df = (DocumentFile) resolve(dstPath);
                 if (df != null) df.delete();
             } catch (Exception ignored) {}
+            // 向上清理空目录（resolveOrCreateParent 可能逐级创建了父目录）
+            DocumentFile root = DocumentFile.fromTreeUri(activity, rootUri);
+            if (root != null) {
+                int i = dstPath.lastIndexOf('/');
+                while (i > 0) {
+                    String parentPath = dstPath.substring(0, i);
+                    try {
+                        DocumentFile dir = (DocumentFile) resolve(parentPath);
+                        if (dir != null && dir.listFiles().length == 0) {
+                            dir.delete();
+                        } else {
+                            break;  // 非空，停止
+                        }
+                    } catch (Exception e) {
+                        break;  // 路径不存在，停止
+                    }
+                    i = parentPath.lastIndexOf('/');
+                }
+            }
         } else {
             deleteRecursive(new File(privateRoot, dstPath));
+            // 向上清理空目录
+            File f = new File(privateRoot, dstPath).getParentFile();
+            while (f != null && !f.equals(privateRoot)) {
+                String[] children = f.list();
+                if (children != null && children.length == 0) {
+                    f.delete();
+                    f = f.getParentFile();
+                } else {
+                    break;
+                }
+            }
         }
     }
 
@@ -678,6 +709,25 @@ public class FileBridge {
     private DocumentFile resolveParent(String relPath) throws IOException {
         int i = relPath.lastIndexOf('/');
         return (DocumentFile) resolve(i < 0 ? "" : relPath.substring(0, i));
+    }
+
+    /** SAF 一次遍历同时解析 src 及其 parent（moveSaf 省一次重复遍历） */
+    private DocumentFile[] resolveSrcAndParent(String srcPath) throws IOException {
+        DocumentFile root = DocumentFile.fromTreeUri(activity, rootUri);
+        if (root == null) throw new IOException("根目录不可用");
+        if (srcPath.isEmpty() || srcPath.equals("/")) return new DocumentFile[] { root, root };
+        String[] parts = srcPath.split("/");
+        DocumentFile parent = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            if (parts[i].isEmpty()) continue;
+            DocumentFile next = parent.findFile(parts[i]);
+            if (next == null) throw new IOException("不存在: " + srcPath);
+            parent = next;
+        }
+        String leaf = parts[parts.length - 1];
+        DocumentFile src = parent.findFile(leaf);
+        if (src == null) throw new IOException("不存在: " + srcPath);
+        return new DocumentFile[] { src, parent };
     }
 
     /* 解析 dstPath 的父目录 DocumentFile，不存在则逐级创建（回收站首删 / 粘贴到新目录场景）。 */

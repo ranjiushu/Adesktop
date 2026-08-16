@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Morph FAB 增强：槽位布局 / 移动文件 / 悬浮球拖拽（2026-08-17）
+
+- **P0 修复：展开菜单空洞 + 按钮叠 FAB**：位移规则原用 `:nth-child(n)` 固定编号，
+  `display:none` 元素仍占序号 → 按上下文隐藏按钮后菜单出现空洞（剪贴板空隐藏粘贴、
+  Viewer 选中、回收站守卫等场景）；selection 集第 8 个按钮缺位移规则叠在 FAB 上。
+  改为槽位类（slot-1..8）由 JS 按可见顺序重排（`_applySlots`，用 offsetParent 判可见，
+  规避 computed display 对隐藏祖先后代返回自身值的 Chrome 行为）；FAB 状态机收敛为
+  单一 `_state` + `_syncContext` 集中按钮显隐；返回键消费展开的菜单
+- **feat：移动文件**：FAB selection 菜单新增「移动」→ 目标文件夹选择器（级联浏览 +
+  面包屑，移植 LexiCull 移动交互）→ 复用真移动管道（进度/取消/失败汇总/清选中/刷新）。
+  守卫：源所在目录 / 自身与子文件夹（循环移动）/ 锁定文件；底部按钮固定「取消/确认」，
+  目标不可移动时确认变灰、点击吐司原因（不用 disabled，保证吐司可触发）
+- **feat：FAB 悬浮球拖拽定位**：按住左右滑动切换左/右档位（甩动判定优先、就近吸附 +
+  spring 动画 + 原位/对侧幽灵占位），位置持久化 localStorage 刷新保持；菜单展开 /
+  取景器激活 / 弹窗打开时禁拖，与短按展开、长按取景器三手势协调（touchcancel 作废
+  点击 + 取消长按 timer）
+- **回归探针 ×4**：tools/ui/fab-gap-probe / fab-context-probe / move-target-probe /
+  fab-drag-probe（无头 Chromium + CDP 触摸序列，mock 文件系统跑守卫与流程断言）
+
 ### 旋转画布 review 修复（2026-08-17）
 
 - **P0 修复：goHome 横屏闪回竖屏**：`goHome()` 创建目标相机时未传 rotation

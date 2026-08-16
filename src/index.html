@@ -325,6 +325,9 @@
     <button class="fab-child fab-child-up" data-action="cut"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-scissors"/></svg>
       <span class="fab-child-label">剪切</span>
     </button>
+    <button class="fab-child fab-child-up" data-action="move"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder-move"/></svg>
+      <span class="fab-child-label">移动</span>
+    </button>
     <button class="fab-child fab-child-up" data-action="rename"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-edit"/></svg>
       <span class="fab-child-label">重命名</span>
     </button>
@@ -379,6 +382,24 @@
 </div>
 
 <div id="drop-tag" class="drop-tag" aria-hidden="true"></div>
+
+<!-- ===== 移动目标选择器（Morph FAB「移动」弹出，移植自 LexiCull 移动功能） =====
+     交互：弹层 = 当前浏览目录；点文件夹项进入子目录；点面包屑返回上级；
+     底部「移动到此处」执行真移动（复用 move 管道：进度/取消/失败汇总/清选中/刷新）；
+     取消 / 返回键 / 点空白 = 清理暂存，选中保持（Windows 原则：不自动清选中）。
+     守卫：目标 = 源所在目录（按钮禁用「已在目标位置」）；目标 ∈ 源文件夹自身/后代
+     （循环移动）；源含锁定文件（预览中）不可移动。 -->
+<div id="move-target-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog move-target-dialog" role="dialog" aria-modal="true" aria-labelledby="move-target-title">
+    <h2 id="move-target-title" class="dialog-title">移动到</h2>
+    <div id="move-target-crumb" class="move-crumb-bar"></div>
+    <div id="move-target-list" class="move-target-list"></div>
+    <div class="dialog-actions dialog-actions-pair">
+      <button id="move-target-cancel" class="dialog-btn dialog-btn-secondary" type="button">取消</button>
+      <button id="move-target-confirm" class="dialog-btn dialog-btn-primary" type="button">确认</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // __JS_PLACEHOLDER__

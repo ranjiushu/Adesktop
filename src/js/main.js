@@ -16,7 +16,15 @@ App.boot = function boot() {
         if (App.fabSpeedDial.isExpanded()) {
           App.fabSpeedDial.collapse()
         } else {
-          App.fabSpeedDial.expand('desktop')
+          // 有选中（文件或 Viewer 实体）→ 唤起 selection 操作栏，而非 desktop 菜单：
+          // 移动选择器取消后 FAB 已收起但选中仍在，短按应能重新唤起文件操作
+          // （对齐 LexiCull 操作模式：收起菜单不退出操作态）。
+          const hasSel = (App.Desktop && typeof App.Desktop.hasSelection === 'function' &&
+            App.Desktop.hasSelection()) ||
+            (App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
+            App.InternalViewer.anySelected())
+          if (hasSel) App.fabSpeedDial.setSelection(true)
+          else App.fabSpeedDial.expand('desktop')
         }
       })
     }
@@ -48,6 +56,14 @@ App.boot = function boot() {
   // 重命名对话框（选中态操作栏弹出）
   if (App.RenameDialog && typeof App.RenameDialog.init === 'function') {
     App.RenameDialog.init()
+  }
+  // 移动目标选择器（Morph FAB「移动」弹出：级联浏览文件夹选目标）
+  if (App.MoveTarget && typeof App.MoveTarget.init === 'function') {
+    App.MoveTarget.init()
+  }
+  // FAB 悬浮球拖拽定位（按住左右滑动切换左/右档位，位置持久化）
+  if (App.fabDrag && typeof App.fabDrag.init === 'function') {
+    App.fabDrag.init()
   }
   // IME 键盘适配（desktop:ime 事件 → 对话框上移）
   if (App.ImeAdapter && typeof App.ImeAdapter.init === 'function') {
@@ -85,6 +101,13 @@ App.onRootChanged = function onRootChanged() {
 // 均未消费返回 false（壳退出 App）。不依赖 pushState 是否被 WebView 计入 canGoBack。
 // 返回键「不关闭」Viewer：Viewer 是画布实体，关闭走 Morph FAB「关闭」（删除语义）。
 App.handleSystemBack = function handleSystemBack() {
+// 0. 展开的 Speed Dial 优先：desktop 态（模态遮罩）返回键 = 收起菜单。
+//    selection 态由下方「取消选中」分支收敛（clearSelection → setSelection(false)），无需重复处理。
+if (App.fabSpeedDial && typeof App.fabSpeedDial.isExpanded === 'function' &&
+    App.fabSpeedDial.isExpanded() && App.fabSpeedDial.getMode() === 'desktop') {
+  App.fabSpeedDial.collapse()
+  return true
+}
 // 0. 弹窗优先（dialog-overlay 最顶层：新建/重命名/确认框/详情弹窗）——系统返回键关闭栈顶弹窗，
 //    弹窗不设「取消/关闭」按钮，关闭途径 = 返回键 / 点空白（见 dialog.js 模块约定）
 if (App.Dialog && typeof App.Dialog.handleBack === 'function' && App.Dialog.handleBack()) {

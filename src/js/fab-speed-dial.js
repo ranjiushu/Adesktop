@@ -3,6 +3,18 @@
  * 导出: App.fabSpeedDial
  * 副作用: 管理子按钮事件、遮罩、展开/收起动画与 FAB 图标状态
  * 触发: 短按 FAB = 展开菜单；长按 800ms = 取景器（inspector.js 接管）
+ *
+ * 生命周期（单一状态机，LexiCull 收敛思路）：
+ *   _state ∈ 'collapsed' | 'desktop' | 'selection'
+ *   所有变更统一走 _apply()（唯一出口：class / data-mode / backdrop / 按钮显隐 / 槽位重排），
+ *   避免 expand/setSelection 各自写状态导致漂移。
+ * 上下文感知：
+ *   按钮显隐集中在 _syncContext()（粘贴按钮仅 desktop 态、selection 按钮集按
+ *   viewerSel/回收站/inTrash 守卫），每次 _apply 都重算——不依赖展开时机。
+ * 槽位布局（对齐 LexiCull 组内固定编号、泛化为可见顺序）：
+ *   CSS 位移用 slot-1..8 类而非 :nth-child(n)——display:none 的元素仍占 nth-child
+ *   序号，按条件隐藏按钮会产生空洞；_applySlots() 按可见顺序重排槽位，可见按钮
+ *   自动紧凑顶位，第 8 个按钮也不会因缺位移规则而叠在 FAB 上。
  */
 'use strict'
 
@@ -11,9 +23,7 @@ App.fabSpeedDial = (function () {
   let BACKDROP_ID = 'fab-backdrop'
   let FAB_ID = 'mode-switch-fab'
 
-  let _expanded = false
-  let _mode = null
-  let _selectionActive = false
+  let _state = 'collapsed' // 'collapsed' | 'desktop' | 'selection'
 
   function _getEl(id) { return document.getElementById(id) }
 
@@ -62,6 +72,17 @@ App.fabSpeedDial = (function () {
           const entries = App.Desktop.getSelectionEntries()
           if (action === 'copy') App.Actions.copySelection(entries)
           else App.Actions.cutSelection(entries)
+        }
+        collapse()
+        return
+      case 'move':
+        // 移动：暂存选中 → 目标文件夹选择器（MoveTarget）→ 真移动管道
+        // （移植自 LexiCull「移到其它辞表」，适配文件系统：级联浏览文件夹选目标）
+        if (App.MoveTarget && typeof App.MoveTarget.open === 'function') {
+          if (App.Desktop && typeof App.Desktop.getSelectionEntries === 'function') {
+            const entries = App.Desktop.getSelectionEntries()
+            if (entries && entries.length) App.MoveTarget.open(entries)
+          }
         }
         collapse()
         return
@@ -122,61 +143,23 @@ App.fabSpeedDial = (function () {
     collapse()
   }
 
-  // ── 遮罩点击 ──
+  // ── 遮罩点击（desktop 态模态；selection 态无遮罩，桌面保持可交互） ──
   function _onBackdropClick(e) {
     e.preventDefault()
     e.stopPropagation()
     collapse()
   }
 
-  // ── 展开 ──
-  function expand(mode) {
-    if (_expanded) return
-    _expanded = true
-    _mode = mode || 'desktop'
-    let fab = _getEl(FAB_ID), sd = _getEl(SPEED_DIAL_ID), bd = _getEl(BACKDROP_ID)
-    if (!fab || !sd) return
-    sd.setAttribute('data-mode', _mode)
-    if (bd) bd.classList.add('fab-backdrop-visible')
-    sd.classList.add('fab-speed-dial-expanded')
-    fab.classList.add('fab-speed-dial-active')
-    // 粘贴按钮显隐：仅预览态 + 剪贴板非空时显示
-    if (_mode === 'desktop') {
+  // ── 上下文感知：按当前状态集中计算按钮显隐（每次 _apply 都重算） ──
+  function _syncContext() {
+    const sd = _getEl(SPEED_DIAL_ID)
+    if (!sd) return
+    if (_state === 'desktop') {
+      // 粘贴按钮：仅剪贴板非空时显示
       const pasteBtn = sd.querySelector('[data-action="paste"]')
       const hasClip = App.Clipboard && typeof App.Clipboard.has === 'function' && App.Clipboard.has()
       if (pasteBtn) pasteBtn.style.display = hasClip ? '' : 'none'
-    }
-    App.bridge.vibrate()
-  }
-
-  // ── 收起 ──
-  function collapse() {
-    if (!_expanded) return
-    _expanded = false
-    _mode = null
-    let fab = _getEl(FAB_ID), sd = _getEl(SPEED_DIAL_ID), bd = _getEl(BACKDROP_ID)
-    if (bd) bd.classList.remove('fab-backdrop-visible')
-    if (fab) fab.classList.remove('fab-speed-dial-active')
-    if (sd) { sd.classList.remove('fab-speed-dial-expanded'); sd.removeAttribute('data-mode') }
-  }
-
-  function isExpanded() { return _expanded }
-  function getMode() { return _mode }
-  function getState() { return { expanded: _expanded, mode: _mode } }
-
-  // 选中态驱动：非空 → 自动展开 selection 按钮集；空 → 收起
-  // 选中态操作栏是「非模态」的：不加全屏遮罩，桌面保持可交互（长按拖拽/框选/点空白清空）
-  // Viewer 实体选中时只显示 全屏预览 + 关闭预览（预览焦点模式）；文件选中时显示文件操作。
-  function setSelection(hasSelection) {
-    _selectionActive = !!hasSelection
-    let fab = _getEl(FAB_ID)
-    let sd = _getEl(SPEED_DIAL_ID)
-    let bd = _getEl(BACKDROP_ID)
-    if (!fab || !sd) return
-    if (hasSelection) {
-      _expanded = true
-      _mode = 'selection'
-      sd.setAttribute('data-mode', 'selection')
+    } else if (_state === 'selection') {
       const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
         App.InternalViewer.anySelected()
       // 回收站守卫：选中含回收站（根目录）→ 隐藏文件操作，只留「打开/取消选择」；
@@ -193,14 +176,10 @@ App.fabSpeedDial = (function () {
       _setBtnVisible(sd, 'close-preview', viewerSel)
       _setBtnVisible(sd, 'copy', fileOps)
       _setBtnVisible(sd, 'cut', fileOps && !inTrash)
+      _setBtnVisible(sd, 'move', fileOps && !inTrash)
       _setBtnVisible(sd, 'rename', fileOps && !inTrash)
       _setBtnVisible(sd, 'delete', fileOps && !inTrash)
       _setBtnVisible(sd, 'clear-selection', !viewerSel)
-      if (bd) bd.classList.remove('fab-backdrop-visible')
-      sd.classList.add('fab-speed-dial-expanded')
-      fab.classList.add('fab-speed-dial-active')
-    } else {
-      collapse()
     }
   }
 
@@ -209,7 +188,79 @@ App.fabSpeedDial = (function () {
     if (btn) btn.style.display = visible ? '' : 'none'
   }
 
-  function isSelectionActive() { return _selectionActive }
+  // ── 槽位重排：可见按钮（渲染树可见，offsetParent 非 null）按 DOM 序分配 slot-1..n ──
+  // 注意不能用 getComputedStyle().display !== 'none' 判断：Chrome 对 display:none 祖先的
+  // 后代返回其自身计算值（flex）而非 none，会把整组隐藏的按钮误判为可见抢占槽位。
+  // 收起态不清理：slot 规则带 .fab-speed-dial-expanded 前缀，收起后自然失效。
+  const SLOT_CLASSES = ['slot-1', 'slot-2', 'slot-3', 'slot-4', 'slot-5', 'slot-6', 'slot-7', 'slot-8']
+  function _applySlots() {
+    const sd = _getEl(SPEED_DIAL_ID)
+    if (!sd) return
+    const btns = sd.querySelectorAll('.fab-child')
+    let n = 0
+    for (let i = 0; i < btns.length; i++) {
+      const b = btns[i]
+      b.classList.remove.apply(b.classList, SLOT_CLASSES)
+      if (b.offsetParent !== null) {
+        n++
+        if (n <= SLOT_CLASSES.length) b.classList.add(SLOT_CLASSES[n - 1])
+      }
+    }
+  }
+
+  // ── 状态机唯一出口：class / data-mode / backdrop 全在这里落定 ──
+  function _apply() {
+    const fab = _getEl(FAB_ID), sd = _getEl(SPEED_DIAL_ID), bd = _getEl(BACKDROP_ID)
+    if (!fab || !sd) { _state = 'collapsed'; return } // 元素缺失兜底，不留幽灵展开态
+    _syncContext()
+    if (_state === 'collapsed') {
+      if (bd) bd.classList.remove('fab-backdrop-visible')
+      fab.classList.remove('fab-speed-dial-active')
+      sd.classList.remove('fab-speed-dial-expanded')
+      sd.removeAttribute('data-mode')
+    } else {
+      sd.setAttribute('data-mode', _state)
+      // 遮罩仅 desktop 态显示（模态）；selection 态非模态（选中操作栏，桌面可交互）
+      if (bd) bd.classList.toggle('fab-backdrop-visible', _state === 'desktop')
+      sd.classList.add('fab-speed-dial-expanded')
+      fab.classList.add('fab-speed-dial-active')
+    }
+    _applySlots()
+  }
+
+  // ── 展开（短按 FAB） ──
+  function expand(mode) {
+    if (_state !== 'collapsed') return
+    _state = mode || 'desktop'
+    App.bridge.vibrate()
+    _apply()
+  }
+
+  // ── 收起 ──
+  function collapse() {
+    if (_state === 'collapsed') return
+    _state = 'collapsed'
+    _apply()
+  }
+
+  function isExpanded() { return _state !== 'collapsed' }
+  function getMode() { return _state === 'collapsed' ? null : _state }
+  function getState() { return { expanded: isExpanded(), mode: getMode() } }
+
+  // 选中态驱动：非空 → 进入 selection 态（自动显隐按钮集）；空 → 收起
+  // 选中态操作栏是「非模态」的：不加全屏遮罩，桌面保持可交互（长按拖拽/框选/点空白清空）
+  // Viewer 实体选中时只显示 全屏预览 + 关闭预览（预览焦点模式）；文件选中时显示文件操作。
+  function setSelection(hasSelection) {
+    if (hasSelection) {
+      if (_state === 'selection') { _apply(); return } // 幂等：仍重算上下文（选中内容可能已变）
+      _state = 'selection'
+      _apply()
+    } else {
+      collapse()
+    }
+  }
+
+  function isSelectionActive() { return _state === 'selection' }
 
   // ── 初始化 ──
   function init() {

@@ -341,6 +341,10 @@
 <div id="loading-dialog" class="dialog-overlay loading-dialog" aria-hidden="true">
   <div class="dialog loading-dialog-card">
     <div id="loading-dialog-title" class="loading-dialog-title"></div>
+    <div id="loading-current" class="loading-current">
+      <span id="loading-current-label" class="loading-row-label"></span>
+      <span id="loading-current-count" class="loading-row-count"></span>
+    </div>
     <div id="loading-phase" class="loading-phase">
       <div class="loading-row">
         <span id="loading-phase-label" class="loading-row-label"></span>
@@ -355,8 +359,24 @@
       </div>
       <div class="loading-track"><div id="loading-total-bar" class="loading-bar"></div></div>
     </div>
+    <div id="loading-actions" class="loading-actions">
+      <button id="loading-cancel" class="dialog-btn dialog-btn-secondary" type="button">取消</button>
+    </div>
   </div>
 </div>
+
+<!-- ===== 批量操作失败汇总（转移失败后弹出：成功 N / 失败 M + 逐项原因） ===== -->
+<div id="transfer-fail-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="transfer-fail-title">
+    <h2 id="transfer-fail-title" class="dialog-title">部分操作失败</h2>
+    <p id="transfer-fail-summary" class="transfer-fail-summary"></p>
+    <ul id="transfer-fail-list" class="transfer-fail-list"></ul>
+    <div class="dialog-actions">
+      <button id="transfer-fail-ok" class="dialog-btn dialog-btn-primary" type="button">知道了</button>
+    </div>
+  </div>
+</div>
+
 <div id="drop-tag" class="drop-tag" aria-hidden="true"></div>
 
 <script>

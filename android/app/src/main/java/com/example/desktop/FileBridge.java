@@ -63,6 +63,9 @@ public class FileBridge {
     private final WebView webView;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
+    /** 传输取消标志：cancelTransfer() 置位，copy 循环检查并尽快中止（单线程串行，同一时刻仅一个传输） */
+    private volatile boolean cancelRequested = false;
+
     private volatile Uri rootUri;          // SAF 授权根（null 时用私有目录）
     private volatile File privateRoot;     // 兜底根 filesDir/root
 
@@ -499,28 +502,36 @@ public class FileBridge {
      *   - SAF 模式: DocumentsContract.moveDocument（API 24+ = minSdk，provider 级移动，
      *               内部存储等多数 provider 原生支持 O(1) 移动）
      * 降级路径（跨文件系统 EXDEV / provider 不支持移动）: copy + delete 源，
-     * 失败安全：复制失败源保留（可重试）；删源失败目标已生成（重复，不丢数据）。 */
+     * 失败安全：复制失败源保留（可重试）；删源失败目标已生成（重复，不丢数据）。
+     * 取消/失败时清理本次创建的半成品（目标原本不存在才删）。 */
     @JavascriptInterface
     public void move(String srcPath, String dstPath, String cbId) {
         executor.execute(() -> {
+            boolean dstExisted = false;
             try {
                 if (!isSafeRelPath(srcPath) || !isSafeRelPath(dstPath)) {
                     throw new IOException("非法路径");
                 }
+                cancelRequested = false;
+                dstExisted = exists(dstPath);
+                ProgressReporter pr = new ProgressReporter(this, cbId);
                 if (rootUri != null) {
-                    moveSaf(srcPath, dstPath);
+                    moveSaf(srcPath, dstPath, pr);
                 } else {
-                    movePrivate(srcPath, dstPath);
+                    movePrivate(srcPath, dstPath, pr);
                 }
                 resolveOk(cbId, true);
             } catch (Exception e) {
+                if (!dstExisted) {
+                    try { cleanupDst(dstPath); } catch (Exception ignored) {}
+                }
                 resolveErr(cbId, e.getMessage(), e);
             }
         });
     }
 
     /* SAF 模式移动：DocumentsContract.moveDocument 优先，失败降级 copySaf + delete 源 */
-    private void moveSaf(String srcPath, String dstPath) throws IOException {
+    private void moveSaf(String srcPath, String dstPath, ProgressReporter pr) throws IOException {
         DocumentFile src = (DocumentFile) resolve(srcPath);
         DocumentFile srcParent = resolveParent(srcPath);
         DocumentFile dstParent = resolveOrCreateParent(dstPath);
@@ -533,12 +544,12 @@ public class FileBridge {
             // provider 不支持移动 → 降级 copy+delete
         }
         // 2) 降级：copy + delete（失败安全：复制失败源保留；删源失败目标已生成，不丢数据）
-        copySaf(src, dstPath);
+        copySaf(src, dstPath, pr);
         if (!src.delete()) throw new IOException("移动失败（复制成功但源删除失败）: " + srcPath);
     }
 
     /* 私有模式移动：File.renameTo 原子移动（同文件系统 O(1)），失败（跨文件系统 EXDEV 等）降级 copy+delete */
-    private void movePrivate(String srcPath, String dstPath) throws IOException {
+    private void movePrivate(String srcPath, String dstPath, ProgressReporter pr) throws IOException {
         File src = (File) resolve(srcPath);
         File dst = new File(privateRoot, dstPath);
         if (!isUnderPrivateRoot(dst)) throw new IOException("非法路径: " + dstPath);
@@ -549,27 +560,116 @@ public class FileBridge {
         // 1) 真移动：rename(2) 原子操作，目录整体移动（POSIX 语义，无需递归搬移）
         if (src.renameTo(dst)) return;
         // 2) 降级：copy + delete（跨文件系统；失败安全同上）
-        copyPrivate(src, dstPath);
+        copyPrivate(src, dstPath, pr);
         if (!src.delete()) throw new IOException("移动失败（复制成功但源删除失败）: " + srcPath);
     }
 
-    /* 复制：文件/目录递归拷贝（粘贴的基础操作）。 */
+    /* 复制：文件/目录递归拷贝（粘贴的基础操作）。失败/取消时清理本次创建的半成品。 */
     @JavascriptInterface
     public void copy(String srcPath, String dstPath, String cbId) {
         executor.execute(() -> {
+            boolean dstExisted = false;
             try {
                 if (!isSafeRelPath(srcPath) || !isSafeRelPath(dstPath)) {
                     throw new IOException("非法路径");
                 }
+                cancelRequested = false;
+                dstExisted = exists(dstPath);
                 Object resolved = resolve(srcPath);
+                ProgressReporter pr = new ProgressReporter(this, cbId);
                 if (rootUri != null) {
-                    copySaf((DocumentFile) resolved, dstPath);
+                    copySaf((DocumentFile) resolved, dstPath, pr);
                 } else {
-                    copyPrivate((File) resolved, dstPath);
+                    copyPrivate((File) resolved, dstPath, pr);
                 }
                 resolveOk(cbId, true);
             } catch (Exception e) {
+                if (!dstExisted) {
+                    try { cleanupDst(dstPath); } catch (Exception ignored) {}
+                }
                 resolveErr(cbId, e.getMessage(), e);
+            }
+        });
+    }
+
+    /* 取消当前传输（复制/移动的降级复制路径）：置取消标志，当前任务尽快中止并清理半成品。
+     * 真移动（renameTo / moveDocument）为原子瞬间操作，取消对其无意义。 */
+    @JavascriptInterface
+    public void cancelTransfer(String cbId) {
+        cancelRequested = true;
+        resolveOk(cbId, true);
+    }
+
+    /* ── 传输进度上报 + 取消 ── */
+
+    /** 进度上报器：copy 循环内节流推送 __fbProgress（约 200ms 一次），并响应取消请求 */
+    private static class ProgressReporter {
+        final FileBridge bridge;
+        final String cbId;
+        long lastReportMs;
+
+        ProgressReporter(FileBridge bridge, String cbId) {
+            this.bridge = bridge;
+            this.cbId = cbId;
+        }
+
+        /** 目录条目间调用：只检查取消，不上报进度 */
+        void tick() throws IOException {
+            if (bridge.cancelRequested) throw new IOException("操作已取消");
+        }
+
+        /** 文件拷贝循环内调用：检查取消 + 节流上报当前文件字节进度 */
+        void tick(String path, long done, long total) throws IOException {
+            if (bridge.cancelRequested) throw new IOException("操作已取消");
+            long now = System.currentTimeMillis();
+            if (now - lastReportMs < 200) return;
+            lastReportMs = now;
+            bridge.postProgress(cbId, path, done, total);
+        }
+    }
+
+    /** 目标路径是否存在（半成品清理判断依据：原本不存在才删） */
+    private boolean exists(String relPath) {
+        try {
+            return resolve(relPath) != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 清理本次创建的目标（递归删除；SAF 的 DocumentFile.delete 对目录递归，私有模式手工递归） */
+    private void cleanupDst(String dstPath) {
+        if (rootUri != null) {
+            try {
+                DocumentFile df = (DocumentFile) resolve(dstPath);
+                if (df != null) df.delete();
+            } catch (Exception ignored) {}
+        } else {
+            deleteRecursive(new File(privateRoot, dstPath));
+        }
+    }
+
+    private void deleteRecursive(File f) {
+        if (f.isDirectory()) {
+            File[] children = f.listFiles();
+            if (children != null) {
+                for (File c : children) deleteRecursive(c);
+            }
+        }
+        f.delete();
+    }
+
+    /** 进度推送：__fbProgress('cbId', {path, done, total})（字节），须在 UI 线程 evaluateJavascript */
+    private void postProgress(String cbId, String path, long done, long total) {
+        activity.runOnUiThread(() -> {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("path", path);
+                o.put("done", done);
+                o.put("total", total);
+                webView.evaluateJavascript(
+                        "window.__fbProgress('" + cbId + "', " + o.toString() + ")", null);
+            } catch (Exception ignored) {
             }
         });
     }
@@ -596,8 +696,8 @@ public class FileBridge {
         return cur;
     }
 
-    /* SAF 递归拷贝：dstPath 逐级解析/创建目录，文件流拷贝 */
-    private void copySaf(DocumentFile src, String dstPath) throws IOException {
+    /* SAF 递归拷贝：dstPath 逐级解析/创建目录，文件流拷贝；pr 上报进度 + 响应取消 */
+    private void copySaf(DocumentFile src, String dstPath, ProgressReporter pr) throws IOException {
         DocumentFile cur = resolveOrCreateParent(dstPath);
         String[] parts = dstPath.split("/");
         String name = parts[parts.length - 1];
@@ -609,7 +709,8 @@ public class FileBridge {
             DocumentFile[] children = src.listFiles();
             if (children != null) {
                 for (DocumentFile c : children) {
-                    copySaf(c, dstPath + "/" + c.getName());
+                    pr.tick();   // 目录条目间也响应取消
+                    copySaf(c, dstPath + "/" + c.getName(), pr);
                 }
             }
         } else {
@@ -623,17 +724,25 @@ public class FileBridge {
                 is.close();
                 throw new IOException("无法写入: " + dstPath);
             }
+            long total = src.length();
+            long done = 0;
             byte[] buf = new byte[8192];
             int n;
-            while ((n = is.read(buf)) != -1) os.write(buf, 0, n);
+            while ((n = is.read(buf)) != -1) {
+                os.write(buf, 0, n);
+                done += n;
+                pr.tick(dstPath, done, total);
+            }
             os.flush();
             os.close();
             is.close();
+            // 私有模式保留 mtime；SAF 模式：DocumentsContract 公开 API 无设置 mtime 的方法
+            // （updateDocument 为隐藏 API，反射有非 SDK 接口政策风险），故 SAF 复制不保留时间戳
         }
     }
 
-    /* 私有模式递归拷贝 */
-    private void copyPrivate(File src, String dstPath) throws IOException {
+    /* 私有模式递归拷贝；pr 上报进度 + 响应取消 */
+    private void copyPrivate(File src, String dstPath, ProgressReporter pr) throws IOException {
         File dst = new File(privateRoot, dstPath);
         if (!isUnderPrivateRoot(dst)) throw new IOException("非法路径: " + dstPath);
         if (src.isDirectory()) {
@@ -641,7 +750,8 @@ public class FileBridge {
             File[] children = src.listFiles();
             if (children != null) {
                 for (File c : children) {
-                    copyPrivate(c, dstPath + "/" + c.getName());
+                    pr.tick();   // 目录条目间也响应取消
+                    copyPrivate(c, dstPath + "/" + c.getName(), pr);
                 }
             }
         } else {
@@ -649,11 +759,21 @@ public class FileBridge {
             if (parent != null && !parent.exists() && !parent.mkdirs()) {
                 throw new IOException("无法创建目录: " + parent);
             }
+            long total = src.length();
+            long done = 0;
             try (FileInputStream fis = new FileInputStream(src);
                  FileOutputStream fos = new FileOutputStream(dst)) {
                 byte[] buf = new byte[8192];
                 int n;
-                while ((n = fis.read(buf)) != -1) fos.write(buf, 0, n);
+                while ((n = fis.read(buf)) != -1) {
+                    fos.write(buf, 0, n);
+                    done += n;
+                    pr.tick(dstPath, done, total);
+                }
+            }
+            // 保留 mtime：复制是「文件即真相」的忠实拷贝，时间戳不得变成"现在"
+            if (!dst.setLastModified(src.lastModified())) {
+                throw new IOException("无法保留文件时间戳: " + dstPath);
             }
         }
     }

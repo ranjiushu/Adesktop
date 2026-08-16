@@ -44,6 +44,11 @@ const totalLabelEl = makeEl()
 const totalBarEl = makeEl()
 const totalCountEl = makeEl()
 const tagEl = makeEl()
+const currentEl = makeEl()
+const currentLabelEl = makeEl()
+const currentCountEl = makeEl()
+const actionsEl = makeEl()
+const cancelBtnEl = makeEl()
 const els = {
   'loading-dialog': dialogEl,
   'loading-dialog-title': titleEl,
@@ -55,11 +60,18 @@ const els = {
   'loading-total-label': totalLabelEl,
   'loading-total-bar': totalBarEl,
   'loading-total-count': totalCountEl,
+  'loading-current': currentEl,
+  'loading-current-label': currentLabelEl,
+  'loading-current-count': currentCountEl,
+  'loading-actions': actionsEl,
+  'loading-cancel': cancelBtnEl,
   'drop-tag': tagEl
 }
 
 const sandbox = {
-  App: {},
+  App: {
+    utils: { bindPress: function () {} }
+  },
   console: console,
   document: { getElementById: function (id) { return els[id] || null } }
 }
@@ -132,6 +144,30 @@ check(phaseBarEl._classes['loading-indeterminate'] !== true, 'hide → 清除条
 check(phaseBarEl.style.width === '0%', 'hide → 阶段条宽度复位 0%')
 check(totalBarEl.style.width === '0%', 'hide → 总进度条宽度复位 0%')
 check(phaseCountEl.textContent === '' && totalCountEl.textContent === '', 'hide → 计数清空')
+
+// ── 当前文件行（字节级进度）：current + 取消按钮 ──
+let cancelFired = 0
+L.show({
+  title: '正在移动',
+  phaseLabel: '移动', phaseDone: 1, phaseTotal: 2,
+  totalLabel: '总进度', totalDone: 1, totalTotal: 2,
+  current: { name: 'docs/report.txt', done: 1234567, total: 5000000 },
+  cancellable: true,
+  onCancel: function () { cancelFired++ }
+})
+check(currentEl._classes['loading-visible'] === true, 'current 行可见')
+check(currentLabelEl.textContent === 'docs/report.txt', 'current 文件名（实际: ' + currentLabelEl.textContent + '）')
+check(currentCountEl.textContent === '1.2 MB / 4.8 MB', 'current 字节人性化 1.2/4.8 MB（实际: ' + currentCountEl.textContent + '）')
+check(actionsEl._classes['loading-visible'] === true, '取消按钮区可见')
+
+// 无 current / 不取消 → 隐藏
+L.show({ title: 'x', phaseLabel: '移动', phaseDone: 1, phaseTotal: 2, totalLabel: 't', totalDone: 1, totalTotal: 2 })
+check(currentEl._classes['loading-visible'] !== true, '无 current → 当前行隐藏')
+check(actionsEl._classes['loading-visible'] !== true, '无 cancellable → 取消按钮区隐藏')
+
+// 取消回调：Loading 模块内按钮绑定（无 DOM 桩交互则跳过；此处验证 onCancel 注册可被 hide 清理）
+L.hide()
+check(cancelFired === 0, 'hide 不触发取消（仅清理状态）')
 
 // ── 实时标签（拖入文件夹提示，不进对话框）──
 L.showTag('文件将移入 报告 文件夹')

@@ -24,7 +24,7 @@ function check(cond, msg) {
 const calls = {
   list: [], mkdir: [], write: [], rename: [], copy: [], del: [], move: [],
   refresh: 0, clearSelection: 0, toasts: [], applyRename: 0, applyMoves: 0,
-  show: [], hide: 0
+  show: [], hide: 0, dialogOpens: []
 }
 let listResult = []       // FileAPI.list 返回
 let copyShouldReject = false
@@ -35,10 +35,35 @@ function resetCalls() {
   calls.rename.length = 0; calls.copy.length = 0; calls.del.length = 0; calls.move.length = 0
   calls.refresh = 0; calls.clearSelection = 0; calls.toasts.length = 0
   calls.applyRename = 0; calls.applyMoves = 0; calls.show.length = 0; calls.hide = 0
+  calls.dialogOpens.length = 0
+}
+
+// ── document 桩（失败汇总弹窗）：元素桩记录 innerHTML/子节点，Dialog.open 可断言 ──
+function makeElStub() {
+  const el = {
+    _children: [], className: '', textContent: '', style: {}, _attrs: {},
+    set innerHTML(v) { el._html = v },
+    get innerHTML() { return el._html || '' },
+    appendChild: function (n) { el._children.push(n) },
+    setAttribute: function (k, v) { el._attrs[k] = v },
+    classList: { add: function () {}, remove: function () {}, contains: function () { return false } }
+  }
+  return el
+}
+const failEls = {
+  'transfer-fail-overlay': makeElStub(),
+  'transfer-fail-list': makeElStub(),
+  'transfer-fail-summary': makeElStub(),
+  'transfer-fail-ok': makeElStub()
+}
+const documentStub = {
+  getElementById: function (id) { return failEls[id] || null },
+  createElement: function () { return makeElStub() }
 }
 
 const sandbox = {
   App: {},
+  document: documentStub,
   console: console,
   setTimeout: setTimeout,
   Promise: Promise
@@ -55,15 +80,18 @@ sandbox.App.FileAPI = {
   mkdir: function (p) { calls.mkdir.push(p); return Promise.resolve(true) },
   write: function (p, c) { calls.write.push([p, c]); return Promise.resolve(true) },
   rename: function (o, n) { calls.rename.push([o, n]); return Promise.resolve(true) },
-  copy: function (s, d) {
+  copy: function (s, d, onProgress) {
     calls.copy.push([s, d])
+    if (typeof onProgress === 'function') onProgress({ path: d, done: 100, total: 200 })
     return copyShouldReject ? Promise.reject(new Error('磁盘空间不足')) : Promise.resolve(true)
   },
   del: function (p) { calls.del.push(p); return Promise.resolve(true) },
-  move: function (s, d) {
+  move: function (s, d, onProgress) {
     calls.move.push([s, d])
+    if (typeof onProgress === 'function') onProgress({ path: d, done: 50, total: 100 })
     return moveShouldReject ? Promise.reject(new Error('模拟移动失败')) : Promise.resolve(true)
-  }
+  },
+  cancelTransfer: function () { calls.cancelTransfer = (calls.cancelTransfer || 0) + 1; return Promise.resolve(true) }
 }
 sandbox.App.Desktop = {
   getCurPath: function () { return '' },
@@ -77,6 +105,13 @@ sandbox.App.Desktop = {
 }
 sandbox.App.toast = {
   show: function (m) { calls.toasts.push(m) }
+}
+sandbox.App.Dialog = {
+  open: function (id) { calls.dialogOpens.push(id) },
+  close: function () {}
+}
+sandbox.App.utils = {
+  bindPress: function () {}
 }
 sandbox.App.Loading = {
   show: function (opts) { calls.show.push(opts) },
@@ -210,7 +245,7 @@ async function main() {
   check(calls.toasts.some(function (t) { return t.indexOf('已移动 1 项') === 0 }),
     'paste cut toast 已移动 1 项')
 
-  // ── 粘贴：copy 失败 → 告警 + 已成功计数 ──
+  // ── 粘贴：copy 失败 → 不中断，逐项继续，最后汇总（成功 N + 失败 M + 弹窗）──
   resetCalls(); C.clear()
   C.set('copy', [{ path: 'a.txt', isDir: false }, { path: 'b.txt', isDir: false }])
   listResult = []
@@ -219,8 +254,10 @@ async function main() {
   await tick()
   copyShouldReject = false
   check(calls.toasts.some(function (t) {
-    return t.indexOf('粘贴失败: 磁盘空间不足') === 0
-  }), 'paste copy 失败 → toast 含错误原因')
+    return t.indexOf('已粘贴 0 项，失败 2 项') === 0
+  }), 'paste copy 失败 → 汇总 toast（成功 0 失败 2）')
+  check(calls.dialogOpens.indexOf('transfer-fail-overlay') >= 0,
+    'paste copy 失败 → 弹失败汇总列表')
   check(calls.clearSelection === 1 && calls.refresh === 1, 'paste 失败也清选中 + refresh')
 
   // ── 多文件进度：对话框双进度条推进 + 完成自动隐藏 ──
@@ -229,10 +266,10 @@ async function main() {
   listResult = []
   A.paste()
   await tick()
-  check(calls.show.length === 3, '多文件 paste → show 3 次（初始、1/2、2/2），实际 ' + calls.show.length)
+  check(calls.show.length === 5, '多文件 paste → show 5 次（初始、进度1、完成1、进度2、完成2），实际 ' + calls.show.length)
   check(calls.show[0].phaseTotal === 2 && calls.show[0].totalTotal === 2,
     'copy 模式：单阶段双进度条（phase=total=2）')
-  check(calls.show[2].phaseDone === 2 && calls.show[2].totalDone === 2,
+  check(calls.show[4].phaseDone === 2 && calls.show[4].totalDone === 2,
     'copy 完成：phaseDone=2 totalDone=2')
   check(calls.hide === 1, '完成 → hide 一次')
 
@@ -242,11 +279,12 @@ async function main() {
   listResult = []
   A.paste()
   await tick()
-  check(calls.show.length === 3, 'cut 单阶段 → show 3 次（初始、1/2、2/2），实际 ' + calls.show.length)
+  check(calls.show.length === 5, 'cut 单阶段 → show 5 次（初始、进度1、完成1、进度2、完成2），实际 ' + calls.show.length)
   const moveLabels = calls.show.map(function (o) { return o.phaseLabel })
-  check(moveLabels[0] === '移动' && moveLabels[1] === '移动' && moveLabels[2] === '移动',
+  check(moveLabels[0] === '移动' && moveLabels[1] === '移动' && moveLabels[2] === '移动' &&
+    moveLabels[3] === '移动' && moveLabels[4] === '移动',
     '移动单阶段标签：全程 phaseLabel=移动')
-  check(calls.show[2].phaseDone === 2 && calls.show[2].totalDone === 2 && calls.show[2].totalTotal === 2,
+  check(calls.show[4].phaseDone === 2 && calls.show[4].totalDone === 2 && calls.show[4].totalTotal === 2,
     '移动完成：phaseDone=2 totalDone=2 totalTotal=2（不再 ×2 两阶段）')
   check(calls.move.length === 2, 'cut 单阶段 → 桥 move 2 次')
   check(calls.applyMoves === 1 && calls.lastMoves.length === 2 &&
@@ -254,6 +292,26 @@ async function main() {
     calls.lastMoves[1].src === 'b.txt' && calls.lastMoves[1].dst === 'b.txt',
     '移动后批量布局迁移 applyMoves(2 项)')
   check(calls.hide === 1, '移动完成 → hide 一次')
+
+  // ── 进度回调：桥层 onProgress → Loading.show 带 current（字节级） + 取消按钮 ──
+  // 桩 move 每次调用同步回调 onProgress({path: dst, done, total}) → show 携带 current
+  check(calls.show.length === 5 && calls.show[1].current &&
+    calls.show[1].current.name === 'a.txt' && calls.show[1].current.done === 50 && calls.show[1].current.total === 100,
+    '进度回调 → show 带 current（正在移动 a.txt 50/100 B）')
+  check(calls.show[1].cancellable === true && typeof calls.show[1].onCancel === 'function',
+    '传输中显示取消按钮（cancellable + onCancel）')
+
+  // ── 取消：点取消 → FileAPI.cancelTransfer 被调用（桥层中止 + 清理半成品）──
+  resetCalls(); C.clear()
+  C.set('cut', [{ path: 'a.txt', isDir: false }])
+  listResult = []
+  A.paste()
+  await tick()
+  check(typeof calls.show[0].onCancel === 'function', '移动中注册 onCancel')
+  calls.show[0].onCancel()
+  check(calls.cancelTransfer === 1, 'onCancel → cancelTransfer 桥调用（取消当前传输）')
+  calls.show[0].onCancel()
+  check(calls.cancelTransfer === 1, '重复点取消 → 只发一次（防抖）')
 
   // ── moveIntoFolder：移动语义（桥 move）+ 不清剪贴板 ──
   resetCalls(); C.clear()

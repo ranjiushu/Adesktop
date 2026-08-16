@@ -29,6 +29,9 @@
   2. 持久告警（toast 提示，不静默吞掉）
 - 批量操作（复制/移动/删除）失败时保留源：移动走桥 `move`（真移动优先，失败自动降级 copy+del，复制失败不得删源），
   复制失败不得删源——用户文件不可因半途失败而丢失
+- 复制保留源 mtime（私有模式 `setLastModified` 可靠；SAF 模式 DocumentsContract 公开 API 无设置
+  mtime 的方法——updateDocument 为隐藏 API 有政策风险，故 SAF 复制不保留时间戳）
+- 失败/取消清理半成品：目标原本不存在且操作失败 → 递归删除本次创建的目标
 
 ## 四、桥层契约（FileBridge）
 

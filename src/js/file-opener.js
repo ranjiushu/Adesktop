@@ -102,6 +102,7 @@ App.FileOpener = (function () {
             name: item.name,
             kind: 'website',
             url: meta.url,
+            trusted: !!meta.trusted,
             anchor: anchor || null,
             camera: camera || null,
             onFallback: function () {   // 网页加载失败 → 交系统浏览器打开

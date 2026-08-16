@@ -13,6 +13,9 @@
 - **桥层加 openUrl**：ACTION_VIEW 打开网址（网站加载失败兜底系统浏览器）
 - **新建网站对话框**（`website-dialog.js`）：Drawer「新建网站」入口 → 网址 + 可选名称 →
   写 `<名称>.desktop`（type=website，重名自动加序号）
+- **网站信任开关**：website 快捷方式加 `trusted` 字段；新建对话框勾选「信任该网站」→
+  `allow-same-origin` 完整加载（可读写授权目录，用户显式接受风险）；未勾选保持 opaque
+  origin 安全隔离（复杂 SPA 因 localStorage/cookie 被拒而白屏）
 - **网页文件上传桥**（`web-upload.js`）：拖拽文件到 website iframe 松手 → 设为待上传 +
   toast 提示；网页触发 `<input type=file>` → 原生 `onShowFileChooser` 拦截 →
   弹确认「用待上传文件 / 重新选择」；桥层加 `completeUpload`/`chooseUploadFromSystem`/

@@ -76,6 +76,15 @@ check(wbuilt.indexOf('"type":"website"') >= 0, 'buildWebsiteShortcut 含 type=we
 check(wbuilt.indexOf('"url":"https://example.com"') >= 0, 'buildWebsiteShortcut 含 url')
 const wbuiltNoLabel = S.buildWebsiteShortcut({ url: 'https://a.com' })
 check(wbuiltNoLabel.indexOf('"label":"https://a.com"') >= 0, 'buildWebsiteShortcut 缺 label 回退 url')
+const wbuiltTrusted = S.buildWebsiteShortcut({ url: 'https://a.com', label: 'A', trusted: true })
+check(wbuiltTrusted.indexOf('"trusted":true') >= 0, 'buildWebsiteShortcut trusted=true 写入')
+check(wbuilt.indexOf('"trusted"') < 0, 'buildWebsiteShortcut 未信任不写入 trusted 字段')
+
+// ── parseShortcut: website trusted ──
+const wmTrusted = S.parseShortcut(JSON.stringify({ type: 'website', url: 'https://a.com', trusted: true }))
+check(wmTrusted.trusted === true, 'website trusted=true 解析')
+const wmNotTrusted = S.parseShortcut(JSON.stringify({ type: 'website', url: 'https://a.com' }))
+check(wmNotTrusted.trusted === false, 'website 缺 trusted 默认 false')
 
 // ── normalizeUrl ──
 check(S.normalizeUrl('example.com') === 'https://example.com', '无协议补 https://')

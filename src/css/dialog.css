@@ -66,6 +66,23 @@
   border-color: var(--color-accent);
 }
 
+/* 信任网站勾选（新建网站对话框）：次要字体 + 强调色 checkbox */
+.website-trust {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+.website-trust input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

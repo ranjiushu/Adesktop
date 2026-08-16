@@ -125,6 +125,8 @@ vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-persist.js'), 'utf8'), s
   { filename: 'desktop-persist.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-viewer-link.js'), 'utf8'), sandbox,
   { filename: 'desktop-viewer-link.js' })
+vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop-gesture-handlers.js'), 'utf8'), sandbox,
+  { filename: 'desktop-gesture-handlers.js' })
 vm.runInContext(fs.readFileSync(path.join(SRC, 'desktop.js'), 'utf8'), sandbox,
   { filename: 'desktop.js' })
 

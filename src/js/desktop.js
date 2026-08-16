@@ -21,16 +21,6 @@ App.Desktop = (function () {
   const V = App.DesktopViewerLink
   const H = App.DesktopGestureHandlers
 
-  // 缩略图渲染：ThumbnailService 已验证 URI（可解码）后回调，创建 <img> 展示；
-  // onerror 双保险（极端情况下仍回退类型图标）。缩略图的「判定/缓存/生成」全在 App.Thumbnail。
-
-  // refresh 代际守卫：异步链完成时若期间又发起了新 refresh（快速连续导航），
-  // 旧路径的 list 结果必须丢弃——否则旧 items 渲染到新视图（先切视图再变目录）
-  // + 用旧 items 做 valid 清空根级 positions（布局像初次启动，真机 Bug A）。
-  // 视图模式（isFolderView）由 curPath 同步切换，但 items 异步加载——
-  // 间隙经 App.Loading 显示不确定进度条（条纹滑动），加载完成隐藏，
-  // 避免「先切视图再变目录」的空白/错位感。
-
   function initGesture() {
     C.nav = App.DesktopNav.create()
     P.initLayout()

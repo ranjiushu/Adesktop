@@ -49,7 +49,7 @@ const CONTRACT = {
 
 // 各桥方法的成功返回样本（数据形状契约，用于验证前端透传不丢字段）
 const FIXTURE = {
-  rootInfo: { rootName: '存储', mode: 'saf', displayPath: '/saf/root', trashName: '.trash' },
+  rootInfo: { rootName: '存储', mode: 'saf', displayPath: '/saf/root', trashName: '.trash', rootId: 'content://tree/rootA' },
   list: [{ name: 'a.txt', isDir: false, size: 12, mtime: 1700000000000 }],
   read: 'hello',
   write: true,

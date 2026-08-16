@@ -132,7 +132,7 @@ App.DesktopNavigation = (function () {
   function captureHome() {
     if (C.isFolderView()) return false
     const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveHome(cam)) {
+    if (!App.HomeStore.saveHome(cam, C.state.rootId)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('Home 视角保存失败')
       return false
     }
@@ -148,7 +148,7 @@ App.DesktopNavigation = (function () {
   function captureDefaultView() {
     if (C.isFolderView()) return false
     const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveFallback(cam)) {
+    if (!App.HomeStore.saveFallback(cam, C.state.rootId)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('默认视角保存失败')
       return false
     }
@@ -163,7 +163,7 @@ App.DesktopNavigation = (function () {
   function goHome() {
     if (C.isFolderView()) return
     let target = App.DesktopCamera.create()
-    const data = App.HomeStore.load()
+    const data = App.HomeStore.load(C.state.rootId)
     if (data && data.home) {
       target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom)
     } else if (data && data.fallback) {

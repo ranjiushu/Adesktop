@@ -30,6 +30,12 @@ App.DesktopPersist = (function () {
         C.state.rootName = info.rootName
         C.state.mode = info.mode
         C.state.trashName = info.trashName || ''
+        // root 身份（布局/Home 隔离用）：首次拿到后做旧 key 一次性迁移
+        if (info.rootId && info.rootId !== C.state.rootId) {
+          C.state.rootId = info.rootId
+          App.LayoutStore.migrateLegacy(C.state.rootId)
+          App.HomeStore.migrateLegacy(C.state.rootId)
+        }
         if (App.Drawer && typeof App.Drawer.updatePath === 'function') {
           const base = info.displayPath || info.rootName
           App.Drawer.updatePath(C.state.curPath ? base + '/' + C.state.curPath : base,
@@ -88,7 +94,7 @@ App.DesktopPersist = (function () {
   // 图标位置恢复无条件执行（与相机优先级无关）：自由摆放位置来自 LayoutStore，
   // Home 快照只决定启动相机，绝不决定图标位置——否则设置快照后重启会丢摆放
   function initLayout() {
-    const saved = App.LayoutStore.load()
+    const saved = App.LayoutStore.load(C.state.rootId)
     if (saved && saved.icons) {
       Object.keys(saved.icons).forEach(function (key) {
         C.positions[key] = saved.icons[key]
@@ -98,7 +104,7 @@ App.DesktopPersist = (function () {
     // Home = Camera 的默认起点（空间锚点）：设置过快照后，每次进入桌面空间都落在快照位
     let cam = null
     if (App.HomeStore) {
-      const home = App.HomeStore.load()
+      const home = App.HomeStore.load(C.state.rootId)
       if (home && home.home) {
         cam = App.DesktopCamera.create(home.home.x, home.home.y, home.home.zoom)
       } else if (home && home.fallback) {
@@ -142,7 +148,7 @@ App.DesktopPersist = (function () {
       icons: C.positions,
       camera: { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
     }
-    if (!App.LayoutStore.save(data)) {
+    if (!App.LayoutStore.save(data, C.state.rootId)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败')
     }
   }

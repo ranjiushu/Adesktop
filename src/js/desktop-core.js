@@ -33,6 +33,7 @@ App.DesktopCore = (function () {
     items: [],
     curPath: '',          // 当前目录（相对根，'' = 根）
     trashName: '',        // 回收站文件夹名（rootInfo 返回，'' = 未知/未初始化）
+    rootId: '',           // 根目录身份（rootInfo 返回：SAF = tree uri / 私有 = 'private'）
     viewStyle: 'grid',    // folder 容器视图：grid（4 列）| list（单列）
     sortBy: 'name',       // folder 容器排序：name | mtime | type | size
     sortDir: 1,           // 1 升序 | -1 降序

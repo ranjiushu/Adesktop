@@ -85,10 +85,15 @@ public class FileBridge {
                     o.put("rootName", df != null && df.getName() != null ? df.getName() : "外部存储");
                     o.put("mode", "saf");
                     o.put("displayPath", ctx.safDisplayPath(ctx.rootUri));
+                    // 布局/Home 的 root 隔离 id：SAF = tree uri（稳定唯一），私有 = 固定串。
+                    // 前端 localStorage key 带 rootId（desktop.layout.<rootId>.v1），
+                    // 切根 A→B 不再继承 A 的图标位置/相机/Home 快照（见 docs/operation-contract.md 1.6）
+                    o.put("rootId", ctx.rootUri.toString());
                 } else {
                     o.put("rootName", "应用私有目录");
                     o.put("mode", "private");
                     o.put("displayPath", ctx.privateRoot.getAbsolutePath());
+                    o.put("rootId", "private");
                 }
                 // 幂等确保回收站存在（桌面初始化即出现回收站图标）；失败不阻断 rootInfo——
                 // 删除时 copy 会自动创建目录，降级为「回收站图标延迟到首次删除后出现」

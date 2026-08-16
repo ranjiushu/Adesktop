@@ -60,6 +60,15 @@
 mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本轮不引入新机制
 （SAF 无公开 API 设置 mtime；如未来需要可按 mtime 投影记录元数据，见 `docs/architecture.md` 分层）。
 
+### 1.6 布局 / Home 快照的 root 隔离
+
+- 布局（图标位置/相机）与 Home 快照是**相对当前根目录**的状态：key 为相对 root 的
+  fullPath，切根 A→B 不得继承 A 的布局/相机/Home。
+- 存储 key 带 rootId（2026-08-17 修复）：`desktop.layout.<rootId>.v1` / `desktop.home.<rootId>.v1`；
+  `rootId` 由 rootInfo 返回（SAF = tree uri / 私有 = `'private'`）。
+- 旧版单根 key（`desktop.layout.v1` / `desktop.home.v1`）经 `migrateLegacy(rootId)`
+  一次性迁移：首见 root 吸收旧数据后删除旧 key（幂等，测试：test-layout-store.js / test-home-store.js）。
+
 ## 二、操作契约表
 
 ### 2.1 create（新建文件夹 / 新建文件）

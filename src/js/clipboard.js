@@ -31,17 +31,15 @@ App.Clipboard = (function () {
   // 粘贴目标名规划：对每个源算不冲突的目标名（重名自动加序号）。
   // items = 当前目录项 [{name,isDir}]；curPath = 当前目录（完整相对路径，''=根）。
   // 返回 [{src, dst}]（dst = 完整相对路径）。纯函数，可单测。
+  // [P1] 占用键 = name 单键（真实文件系统「一名字一 entry」，不分文件/文件夹）：
+  // 同目录「文件夹报告.txt + 文件报告.txt」不共存，粘贴时后者加序号。
   function planPaste(cb, items, curPath) {
     if (!cb || !cb.entries || !cb.entries.length) return []
-    const taken = {}
-    ;(items || []).forEach(function (it) {
-      taken[it.name + '|' + (it.isDir ? 'd' : 'f')] = true
-    })
+    const taken = (items || []).map(function (it) { return it.name })
     return cb.entries.map(function (entry) {
       const base = basename(entry.path)
-      const type = entry.isDir ? 'd' : 'f'
       const dstName = uniqueName(taken, base, entry.isDir)
-      taken[dstName + '|' + type] = true
+      taken.push(dstName)
       return { src: entry.path, dst: joinPath(curPath, dstName) }
     })
   }
@@ -58,8 +56,11 @@ App.Clipboard = (function () {
     return base ? base + '/' + name : name
   }
 
-  // 重名自动加序号（文件拆主名/扩展名，文件夹直接加序号）
-  function uniqueName(taken, base, isDir) {
+  // 命名规划唯一入口（create / paste / delete 进回收站共用）：
+  // 给定已占用名数组与期望名，返回不冲突的最终名（重名自动加序号）。
+  // 文件拆主名/扩展名（「报告.txt」重名 → 「报告 2.txt」），文件夹直接加序号（「新建文件夹 2」）。
+  // takenNames 为名称数组（不分类型）——调用方负责传入目标目录全部 entry 的 name。
+  function uniqueName(takenNames, base, isDir) {
     let stem = base
     let ext = ''
     if (!isDir && base.indexOf('.') > 0) {
@@ -69,7 +70,7 @@ App.Clipboard = (function () {
     }
     let name = base
     let seq = 2
-    function exists(n) { return !!taken[n + '|' + (isDir ? 'd' : 'f')] }
+    function exists(n) { return (takenNames || []).indexOf(n) >= 0 }
     while (exists(name)) {
       name = stem + ' ' + seq + ext
       seq++
@@ -83,6 +84,7 @@ App.Clipboard = (function () {
     has: has,
     clear: clear,
     isCut: isCut,
-    planPaste: planPaste
+    planPaste: planPaste,
+    uniqueName: uniqueName
   }
 })()

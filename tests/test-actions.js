@@ -169,6 +169,21 @@ async function main() {
   check(calls.write.length === 1 && calls.write[0][0] === '报告 2.txt',
     'createFile 重名 → 报告 2.txt（扩展名保留）')
 
+  // ── [P1] 新建文件与同名文件夹冲突：name 单键（类型不豁免）──
+  // 修复前 actions._uniqueName 用 name+isDir 双匹配 → 文件夹「报告.txt」不占文件「报告.txt」的号
+  resetCalls(); listResult = [{ name: '报告.txt', isDir: true }]
+  A.createFile('报告.txt')
+  await tick()
+  check(calls.write.length === 1 && calls.write[0][0] === '报告 2.txt',
+    '同名文件夹占用 → createFile → 报告 2.txt（name 单键，真实 FS 一名字一 entry）')
+
+  // ── [P1] 新建文件夹与同名文件冲突：name 单键 ──
+  resetCalls(); listResult = [{ name: '新建文件夹', isDir: false }]
+  A.createFolder('新建文件夹')
+  await tick()
+  check(calls.mkdir.length === 1 && calls.mkdir[0] === '新建文件夹 2',
+    '同名文件占用 → createFolder → 新建文件夹 2（name 单键）')
+
   // ── 重命名：正常路径（预检通过 → 桥 rename + applyRename）──
   resetCalls(); listResult = []
   A.rename('a.txt', 'b.txt')

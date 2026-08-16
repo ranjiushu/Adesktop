@@ -95,12 +95,25 @@ check(plan.length === 2 && plan[0].dst === 'a 3.txt' && plan[1].dst === '文件�
 plan = C.planPaste({ mode: 'copy', entries: [{ path: 'b.txt', isDir: false }] }, items, '')
 check(plan.length === 1 && plan[0].dst === 'b.txt', '无重名 → 目标原名')
 
-// 同名同类型判断：文件不占文件夹的号
+// 剪贴板内自身也去重（重复源 → a 3 / a 4；占用键 = name 单键，与类型无关）
 plan = C.planPaste({ mode: 'copy', entries: [
   { path: 'a.txt', isDir: false }, { path: '文件夹', isDir: true }, { path: 'a.txt', isDir: false }
 ] }, items, '')
 check(plan[0].dst === 'a 3.txt' && plan[2].dst === 'a 4.txt',
   '剪贴板内自身也去重（重复源 → a 3 / a 4）')
+
+// [P1] 真实 FS「一名字一 entry」：文件夹「报告.txt」占用 → 粘贴文件「报告.txt」→ 报告 2.txt
+// 修复前 planPaste 占用键 = name+isDir，文件/文件夹同名不互占 → 放行后桥层撞名失败。
+plan = C.planPaste({ mode: 'copy', entries: [{ path: '报告.txt', isDir: false }] },
+  [{ name: '报告.txt', isDir: true }], '')
+check(plan.length === 1 && plan[0].dst === '报告 2.txt',
+  '文件夹报告.txt 占用 → 粘贴文件报告.txt → 报告 2.txt（name 单键）')
+
+// 反向：文件「报告.txt」占用 → 粘贴文件夹「报告.txt」→ 报告.txt 2（文件夹整体加序号，不拆扩展名）
+plan = C.planPaste({ mode: 'copy', entries: [{ path: '报告.txt', isDir: true }] },
+  [{ name: '报告.txt', isDir: false }], '')
+check(plan.length === 1 && plan[0].dst === '报告.txt 2',
+  '文件报告.txt 占用 → 粘贴文件夹报告.txt → 报告.txt 2（name 单键）')
 
 // ── 子目录粘贴（curPath='docs'）：dst 带目录前缀 ──
 plan = C.planPaste({ mode: 'copy', entries: [{ path: 'a.txt', isDir: false }] }, items, 'docs')

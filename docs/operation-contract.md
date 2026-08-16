@@ -21,11 +21,10 @@
 
 - 真实文件系统不变式：**同一目录中，一个名字只能对应一个 entry**（Linux/Android 语义，
   不分文件/文件夹）。SAF 各 provider 与私有目录均应满足此不变式。
-- 现状（[P1] 待收口）：命名规则存在**两套独立实现**——
-  `src/js/actions.js` 的 `_uniqueName`（create 用）与 `src/js/clipboard.js` 的 `uniqueName`
-  （粘贴/删除进回收站用）。两者算法相同（文件拆主名+扩展名加序号，文件夹整体加序号），
-  但各自演化；且 `planPaste` 的「已占用」键为 `name + isDir`（[P1] 与真实 FS「一名字一
-  entry」不符，同目录「文件夹报告.txt + 文件报告.txt」会被放行，后端才撞名失败）。
+- 命名规划唯一入口（2026-08-17 收口，测试：`tests/test-clipboard.js` / `test-actions.js`）：
+  `App.Clipboard.uniqueName(takenNames, desiredName, isDir)`——create / paste / 删除进回收站
+  三处共用（`actions.js` 经 `_finalName` 薄封装调用）；占用键为 **name 单键**（不分类型，
+  贴合真实 FS「一名字一 entry」）。
 - 重名策略分两种（**均为有意行为，须锁进测试**）：
   - **拒绝**：`rename`——目标目录已存在同名项即报错，不自动加序号（Windows 风格）。
   - **自动加序号**：`create` / `paste` / `删除进回收站`——重名时生成「主名 序号.扩展名」。
@@ -151,13 +150,13 @@ mtime 差异影响**（[P1] 本轮先文档化接受，不引入新机制）。
 
 现有测试：`tests/test-file-opener.js`（kindFor 分派）、`tests/test-desktop-viewerlink-lock.js`（锁定）。
 
-## 三、命名规划器（唯一入口，现状 + 收口目标）
+## 三、命名规划器（唯一入口）
 
-- 现状：两处实现——`actions.js::_uniqueName`（create）、`clipboard.js::uniqueName`（paste/delete）。
-  算法一致（文件「主名 序号.扩展名」，文件夹「名 序号」），规则未被统一维护。
-- [P1] 收口目标（Core Hardening 第 ③ 步）：收敛为**唯一入口** `uniqueName(takenNames, desiredName, isDir)`，
-  三处（create / paste / delete）共用；`planPaste` 占用键由 `name+isDir` 改为 `name`
-  （贴合真实 FS「一名字一 entry」）；rename 保持「重名拒绝」语义不变并写入测试。
+- 唯一入口：`App.Clipboard.uniqueName(takenNames, desiredName, isDir)`（2026-08-17 收口）。
+  - `takenNames`：目标目录全部 entry 的 name 数组（**不分类型**）；
+  - 文件拆主名/扩展名（「报告.txt」→「报告 2.txt」），文件夹整体加序号（「新建文件夹 2」）；
+  - 调用方：`actions.js::_finalName`（create）、`clipboard.js::planPaste`（paste / delete 进回收站）；
+  - `rename` 保持「重名拒绝」语义不变（不调用本入口，见 2.2）。
 
 ## 四、测试矩阵（映射 + 待补）
 
@@ -169,7 +168,7 @@ mtime 差异影响**（[P1] 本轮先文档化接受，不引入新机制）。
 | 4 | 批量失败不中断（失败收集 + 汇总） | test-actions.js | 已有 |
 | 5 | 取消防抖（cancelTransfer 只发一次） | test-actions.js | 已有 |
 | 6 | **取消后停止调度剩余项（3 以后不再启动）** | test-actions.js [P0] 用例 | **已修（2026-08-17）** |
-| 7 | 唯一入口 uniqueName 三处共用 + planPaste 键改 name | — | [P1] **待补（第 ③ 步）** |
+| 7 | 唯一入口 uniqueName 三处共用 + planPaste 键改 name | test-clipboard.js / test-actions.js | **已修（2026-08-17）** |
 | 8 | rename 跨目录拒绝（两后端一致） | — | [P1] **待补（第 ④ 步）** |
 | 9 | delete 进 .trash 重名加序号 / 回收站自身不可删 / 未授权拒绝 | test-actions.js | 已有 |
 | 10 | open 锁定 / 解锁 | test-desktop-viewerlink-lock.js | 已有 |

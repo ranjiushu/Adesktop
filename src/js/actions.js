@@ -8,30 +8,12 @@
 'use strict'
 
 App.Actions = (function () {
-  // 重名自动加序号：遍历目录找不冲突的名字。
-  // 文件拆分主名与扩展名（如「报告.txt」重名 → 「报告 2.txt」），
-  // 文件夹直接加序号（「新建文件夹」→「新建文件夹 2」）。
-  function _uniqueName(items, base, isDir) {
-    let stem = base
-    let ext = ''
-    if (!isDir && base.indexOf('.') > 0) {
-      let i = base.lastIndexOf('.')
-      stem = base.slice(0, i)
-      ext = base.slice(i)
-    }
-    let name = base
-    let seq = 2
-    function exists(n) {
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].name === n && items[i].isDir === isDir) return true
-      }
-      return false
-    }
-    while (exists(name)) {
-      name = stem + ' ' + seq + ext
-      seq++
-    }
-    return name
+  // 命名规划唯一入口（重名自动加序号，文件拆主名/扩展名，文件夹直接加序号）：
+  // 收敛自 clipboard.js——create / paste / delete 进回收站共用同一规则（见 operation-contract.md 1.2）。
+  // items = 当前目录项 [{name,isDir}]；占用键为 name 单键（真实 FS「一名字一 entry」）。
+  function _finalName(items, base, isDir) {
+    return App.Clipboard.uniqueName(
+      (items || []).map(function (it) { return it.name }), base, isDir)
   }
 
   // 当前目录（Desktop 提供；无则根目录）
@@ -47,7 +29,7 @@ App.Actions = (function () {
 
   function createFolder(name) {
     App.FileAPI.list(_curPath()).then(function (items) {
-      let finalName = _uniqueName(items, name || '新建文件夹', true)
+      let finalName = _finalName(items, name || '新建文件夹', true)
       return App.FileAPI.mkdir(_joinPath(finalName)).then(function () { return finalName })
     }).then(function (finalName) {
       App.toast.show('已创建文件夹: ' + finalName)
@@ -60,7 +42,7 @@ App.Actions = (function () {
   function createFile(name) {
     App.FileAPI.list(_curPath()).then(function (items) {
       // 名称原样使用（不自动补后缀）；空输入用默认名「新建文件」
-      let finalName = _uniqueName(items, name || '新建文件', false)
+      let finalName = _finalName(items, name || '新建文件', false)
       return App.FileAPI.write(_joinPath(finalName), '').then(function () { return finalName })
     }).then(function (finalName) {
       // toast 显示最终创建名（含重名序号），让用户确认名字无自动后缀

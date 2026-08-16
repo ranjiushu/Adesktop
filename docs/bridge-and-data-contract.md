@@ -26,6 +26,9 @@
 | `FileAPI.del(path)` | `delete` | `path` | `true` | 移入回收站（安全删除，不彻底删） |
 | `FileAPI.rename(old, new)` | `rename` | `oldPath, newPath` | `true` | 重命名 / 移动 |
 | `FileAPI.copy(src, dst)` | `copy` | `srcPath, dstPath` | `true` | 复制 |
+| `FileAPI.move(src, dst)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+del） |
+| `FileAPI.copy(src, dst)` | `copy` | `srcPath, dstPath` | `true` | 复制 |
+| `FileAPI.move(src, dst)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+delete） |
 | `FileAPI.resolveUri(path)` | `resolveUri` | `path` | `uri` | 转 WebView 可直接加载的 URI |
 | `FileAPI.thumb(path)` | `thumb` | `path` | `file://` URI | 缩略图（磁盘缓存） |
 | `FileAPI.openExternal(path)` | `openExternal` | `path` | `true` | 交外部应用打开，无可用应用时报错 |

@@ -21,6 +21,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.provider.DocumentsContract;
 import android.webkit.JavascriptInterface;
 import android.webkit.MimeTypeMap;
 import android.webkit.WebView;
@@ -479,8 +480,68 @@ public class FileBridge {
         });
     }
 
-    /* 复制：文件/目录递归拷贝（粘贴的基础操作；剪切 = copy + delete）。
-     * srcPath/dstPath 均为相对根目录路径；目标已存在则覆盖（重名由前端规划防冲突）。 */
+    /* 移动（剪切粘贴 / 拖入文件夹 / 移入回收站共用）：真移动优先，降级 copy+delete。
+     * srcPath/dstPath 均为相对根目录路径；目标名由前端规划（重名加序号，不覆盖）。
+     * 真移动路径：
+     *   - 私有模式: File.renameTo（同文件系统内原子移动，目录整体 O(1)，不搬数据）
+     *   - SAF 模式: DocumentsContract.moveDocument（API 24+ = minSdk，provider 级移动，
+     *               内部存储等多数 provider 原生支持 O(1) 移动）
+     * 降级路径（跨文件系统 EXDEV / provider 不支持移动）: copy + delete 源，
+     * 失败安全：复制失败源保留（可重试）；删源失败目标已生成（重复，不丢数据）。 */
+    @JavascriptInterface
+    public void move(String srcPath, String dstPath, String cbId) {
+        executor.execute(() -> {
+            try {
+                if (!isSafeRelPath(srcPath) || !isSafeRelPath(dstPath)) {
+                    throw new IOException("非法路径");
+                }
+                if (rootUri != null) {
+                    moveSaf(srcPath, dstPath);
+                } else {
+                    movePrivate(srcPath, dstPath);
+                }
+                resolveOk(cbId, true);
+            } catch (Exception e) {
+                resolveErr(cbId, e.getMessage());
+            }
+        });
+    }
+
+    /* SAF 模式移动：DocumentsContract.moveDocument 优先，失败降级 copySaf + delete 源 */
+    private void moveSaf(String srcPath, String dstPath) throws IOException {
+        DocumentFile src = (DocumentFile) resolve(srcPath);
+        DocumentFile srcParent = resolveParent(srcPath);
+        DocumentFile dstParent = resolveOrCreateParent(dstPath);
+        // 1) 真移动：provider 级 moveDocument（API 24 = minSdk，恒可用；provider 不支持时抛异常/返回 null）
+        try {
+            Uri moved = DocumentsContract.moveDocument(
+                    activity.getContentResolver(), src.getUri(), srcParent.getUri(), dstParent.getUri());
+            if (moved != null) return;
+        } catch (Exception ignored) {
+            // provider 不支持移动 → 降级 copy+delete
+        }
+        // 2) 降级：copy + delete（失败安全：复制失败源保留；删源失败目标已生成，不丢数据）
+        copySaf(src, dstPath);
+        if (!src.delete()) throw new IOException("移动失败（复制成功但源删除失败）: " + srcPath);
+    }
+
+    /* 私有模式移动：File.renameTo 原子移动（同文件系统 O(1)），失败（跨文件系统 EXDEV 等）降级 copy+delete */
+    private void movePrivate(String srcPath, String dstPath) throws IOException {
+        File src = (File) resolve(srcPath);
+        File dst = new File(privateRoot, dstPath);
+        if (!isUnderPrivateRoot(dst)) throw new IOException("非法路径: " + dstPath);
+        File parent = dst.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("无法创建目录: " + parent);
+        }
+        // 1) 真移动：rename(2) 原子操作，目录整体移动（POSIX 语义，无需递归搬移）
+        if (src.renameTo(dst)) return;
+        // 2) 降级：copy + delete（跨文件系统；失败安全同上）
+        copyPrivate(src, dstPath);
+        if (!src.delete()) throw new IOException("移动失败（复制成功但源删除失败）: " + srcPath);
+    }
+
+    /* 复制：文件/目录递归拷贝（粘贴的基础操作）。 */
     @JavascriptInterface
     public void copy(String srcPath, String dstPath, String cbId) {
         executor.execute(() -> {
@@ -501,8 +562,14 @@ public class FileBridge {
         });
     }
 
-    /* SAF 递归拷贝：dstPath 逐级解析/创建目录，文件流拷贝 */
-    private void copySaf(DocumentFile src, String dstPath) throws IOException {
+    /* 解析 relPath 的父目录 DocumentFile（'' 或 '/' → 根）。供 move 的 sourceParentUri 使用。 */
+    private DocumentFile resolveParent(String relPath) throws IOException {
+        int i = relPath.lastIndexOf('/');
+        return (DocumentFile) resolve(i < 0 ? "" : relPath.substring(0, i));
+    }
+
+    /* 解析 dstPath 的父目录 DocumentFile，不存在则逐级创建（回收站首删 / 粘贴到新目录场景）。 */
+    private DocumentFile resolveOrCreateParent(String dstPath) throws IOException {
         DocumentFile root = DocumentFile.fromTreeUri(activity, rootUri);
         if (root == null) throw new IOException("根目录不可用");
         String[] parts = dstPath.split("/");
@@ -514,6 +581,13 @@ public class FileBridge {
             if (next == null || !next.isDirectory()) throw new IOException("无法进入目录: " + parts[i]);
             cur = next;
         }
+        return cur;
+    }
+
+    /* SAF 递归拷贝：dstPath 逐级解析/创建目录，文件流拷贝 */
+    private void copySaf(DocumentFile src, String dstPath) throws IOException {
+        DocumentFile cur = resolveOrCreateParent(dstPath);
+        String[] parts = dstPath.split("/");
         String name = parts[parts.length - 1];
         if (name.isEmpty()) throw new IOException("非法目标名: " + dstPath);
         if (src.isDirectory()) {

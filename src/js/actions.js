@@ -1,6 +1,7 @@
 /* 文件系统动作（FAB / Drawer / 新建对话框共享）：
  * 新建文件夹/新建文件/刷新/切换根目录 + 阶段 C：重命名/复制/剪切/粘贴。
- * 复制/剪切只写剪贴板（内存态，Windows 模型），粘贴时才真正 copy / copy+delete。
+ * 复制/剪切只写剪贴板（内存态，Windows 模型），粘贴时才真正 copy / move（cut）。
+ * 移动 = 真移动优先（FileBridge.move：私有 File.renameTo / SAF moveDocument），失败降级 copy+del。
  * 路径约定：全部使用完整相对路径（含当前目录前缀），FileAPI 桥天然匹配。
  * 依赖: namespace.js, file-api.js, clipboard.js, toast.js, desktop.js
  */
@@ -141,7 +142,7 @@ App.Actions = (function () {
     }
   }
 
-  // ── 阶段 C：剪切（只写剪贴板 + 视觉标记，文件不动；粘贴时才 copy+delete）──
+  // ── 阶段 C：剪切（只写剪贴板 + 视觉标记，文件不动；粘贴时才真正移动）──
   function cutSelection(entries) {
     if (!entries || !entries.length) return
     if (_lockedEntry(entries)) {
@@ -176,15 +177,15 @@ App.Actions = (function () {
     return locked.indexOf(path) >= 0
   }
 
-  // ── 阶段 C：粘贴（目标名自动加序号；cut 模式 copy+delete 源）──
+  // ── 阶段 C：粘贴（目标名自动加序号；cut 模式 = 真移动，桥层降级 copy+delete）──
   // 统一执行链：paste（当前目录）与 moveIntoFolder（指定文件夹）共用。
   // cb = {mode:'copy'|'cut', entries:[{path,isDir}]}；targetDir = 完整相对路径。
   // opts.keepClipboard = true 时（拖入文件夹）不清剪贴板（非用户剪贴板操作）。
-  // 分阶段进度：两阶段分离执行——先全部复制，再删除源（移动语义）。
-  //   - 阶段进度条：当前阶段内 done/total（复制 3/5 → 删除源 2/5）
-  //   - 总进度条：跨阶段整体 done/(total*阶段数)
-  // 两阶段分离的风险收益：复制阶段失败 → 源全部保留（可重试，不删源）；
-  // 删除阶段失败 → 目标已生成、源未删（重复，告警提示，不丢数据）。
+  // 移动语义（cut）：逐项调桥 move（FileBridge 真移动优先——私有模式 File.renameTo
+  //   原子移动 / SAF 模式 DocumentsContract.moveDocument，失败自动降级 copy+delete）。
+  //   风险收益：真移动失败 → 该项整体不动（可重试）；降级复制成功但删源失败 →
+  //   目标已生成、源未删（重复，告警提示，不丢数据）。
+  // 移动后布局 key 迁移：positions/bounds 以完整路径为 key，不迁移刷新后丢位置。
   function _transfer(cb, targetDir, opts) {
     opts = opts || {}
     App.FileAPI.list(targetDir).then(function (items) {
@@ -192,65 +193,47 @@ App.Actions = (function () {
       if (!plan.length) return
       const isMove = cb.mode === 'cut'
       const title = opts.title || (isMove ? '正在移动' : '正在粘贴')
-      const totalSteps = plan.length * (isMove ? 2 : 1)
+      const totalSteps = plan.length
       if (App.Loading && typeof App.Loading.show === 'function') {
         App.Loading.show({
           title: title,
-          phaseLabel: '复制',
+          phaseLabel: isMove ? '移动' : '复制',
           phaseDone: 0, phaseTotal: plan.length,
           totalLabel: '总进度',
           totalDone: 0, totalTotal: totalSteps
         })
       }
-      // 阶段 1：全部复制（失败 → 源不删，可重试）
+      // 逐项执行：copy 模式 = 桥 copy；cut 模式 = 桥 move（真移动优先，失败降级 copy+del）
       let chain = Promise.resolve()
-      let copied = 0
+      let done = 0
+      const moved = []   // 成功移动项 [{src, dst}] → 布局 key 迁移
       plan.forEach(function (job) {
         chain = chain.then(function () {
-          return App.FileAPI.copy(job.src, job.dst)
+          return isMove ? App.FileAPI.move(job.src, job.dst) : App.FileAPI.copy(job.src, job.dst)
         }).then(function () {
-          copied++
+          done++
+          if (isMove) moved.push({ src: job.src, dst: job.dst })
           if (App.Loading && typeof App.Loading.show === 'function') {
             App.Loading.show({
               title: title,
-              phaseLabel: '复制',
-              phaseDone: copied, phaseTotal: plan.length,
+              phaseLabel: isMove ? '移动' : '复制',
+              phaseDone: done, phaseTotal: plan.length,
               totalLabel: '总进度',
-              totalDone: copied, totalTotal: totalSteps
+              totalDone: done, totalTotal: totalSteps
             })
           }
         })
       })
-      // 阶段 2（仅移动）：删除源
-      if (isMove) {
-        chain = chain.then(function () {
-          let deleted = 0
-          let delChain = Promise.resolve()
-          plan.forEach(function (job) {
-            delChain = delChain.then(function () {
-              return App.FileAPI.del(job.src)
-            }).then(function () {
-              deleted++
-              if (App.Loading && typeof App.Loading.show === 'function') {
-                App.Loading.show({
-                  title: title,
-                  phaseLabel: '删除源',
-                  phaseDone: deleted, phaseTotal: plan.length,
-                  totalLabel: '总进度',
-                  totalDone: plan.length + deleted, totalTotal: totalSteps
-                })
-              }
-            })
-          })
-          return delChain
-        })
-      }
       return chain.then(function () {
+        if (isMove && moved.length &&
+            App.Desktop && typeof App.Desktop.applyMoves === 'function') {
+          App.Desktop.applyMoves(moved)
+        }
         if (isMove && !opts.keepClipboard) App.Clipboard.clear()
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
-        App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + copied + ' 项')
+        App.toast.show((opts.doneText || (isMove ? '已移动 ' : '已粘贴 ')) + done + ' 项')
         // Windows 原则：选中态脆弱——粘贴后源选中路径已失效（cut 源已删 / 目标已生成），
         // 清空选中 + 收起操作栏，避免「幽灵选中」残留
         App.Desktop.clearSelection()
@@ -259,7 +242,7 @@ App.Actions = (function () {
         if (App.Loading && typeof App.Loading.hide === 'function') {
           App.Loading.hide()
         }
-        App.toast.show((opts.failText || (isMove ? '移动' : '粘贴')) + '失败: ' + err.message + '（已成功 ' + copied + ' 项）')
+        App.toast.show((opts.failText || (isMove ? '移动' : '粘贴')) + '失败: ' + err.message + '（已成功 ' + done + ' 项）')
         App.Desktop.clearSelection()
         App.Desktop.refresh()
       })
@@ -273,7 +256,7 @@ App.Actions = (function () {
 
   // ── 阶段 C+：删除 = 移入回收站（安全删除，不做彻底删除）──
   // entries: [{path, isDir}]（完整路径）；目标 = 根目录回收站（Desktop.getTrashName）。
-  // 复用移动管道（copy+del 源，SAF 无跨目录 rename），重名自动加序号、失败保留源（安全）。
+  // 复用移动管道（真移动优先，桥层降级 copy+del），重名自动加序号、失败保留源（安全）。
   // 守卫：回收站自身不可删；锁定文件（正在预览）不可删；无回收站名（未授权）拒绝。
   function deleteSelection(entries) {
     if (!entries || !entries.length) return
@@ -311,7 +294,7 @@ App.Actions = (function () {
     _transfer(cb, _curPath())
   }
 
-  // 拖入文件夹（桌面空间拖动命中文件夹松手）：移动语义（copy+del 源），
+  // 拖入文件夹（桌面空间拖动命中文件夹松手）：移动语义（真移动，桥层降级 copy+del 源），
   // 目标目录 = 文件夹完整路径，不清用户剪贴板（非剪贴板操作）。
   function moveIntoFolder(entries, dirPath) {
     if (!entries || !entries.length || !dirPath) return

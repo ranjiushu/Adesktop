@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 切换画布方向：MD 勾选图标 + 先回 Home 再转方向（2026-08-17）
+
+- **菜单勾选标记改 MD 图标**：view-menu 各勾选项（网格/列表/高级浏览模式/切换画布方向）
+  从文字对勾（`<i class="view-menu-check">`）改为 MD 风格 SVG check 图标
+  （`icon-check` symbol，`<svg class="view-menu-check"><use href="#icon-check"/></svg>`）
+- **切换方向先回 Home**：每次切换画布方向，先自动回到**当前方向**的 Home 槽位
+  （快照优先 > 默认视角 > 出厂 (0,0,1)）再旋转——旋转是绕视口中心的，停在任意位置
+  旋转后看到的区域完全不同；先回 Home 保证旋转后落在当前方向的 Home 视角（位置可预期）。
+  无 Home 槽位时保持当前位置只转方向
+- **验证**：verify-rotate.js E2E 新增「勾选标记为 #icon-check」+「切换后相机位置保持/回 Home」断言
+
 ### 切换画布方向 + 横屏/竖屏 Home 槽位（2026-08-17）
 
 - **菜单项改名**：「旋转画布 90°」→「切换画布方向」（语义更清晰，仍是 0↔90 toggle）

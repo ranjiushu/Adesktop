@@ -117,6 +117,15 @@ async function main() {
   })
   if (!rotateItem) { fail('view-menu 中旋转画布项缺失'); process.exit(1) }
   pass('view-menu 中「切换画布方向」项存在')
+  // 勾选标记为 MD 图标（icon-check symbol），非文字 ✓
+  const checkIcon = await page.evaluate(() => {
+    const el = document.querySelector('[data-rotate="toggle"] .view-menu-check')
+    if (!el) return null
+    const use = el.querySelector('use')
+    return use ? use.getAttribute('href') : null
+  })
+  if (checkIcon === '#icon-check') pass('勾选标记为 MD 图标（#icon-check）')
+  else fail('勾选标记应为 MD 图标 #icon-check', String(checkIcon))
   if (!rotateItem.disabled) pass('根目录下旋转项可用')
   else fail('根目录下旋转项应可用（实际 disabled）')
   // 关闭菜单
@@ -127,6 +136,12 @@ async function main() {
   const t0 = await canvasTransform(page)
   if (t0.indexOf('rotate') >= 0) { fail('初始 canvas transform 不应含 rotate', t0); process.exit(1) }
   pass('初始 canvas transform 无 rotate')
+  // 记录旋转前相机（Home 槽位为空时应保持原位置）
+  const camBefore = await page.evaluate(() => {
+    const t = document.getElementById('desktop-canvas').style.transform
+    const m = /translate3d\((-?[\d.]+)px,\s*(-?[\d.]+)px,\s*(-?[\d.]+)px?\)\s*scale\(([\d.]+)\)/.exec(t)
+    return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]), s: parseFloat(m[4]) } : null
+  })
   await tap(client, menuBtn.x, menuBtn.y)
   const rotRect = await rect('[data-rotate="toggle"]')
   await tap(client, rotRect.x, rotRect.y)
@@ -138,6 +153,28 @@ async function main() {
     document.querySelector('[data-rotate="toggle"]').classList.contains('active'))
   if (active) pass('旋转后菜单项勾选态 active')
   else fail('旋转后菜单项应 active')
+
+  // ── 2.5 切换方向先回 Home：初始无快照 → 旋转后保持原相机位置（仅加 rotate）──
+  // 本场景 Home 槽位为空（evaluateOnNewDocument 未注入 home 数据），因此旋转前后
+  // 相机 x/y/zoom 不变，只有 transform 追加 rotate(90deg)。
+  const camAfter = await page.evaluate(() => {
+    const t = document.getElementById('desktop-canvas').style.transform
+    const m = /translate3d\((-?[\d.]+)px,\s*(-?[\d.]+)px,\s*(-?[\d.]+)px?\)\s*rotate\(90deg\)\s*scale\(([\d.]+)\)/.exec(t)
+    if (!m) return null
+    // rotation=90 的 transform 中 tx/ty 是「旋转后」的显示值，反推相机：
+    //   tx = cam.y*zoom + (vw+vh)/2, ty = -cam.x*zoom + (vh-vw)/2
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const tx = parseFloat(m[1])
+    const ty = parseFloat(m[2])
+    const z = parseFloat(m[4])
+    return { x: -(ty - (vh - vw) / 2) / z, y: (tx - (vw + vh) / 2) / z, s: z }
+  })
+  if (camBefore && camAfter && camAfter.s === camBefore.s) {
+    pass('切换方向后相机 zoom 不变（先回 Home：无快照时保持原位置）')
+  } else {
+    fail('切换方向后相机 zoom 应不变', JSON.stringify({ before: camBefore, after: camAfter }))
+  }
 
   // ── 3. 再次点击 → 转回 ──
   await tap(client, menuBtn.x, menuBtn.y)

@@ -224,11 +224,16 @@ down ─────────────────────────
 再次点击转回 0°。只旋转画布视觉与坐标映射，**不改变**相机位置/缩放、图标世界坐标、布局持久化数据。
 
 - **开关**：顶栏「排列与视图」菜单底部「切换画布方向」勾选项（`.view-menu-rotate`，`data-rotate="toggle"`）。
+  勾选标记为 MD 风格 check 图标（`icon-check` symbol，非文字 ✓）。
   **与其余项相反的可用性**——根目录（Desktop 空间）可用，子文件夹（Folder 容器）禁用
   （`setEnabled(true)` 时 `disabled`；旋转对有限画布滚动容器无意义）。仿高级浏览模式走独立处理器 `_onRotateToggle`。
 - **状态存储**：`camera.rotation`（0 或 90）。旋转是瞬时两态切换（无过渡动画），
   `App.Desktop.toggleRotate()` 以当前 x/y/zoom 重建相机对象（带 rotation）→ `DesktopGesture.setCamera` 重放
   transform → `InternalViewer.syncHandles` 重算手柄。`App.Desktop.isRotated()` 供菜单勾选态。
+- **切换先回 Home**：每次切换画布方向，先自动回到**当前方向**的 Home 槽位（快照优先 > 默认视角 >
+  出厂 (0,0,1)）再旋转——旋转是绕视口中心的，停在任意位置旋转后看到的区域完全不同；
+  先回 Home 保证旋转后落在当前方向的 Home 视角（位置可预期），而非停留在旋转前的任意位置。
+  无 Home 槽位时保持当前位置只转方向。
 - **数学核心（`desktop-camera.js` 纯函数，rotation 透传）**：
   - `transform/applyTo(camera, el, vw, vh)`：rotation=90 时生成
     `translate3d(c.y*zoom + (vw+vh)/2, -c.x*zoom + (vh-vw)/2, 0) rotate(90deg) scale(zoom)`——

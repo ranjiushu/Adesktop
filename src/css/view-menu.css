@@ -81,9 +81,15 @@
   font-weight: 600;
 }
 
+/* 勾选标记（MD 图标）：active 时显示，flex 布局对齐 */
+.view-menu-item .view-menu-check {
+  flex: none;
+  margin-left: var(--space-sm);
+}
+
 .view-menu-item.active .view-menu-dir,
 .view-menu-item.active .view-menu-check {
-  display: inline;
+  display: inline-block;
 }
 
 .view-menu-sep {

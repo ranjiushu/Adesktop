@@ -73,12 +73,22 @@ App.Desktop = (function () {
   N.setRefresh(P.refresh)
 
   // 旋转画布 toggle（view-menu 驱动）：桌面空间 0↔90 toggle；folder 容器无意义，忽略。
-  // 旋转是瞬时两态（无过渡动画），只改 camera.rotation 并重应用 transform；
-  // 手势层/Viewer 手柄经 setCamera/onUpdate 自动同步（rotation 随相机对象透传）。
-  // 同步 Home 快照视觉：竖屏/横屏各自槽位的标记（画布方向切换后底栏 Home 高亮跟随）。
+  // 旋转是瞬时两态（无过渡动画）。切换前先回到当前方向的 Home 槽位（快照优先、
+  // 无则默认视角、再无则出厂 (0,0,1)）——「先回 Home 再转方向」：确保旋转后落在
+  // 当前方向的 Home 视角，而不是停在旋转前任意位置（旋转是绕视口中心的，位置不同
+  // 旋转后看到的区域完全不同）。旋转后同步手势层/Viewer 手柄/Home 高亮。
   function toggleRotate() {
     if (C.isFolderView()) return false
     const next = C.camera.rotation === 90 ? 0 : 90
+    // 1. 先回当前方向的 Home 槽位（无动画，瞬时；旋转紧随其后，动画无意义）
+    let home = null
+    const data = App.HomeStore.load(C.state.rootId, C.camera.rotation)
+    if (data && data.home) home = data.home
+    else if (data && data.fallback) home = data.fallback
+    if (home) {
+      C.camera = App.DesktopCamera.create(home.x, home.y, home.zoom, C.camera.rotation)
+    }
+    // 2. 旋转到目标方向（保留回 Home 后的 x/y/zoom）
     C.camera = App.DesktopCamera.create(C.camera.x, C.camera.y, C.camera.zoom, next)
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
       App.DesktopGesture.setCamera(C.camera)

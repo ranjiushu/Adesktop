@@ -363,18 +363,29 @@ App.BuildInfo = (function () {
     if (!f) return
     let shortName = (f.name || '').split('/').pop()
     let fullPath = f.name || ''
-    let rows = '<span class="build-detail-label">行数</span><span class="build-detail-value" data-copy data-toast="已复制">' + App.utils.escapeHtml(String(f.lines || 0)) + '</span>'
-    if (f.chars) rows += '<span class="build-detail-label">字数</span><span class="build-detail-value" data-copy data-toast="已复制">' + App.utils.escapeHtml(String(f.chars)) + '</span>'
-    rows += '<span class="build-detail-label">创建</span><span class="build-detail-value" data-copy data-toast="已复制">' + App.utils.escapeHtml(formatGitTime(f.created)) + '</span>' +
-      '<span class="build-detail-label">修改</span><span class="build-detail-value" data-copy data-toast="已复制">' + App.utils.escapeHtml(formatGitTime(f.modified)) + '</span>'
+    // 规模一行：324字 · 120行（与 LexiCull 精简排版一致）
+    let sizeLine = (f.chars ? App.utils.escapeHtml(String(f.chars)) + '字 · ' : '') +
+      App.utils.escapeHtml(String(f.lines || 0)) + ' 行'
+    // 时间：精简为两行，创建 / 修改
+    let timeHtml =
+      '<div style="margin-top:8px;font-size:12px;color:var(--text-tertiary);line-height:1.8">' +
+        '<div data-copy data-copy-text="' + App.utils.escapeHtml(formatGitTime(f.created)) + '" data-toast="已复制创建时间">' +
+          App.utils.escapeHtml(formatGitTime(f.created)) +
+        '</div>' +
+        '<div data-copy data-copy-text="' + App.utils.escapeHtml(formatGitTime(f.modified)) + '" data-toast="已复制修改时间">' +
+          App.utils.escapeHtml(formatGitTime(f.modified)) +
+        '</div>' +
+      '</div>'
     _openDetailModal(
       '<h2 class="dialog-title" data-copy data-toast="已复制文件名">' + App.utils.escapeHtml(shortName) + '</h2>' +
       '<div class="build-detail-path" data-copy data-toast="已复制路径">' + App.utils.escapeHtml(fullPath) + '</div>' +
-      '<div class="build-detail-grid">' + rows + '</div>' +
-      '<div class="dialog-actions">' +
-        '<button class="dialog-btn dialog-btn-secondary" data-copy data-copy-text="' + App.utils.escapeHtml(shortName) + '" data-toast="已复制文件名">复制文件名</button>' +
-        '<button class="dialog-btn dialog-btn-primary" data-copy data-copy-text="' + App.utils.escapeHtml(fullPath) + '" data-toast="已复制路径">复制路径</button>' +
-      '</div>'
+      '<div style="font-size:13px;color:var(--text-primary);margin-bottom:8px">' + sizeLine + '</div>' +
+      (f.desc
+        ? '<div data-copy data-copy-text="' + App.utils.escapeHtml(f.desc) + '" data-toast="已复制简介" style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px">' +
+            App.utils.escapeHtml(f.desc) + '</div>'
+        : '') +
+      '<div class="build-detail-divider"></div>' +
+      timeHtml
     )
   }
 

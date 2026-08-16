@@ -259,7 +259,7 @@ App.InternalViewer = (function () {
         applyCanvasRect(rect)
         backBtn.style.display = 'none'
         updateTools()
-        card.className = 'viewer-card viewer-card-canvas'
+        card.className = canvasCardClass()
         if (_canvas) _canvas.appendChild(card)
         // 打开不选中：选中态由点击/框选触发（与文件图标一致的脆弱选中），打开动作不触发选中
       } else {
@@ -296,6 +296,14 @@ App.InternalViewer = (function () {
       }
     }
 
+    // canvas 态卡片 class：media 类（image/video/svg，按固有比例自适应）额外标记
+    // viewer-card-media → CSS 中文件名栏 absolute 覆盖底部，不占位不改变媒体缩放比例
+    function canvasCardClass() {
+      let cls = 'viewer-card viewer-card-canvas'
+      if (state.kind && MEDIA_KINDS[state.kind] && state.kind !== 'audio') cls += ' viewer-card-media'
+      return cls
+    }
+
     // ── 全屏相册式新页面 ──
     function enterFullscreenPage() {
       state.mode = 'fullscreen'
@@ -329,7 +337,7 @@ App.InternalViewer = (function () {
       _fsPage.setAttribute('aria-hidden', 'true')
       if (from === 'canvas') {
         state.mode = 'canvas'
-        card.className = 'viewer-card viewer-card-canvas'
+        card.className = canvasCardClass()
         backBtn.style.display = 'none'
         reader = { scale: 1, wrap: true }
         resetReaderStyle()
@@ -650,7 +658,7 @@ App.InternalViewer = (function () {
       if (!state.path) return false
       if (state.mode === 'canvas' && anchorIsCenter(state.kind)) _cascade++
       title.textContent = state.name
-      card.className = 'viewer-card viewer-card-canvas'
+      card.className = canvasCardClass()
       mount()
       state.open = true
       renderContent()

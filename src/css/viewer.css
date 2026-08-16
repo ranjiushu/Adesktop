@@ -51,6 +51,27 @@
   display: none;
 }
 
+/* 画布实体 media 类（image/video/svg，按固有宽高比自适应 fitAspectRect）：
+   文件名栏 absolute 覆盖在卡片底部——不占 flex 空间，选中显示文件名时不改变媒体缩放比例，
+   盖住底部少量内容可接受（优先保媒体画面）。media 标记类由 viewer.js 的
+   canvasCardClass() 按 kind 添加（audio 除外：3:4 封面卡片底部是原生播放控制条，
+   保持占位式不遮挡）。
+   半透明深色浮层（类似播放器字幕条/网站标签），标题反白保证可读性。 */
+.viewer-card-canvas.viewer-card-media .viewer-header {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  order: 0;   /* absolute 脱离 flex 布局，order 不再起作用 */
+  background: rgba(17, 24, 39, 0.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: none;
+}
+
+.viewer-card-canvas.viewer-card-media .viewer-title {
+  color: #fff;
+}
+
 /* 顶栏：文件名 + 全屏预览按钮 */
 .viewer-header {
   display: flex;

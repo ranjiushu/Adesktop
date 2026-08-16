@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Viewer media 文件名栏改覆盖式（2026-08-16）
+
+- **media 类（image/video/svg）文件名栏 = absolute 覆盖在卡片底部**：不参与 flex 占位，
+  选中显示文件名时**不改变媒体缩放比例**（fitAspectRect 结果不动），盖住底部少量内容
+  可接受；半透明深色浮层 + 白色标题保证可读性。viewer.js 新增 `canvasCardClass()`
+  按 kind 给 canvas 态卡片加 `viewer-card-media` 标记类（audio 除外：3:4 封面卡片底部
+  是原生播放控制条，保持占位式不遮挡）
+- 文档/验证同步：`docs/viewer.md` 增 media 覆盖式说明；`viewer-modules-verify.js`
+  新增 5b（media 覆盖式：未选中隐藏/absolute 覆盖/卡片尺寸与媒体比例不变）与
+  5c（文档类仍占位式）断言
+
 ### Viewer 画布实体：文件名栏移至底部 + 未选中隐藏（2026-08-16）
 
 - **文件名栏移到内容区下方**：canvas 态 Viewer 的 `.viewer-header` 用 CSS `order` 从卡片

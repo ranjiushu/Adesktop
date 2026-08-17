@@ -13,6 +13,7 @@
  *       viewer.js
  * 导出: App.DesktopViewerLink
  */
+// @ts-check
 'use strict'
 
 App.DesktopViewerLink = (function () {
@@ -32,14 +33,17 @@ App.DesktopViewerLink = (function () {
   }
 
   // 锁定判断（actions.js 用）：路径是否被任一 Viewer 锁定
+  /** @param {string} path @returns {boolean} */
   function isLockedPath(path) {
     return C._lockedPaths.has(path)
   }
 
+  /** @returns {Array<string>} */
   function getLockedPaths() { return Array.from(C._lockedPaths) }
 
   // 重命名后布局 key 迁移：positions/bounds 以完整路径为 key，
   // 旧 key → 新 key，否则新名字刷新后回退自动排布丢位置。随后重绘。
+  /** @param {string} oldPath @param {string} newPath */
   function applyRename(oldPath, newPath) {
     if (!oldPath || !newPath || oldPath === newPath) return
     if (C.positions[oldPath]) {
@@ -61,6 +65,7 @@ App.DesktopViewerLink = (function () {
   // 批量布局 key 迁移（移动后）：moves = [{src, dst}]（src = 完整相对路径）。
   // 与 applyRename 同构但不 refresh/saveLayout 逐项执行——由调用方（Actions 移动管道）
   // 一次 saveLayout + 统一 refresh，避免多文件移动反复重绘。
+  /** @param {Array<{src: string, dst: string}> | null} moves */
   function applyMoves(moves) {
     if (!moves || !moves.length) return
     let changed = false
@@ -85,6 +90,7 @@ App.DesktopViewerLink = (function () {
     if (changed) App.DesktopPersist.saveLayout()
   }
 
+  /** @type {DesktopViewerLink} */
   return {
     closeViewer: closeViewer,
     isLockedPath: isLockedPath,

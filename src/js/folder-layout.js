@@ -5,6 +5,7 @@
  * 依赖: namespace.js, desktop-grid.js（ORIGIN_X/ORIGIN_Y/GRID_H）
  * 导出: App.FolderLayout
  */
+// @ts-check
 'use strict'
 
 App.FolderLayout = (function () {
@@ -14,6 +15,7 @@ App.FolderLayout = (function () {
   const COL_GAP = 8   // 列间空隙（图标宽 = 列宽 - gap）
 
   // 网格位置：i 从 0 起，4 个一换行（y 步进 GRID_H）
+  /** @param {number} count @param {number} viewportW @returns {Array<Position2D>} */
   function gridPositions(count, viewportW) {
     const colW = (viewportW - GRID.ORIGIN_X * 2) / COLS
     const arr = []
@@ -27,6 +29,7 @@ App.FolderLayout = (function () {
   }
 
   // 列表位置：单列，行高固定
+  /** @param {number} count @returns {Array<Position2D>} */
   function listPositions(count) {
     const arr = []
     for (let i = 0; i < count; i++) {
@@ -36,6 +39,7 @@ App.FolderLayout = (function () {
   }
 
   // 画布尺寸（纸面）：网格 = 视口宽 x (ORIGIN_Y + 行数*GRID_H)；列表 = 视口宽 x 行数*ROW_H
+  /** @param {number} count @param {number} viewportW @param {string} viewStyle @returns {{w: number, h: number}} */
   function canvasSize(count, viewportW, viewStyle) {
     if (viewStyle === 'list') {
       return { w: viewportW, h: count * LIST_ROW_H }
@@ -45,10 +49,12 @@ App.FolderLayout = (function () {
   }
 
   // 网格模式图标宽度（列宽 - 间隙），下限 48 防过窄
+  /** @param {number} viewportW @returns {number} */
   function iconWidth(viewportW) {
     return Math.max(48, (viewportW - GRID.ORIGIN_X * 2) / COLS - COL_GAP)
   }
 
+  /** @type {FolderLayout} */
   return {
     gridPositions: gridPositions,
     listPositions: listPositions,

@@ -8,10 +8,12 @@
  * 依赖: namespace.js
  * 导出: App.FolderSort
  */
+// @ts-check
 'use strict'
 
 App.FolderSort = (function () {
   // 扩展名（含点后部分，小写）；无扩展名 → ''
+  /** @param {any} name @returns {string} */
   function typeKey(name) {
     if (typeof name !== 'string') return ''
     const i = name.lastIndexOf('.')
@@ -19,6 +21,7 @@ App.FolderSort = (function () {
   }
 
   // 比较器：文件夹优先（与方向无关），组内按 sortBy 升序比较，再乘 dir
+  /** @param {FileItem} a @param {FileItem} b @param {string} sortBy @param {number} dir @returns {number} */
   function compare(a, b, sortBy, dir) {
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
     let r = 0
@@ -42,6 +45,7 @@ App.FolderSort = (function () {
   }
 
   // 排序（返回新数组，不改原数组）
+  /** @param {Array<FileItem> | null} items @param {string} sortBy @param {number} sortDir @returns {Array<FileItem>} */
   function sort(items, sortBy, sortDir) {
     const list = (items || []).slice()
     list.sort(function (a, b) { return compare(a, b, sortBy, sortDir) })
@@ -49,10 +53,12 @@ App.FolderSort = (function () {
   }
 
   // 切换排序项时使用的默认方向（日期传统上降序，其余升序）
+  /** @param {string} sortBy @returns {number} */
   function defaultDir(sortBy) {
     return sortBy === 'mtime' ? -1 : 1
   }
 
+  /** @type {FolderSort} */
   return {
     sort: sort,
     typeKey: typeKey,

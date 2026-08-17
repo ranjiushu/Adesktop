@@ -6,12 +6,14 @@
  * 纯函数零 DOM，可单测；依赖仅 namespace.js。
  * 导出: App.Shortcut
  */
+// @ts-check
 'use strict'
 
 App.Shortcut = (function () {
   const EXT = 'desktop'          // 快捷方式文件扩展名（不含点）
   const SCHEMA_VERSION = 1
 
+  /** @param {any} name @returns {string} */
   function extOf(name) {
     if (typeof name !== 'string') return ''
     const i = name.lastIndexOf('.')
@@ -20,11 +22,13 @@ App.Shortcut = (function () {
   }
 
   // 文件名是否为快捷方式（.desktop 后缀，大小写不敏感）
+  /** @param {any} name @returns {boolean} */
   function isShortcutName(name) {
     return extOf(name) === EXT
   }
 
   // 解析快捷方式 JSON 内容 → 规范化元信息；非法/缺字段抛错（调用方 toast）。
+  /** @param {string} content @returns {ShortcutMeta} */
   function parseShortcut(content) {
     let obj
     try {
@@ -68,7 +72,9 @@ App.Shortcut = (function () {
 
   // 构建 Application Shortcut 的 JSON 文本（写入文件用）。
   // icon 可选（base64 data URI）：内嵌后快捷方式自包含，可随文件迁移。
+  /** @param {{package: string, label?: string, isSystem?: boolean, icon?: string}} app @returns {string} */
   function buildAppShortcut(app) {
+    /** @type {{type: string, version: number, package: string, label: string, isSystem: boolean, icon?: string}} */
     const obj = {
       type: 'application',
       version: SCHEMA_VERSION,
@@ -82,7 +88,9 @@ App.Shortcut = (function () {
 
   // 构建 Website Shortcut 的 JSON 文本（写入文件用）。
   // trusted=true 时内嵌标记（网站以 allow-same-origin 完整加载，可读写授权目录——用户显式信任）。
+  /** @param {{url: string, label?: string, trusted?: boolean}} site @returns {string} */
   function buildWebsiteShortcut(site) {
+    /** @type {{type: string, version: number, url: string, label: string, trusted?: boolean}} */
     const obj = {
       type: 'website',
       version: SCHEMA_VERSION,
@@ -95,6 +103,7 @@ App.Shortcut = (function () {
 
   // 网址规范化：无协议（http:// https:// 等）时补 https://；已有协议原样保留。
   // 空 / 非字符串 → 空串（调用方据此拒绝创建）。
+  /** @param {any} input @returns {string} */
   function normalizeUrl(input) {
     if (typeof input !== 'string') return ''
     const s = input.trim()
@@ -105,6 +114,7 @@ App.Shortcut = (function () {
 
   // 网址 → 主机名（含端口，不含协议/路径/查询）：https://example.com/a → example.com。
   // 无法解析（无协议）时原样返回 trim 值（供文件名兜底）。
+  /** @param {any} url @returns {string} */
   function hostOf(url) {
     if (typeof url !== 'string') return ''
     const s = url.trim()
@@ -115,6 +125,7 @@ App.Shortcut = (function () {
 
   // 标签 → 安全文件名主名（剥离路径分隔符/非法字符/控制字符/首尾点/折叠空白）。
   // 返回不含扩展名的主名；空结果回退 fallback（通常是 package）。
+  /** @param {any} label @param {any} fallback @returns {string} */
   function sanitizeFileName(label, fallback) {
     let s = (typeof label === 'string' && label.trim()) ? label : ''
     // 剥离路径分隔符与 Windows/Android 非法字符 + 控制字符
@@ -128,6 +139,7 @@ App.Shortcut = (function () {
     return s
   }
 
+  /** @type {Shortcut} */
   return {
     EXT: EXT,
     SCHEMA_VERSION: SCHEMA_VERSION,

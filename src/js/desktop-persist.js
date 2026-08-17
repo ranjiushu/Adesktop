@@ -176,10 +176,11 @@ App.DesktopPersist = (function () {
   // rotation 透传：崩溃恢复后按保存时的旋转态重建相机（竖屏/横屏视角不混淆）
   function saveLayout() {
     if (C.isFolderView()) return
+    const cam = C.camera || App.DesktopCamera.create()
     const data = {
       version: 1,
       icons: C.positions,
-      camera: { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom, rotation: C.camera.rotation || 0 }
+      camera: { x: cam.x, y: cam.y, zoom: cam.zoom, rotation: cam.rotation || 0 }
     }
     if (!App.LayoutStore.save(data, C.state.rootId)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败')

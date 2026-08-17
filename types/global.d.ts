@@ -10,6 +10,12 @@ interface AppCamera {
   zoom: number
 }
 
+/** 扩展 HTMLElement：bindPress 防重复绑定标记（utils.js） */
+interface HTMLElement {
+  _bindPressBound?: boolean
+  _bindPressSplitBound?: boolean
+}
+
 /** 平面坐标（图标布局条目） */
 interface Position2D {
   x: number
@@ -178,6 +184,266 @@ interface AppBridge {
   requestRootAccess(): boolean
 }
 
+/** 桌面运行时状态（App.DesktopCore）：状态中枢，内存投影。
+ * positions/bounds 以完整相对路径为 key；selection 存 fullPath。 */
+interface DesktopCoreStateData {
+  rootName: string
+  mode: string
+  items: Array<FileItem>
+  curPath: string
+  trashName: string
+  rootId: string
+  viewStyle: 'grid' | 'list'
+  sortBy: string
+  sortDir: number
+  canvasH: number
+}
+
+/** 世界坐标 AABB（命中测试用） */
+interface Bounds2D {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+interface DesktopCore {
+  state: DesktopCoreStateData
+  positions: Record<string, Position2D>
+  bounds: Record<string, Bounds2D>
+  camera: DesktopCameraState | null
+  rootCamera: DesktopCameraState | null
+  selection: Set<string>
+  iconEls: Record<string, HTMLElement>
+  dragTargets: string[]
+  dragStartWorld: WorldPoint | null
+  dragStartPositions: Record<string, Position2D>
+  _lockedPaths: Set<string>
+  _advancedBrowse: boolean
+  _tempNormalMode: boolean
+  _emptyTapTime: number
+  _refreshSeq: number
+  nav: any
+  _raf: (cb: () => void) => number
+  _caf: (id: number) => void
+  _now: () => number
+  el: (tag: string, className?: string, text?: string | null) => HTMLElement
+  viewportWidth: () => number
+  viewportHeight: () => number
+  isFolderView: () => boolean
+  viewMode: () => string
+  fmtSize: (size: any) => string
+  fullPath: (name: string) => string
+  isTrashPath: (path: string) => boolean
+  inTrash: () => boolean
+  dragIncludesTrash: () => boolean
+  [key: string]: any
+}
+
+/** 按压处理器（utils.js） */
+interface PressHandlers {
+  onTap?: (e: Event) => void
+  onLongPress?: (e: Event) => void
+}
+
+interface PressOpts {
+  longPressMs?: number
+  moveThreshold?: number
+}
+
+interface AppUtils {
+  escapeHtml(str: any): string
+  bindPress(btn: HTMLElement | null, handler: (e: Event) => void): void
+  bindPressSplit(btn: HTMLElement | null, handlers: PressHandlers, opts?: PressOpts): void
+}
+
+/** 文件夹视图排布（App.FolderLayout）：网格/列表坐标纯函数 */
+interface FolderLayout {
+  gridPositions(count: number, viewportW: number): Array<Position2D>
+  listPositions(count: number): Array<Position2D>
+  canvasSize(count: number, viewportW: number, viewStyle: string): { w: number; h: number }
+  iconWidth(viewportW: number): number
+  COLS: number
+  LIST_ROW_H: number
+}
+
+/** 文件夹视图排序（App.FolderSort）：传统文件管理器语义纯函数 */
+interface FolderSort {
+  sort(items: Array<FileItem> | null, sortBy: string, sortDir: number): Array<FileItem>
+  typeKey(name: any): string
+  defaultDir(sortBy: string): number
+}
+
+/** 高级浏览模式 + 临时操作模式（App.DesktopBrowseMode） */
+interface DesktopBrowseMode {
+  syncBrowseMode(): void
+  exitTempMode(): void
+  setAdvancedBrowse(on: boolean): void
+  isAdvancedBrowse(): boolean
+}
+
+/** 类型图标系统（App.TypeIcons）：类型判定 → 内联 SVG */
+interface TypeIcons {
+  kindFor(name: string, isDir: boolean): string
+  svgFor(kind: string): string
+  extOf(name: any): string
+}
+
+interface IconOpts {
+  width?: number
+  height?: number
+  className?: string
+  class?: string
+  style?: string
+}
+
+interface AppIcons {
+  get(name: string, opts?: IconOpts): string
+  _NAMES?: Array<string>
+  [name: string]: any
+}
+
+/** 剪贴板（App.Clipboard）：内存态 copy/cut 模型 */
+interface ClipboardEntry {
+  path: string
+  isDir: boolean
+}
+
+interface ClipboardState {
+  mode: 'copy' | 'cut'
+  entries: Array<ClipboardEntry>
+}
+
+interface Clipboard {
+  set(mode: 'copy' | 'cut', entries: Array<{ path: string; isDir?: boolean }>): boolean
+  get(): ClipboardState | null
+  has(): boolean
+  clear(): void
+  isCut(path: string): boolean
+  planPaste(cb: ClipboardState | null, items: Array<FileItem> | null, curPath: string): Array<{ src: string; dst: string }>
+  uniqueName(takenNames: Array<string> | null, base: string, isDir: boolean): string
+}
+
+/** 网页文件上传桥（App.WebUpload） */
+interface WebUpload {
+  setPending(paths: Array<string> | null): void
+  hasPending(): boolean
+  getPending(): Array<string>
+  clearPending(): void
+  onFileRequested(): void
+  init(): void
+}
+
+/** Viewer 联动 + 布局 key 迁移（App.DesktopViewerLink） */
+interface DesktopViewerLink {
+  closeViewer(): void
+  isLockedPath(path: string): boolean
+  getLockedPaths(): Array<string>
+  applyRename(oldPath: string, newPath: string): void
+  applyMoves(moves: Array<{ src: string; dst: string }> | null): void
+}
+
+/** 基础 Markdown 渲染器（App.Markdown）：纯函数，先转义后标记 */
+interface Markdown {
+  render(md: any): string
+  inline(text: string): string
+  escapeHtml(s: any): string
+  safeUrl(url: any): string
+}
+
+/** 快捷方式契约（App.Shortcut）：.desktop JSON ↔ 语义 */
+interface AppShortcut {
+  type: 'application'
+  version: number
+  package: string
+  label: string
+  isSystem: boolean
+  icon: string | null
+}
+
+interface FileShortcut {
+  type: 'file'
+  version: number
+  label: string
+  uri: string
+}
+
+interface WebsiteShortcut {
+  type: 'website'
+  version: number
+  url: string
+  label: string
+  trusted: boolean
+}
+
+type ShortcutMeta = AppShortcut | FileShortcut | WebsiteShortcut
+
+interface Shortcut {
+  EXT: string
+  SCHEMA_VERSION: number
+  extOf(name: any): string
+  isShortcutName(name: any): boolean
+  parseShortcut(content: string): ShortcutMeta
+  buildAppShortcut(app: { package: string; label?: string; isSystem?: boolean; icon?: string }): string
+  buildWebsiteShortcut(site: { url: string; label?: string; trusted?: boolean }): string
+  normalizeUrl(input: any): string
+  hostOf(url: any): string
+  sanitizeFileName(label: any, fallback: any): string
+}
+
+/** 缩略图服务（App.Thumbnail）：渐进式获取 + 缓存 + pending 去重 */
+interface ThumbnailEntry {
+  state: 'pending' | 'ready' | 'failed'
+  uri: string | null
+  waiters: Array<{ ok: (uri: string) => void; fail: () => void }>
+}
+
+interface Thumbnail {
+  canThumbnail(kind: string): boolean
+  request(path: string, name: string, kind: string, onReady: (uri: string) => void, onFallback: () => void): void
+  requestShortcutIcon(path: string, onReady: (uri: string) => void, onFallback: () => void): void
+}
+
+/** 文件打开分派器（App.FileOpener）：类型判定 → InternalViewer / ExternalIntent */
+interface FileOpener {
+  open(item: { name: string; path: string }, anchor: WorldPoint | null, camera: DesktopCameraState | null, onClose: (() => void) | null): number | boolean | null
+  kindFor(name: string): string
+  extOf(name: any): string
+}
+
+/** 目录导航（App.DesktopNav）：路径 + 历史栈纯函数 */
+interface NavState {
+  stack: Array<string>
+  index: number
+}
+
+interface DesktopNav {
+  create(): NavState
+  current(nav: NavState): string
+  canBack(nav: NavState): boolean
+  canForward(nav: NavState): boolean
+  enter(nav: NavState, path: string): NavState
+  back(nav: NavState): NavState
+  forward(nav: NavState): NavState
+  join(base: string, name: string): string
+  parent(path: string): string
+  basename(path: string): string
+}
+
+/** 轻量吐司（App.toast） */
+interface Toast {
+  show(msg: string): void
+  pending(): number
+}
+
+/** 通用弹窗（App.Dialog）：overlay 显隐 + 返回键关闭栈 */
+interface Dialog {
+  open(overlayId: string, closeFn?: (() => void) | null): boolean
+  close(overlayId: string): boolean
+  handleBack(): boolean
+  isOpen(overlayId: string): boolean
+}
+
 /** App 全局命名空间（namespace.js 声明，各模块挂载）。
  * 已声明模块强类型；未声明模块经索引签名退化为 any，
  * 随 @ts-check 扩展逐步补声明（渐进式路线）。 */
@@ -192,7 +458,24 @@ interface AppNamespace {
   DesktopCamera: DesktopCamera
   ViewStore: ViewStore
   DesktopPersist: DesktopPersist
+  DesktopCore: DesktopCore
+  DesktopNav: DesktopNav
+  DesktopBrowseMode: DesktopBrowseMode
+  DesktopViewerLink: DesktopViewerLink
+  FolderLayout: FolderLayout
+  FolderSort: FolderSort
+  FileOpener: FileOpener
+  Markdown: Markdown
+  Shortcut: Shortcut
+  Thumbnail: Thumbnail
+  TypeIcons: TypeIcons
+  Clipboard: Clipboard
+  WebUpload: WebUpload
+  Dialog: Dialog
+  utils: AppUtils
+  icons: AppIcons
   bridge: AppBridge
+  toast: Toast
   [key: string]: any
 }
 

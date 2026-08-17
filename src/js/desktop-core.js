@@ -8,10 +8,12 @@
  * 依赖: namespace.js, desktop-nav.js（fullPath 用 join）
  * 导出: App.DesktopCore
  */
+// @ts-check
 'use strict'
 
 App.DesktopCore = (function () {
-  const C = {}
+  /** @type {DesktopCore} */
+  const C = /** @type {any} */ ({})
 
   // RAF 驱动（无 RAF 环境兜底 setTimeout ~16ms）
   C._raf = function (cb) {
@@ -45,14 +47,14 @@ App.DesktopCore = (function () {
   C.rootCamera = null      // 根目录相机快照（进入子文件夹前保存，返回根时恢复）
   C.positions = {}   // fullPath → {x, y}（世界坐标，移动后保留；仅 desktop 空间）
   C.bounds = {}      // fullPath → {x, y, w, h}（世界坐标 AABB，命中测试用）
-  C.selection = new Set()
+  C.selection = /** @type {Set<string>} */ (new Set())
   C.iconEls = {}     // fullPath → DOM 元素
   C.dragTargets = []        // 移动的图标 fullPath 列表（组移动）
   C.dragStartWorld = null   // 手指起始世界坐标
   C.dragStartPositions = {} // fullPath → 起始世界坐标（保持组内相对位置）
   // 文件锁定（Windows 式）：被 Viewer 打开的文件禁止复制/剪切/移动/删除/重命名，
   // 只允许拖动摆放（桌面空间布局）；关闭对应 Viewer 即解除。多实例：Set 存所有锁定路径
-  C._lockedPaths = new Set()
+  C._lockedPaths = /** @type {Set<string>} */ (new Set())
   // Viewer 选中态由 InternalViewer 实例管理（单选：最多一个选中，脆弱/临时）
 
   // 双击窗口状态

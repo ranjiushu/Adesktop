@@ -1,7 +1,9 @@
 /* 工具函数：escapeHtml + bindPress（按钮一触即发）+ bindPressSplit（长短按分流） */
+// @ts-check
 'use strict'
 
 App.utils = (function () {
+  /** @param {any} str @returns {string} */
   function escapeHtml(str) {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -13,6 +15,7 @@ App.utils = (function () {
 
   // 方案A：按钮一触即发，长短按均执行 handler
   // 解决 WebView 长按后 :active/focus 不释放、文本选择弹出等问题
+  /** @param {HTMLElement | null} btn @param {(e: Event) => void} handler */
   function bindPress(btn, handler) {
     if (!btn) return
     if (btn._bindPressBound) return
@@ -26,7 +29,7 @@ App.utils = (function () {
       // 可编辑元素不拦截默认行为：否则输入框无法触摸聚焦、软键盘不拉起
       // （touchstart preventDefault 会阻止触摸聚焦；输入框事件冒泡到遮罩的
       //   bindPress 时同样命中，须豁免 INPUT/TEXTAREA/SELECT/contentEditable）
-      let t = e.target
+      let t = /** @type {HTMLElement | null} */ (e.target)
       let editable = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
         t.tagName === 'SELECT' || t.isContentEditable)
       if (!editable) e.preventDefault()
@@ -38,6 +41,7 @@ App.utils = (function () {
     btn.addEventListener('touchmove', function (e) {
       if (!pressed) return
       let touch = e.touches[0]
+      if (!touch) return
       let rect = btn.getBoundingClientRect()
       if (touch.clientX < rect.left || touch.clientX > rect.right ||
           touch.clientY < rect.top || touch.clientY > rect.bottom) {
@@ -66,6 +70,7 @@ App.utils = (function () {
   // 方案B：长短按分流——按住超时（默认 500ms）= 长按只触发一次，
   // 提前抬起 = 短按（tap）。位移超阈值取消（防与底栏右滑 Drawer 手势打架）。
   // handlers: { onTap?, onLongPress? }，opts: { longPressMs?, moveThreshold? }
+  /** @param {HTMLElement | null} btn @param {PressHandlers} handlers @param {PressOpts} [opts] */
   function bindPressSplit(btn, handlers, opts) {
     if (!btn || !handlers) return
     if (btn._bindPressSplitBound) return
@@ -76,6 +81,7 @@ App.utils = (function () {
     let pressed = false
     let longFired = false
     let touchFired = false
+    /** @type {number | null} */
     let timer = null
 
     function cancelTimer() {
@@ -84,7 +90,7 @@ App.utils = (function () {
 
     btn.addEventListener('touchstart', function (e) {
       // 可编辑元素不拦截默认行为（同 bindPress：输入框触摸聚焦/软键盘）
-      let t = e.target
+      let t = /** @type {HTMLElement | null} */ (e.target)
       let editable = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
         t.tagName === 'SELECT' || t.isContentEditable)
       if (!editable) e.preventDefault()
@@ -104,6 +110,7 @@ App.utils = (function () {
     btn.addEventListener('touchmove', function (e) {
       if (!pressed) return
       let touch = e.touches[0]
+      if (!touch) return
       let rect = btn.getBoundingClientRect()
       if (touch.clientX < rect.left - moveThreshold || touch.clientX > rect.right + moveThreshold ||
           touch.clientY < rect.top - moveThreshold || touch.clientY > rect.bottom + moveThreshold) {
@@ -135,6 +142,7 @@ App.utils = (function () {
     })
   }
 
+  /** @type {AppUtils} */
   return {
     escapeHtml: escapeHtml,
     bindPress: bindPress,

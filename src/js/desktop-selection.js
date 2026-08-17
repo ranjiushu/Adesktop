@@ -3,10 +3,12 @@
  * 依赖: namespace.js
  * 导出: App.DesktopSelection
  */
+// @ts-check
 'use strict'
 
 App.DesktopSelection = (function () {
   // 归一化矩形：任意两个角点 → { x, y, w, h }（x/y = 左上角，w/h = 非负宽高）
+  /** @param {number} ax @param {number} ay @param {number} bx @param {number} by @returns {Bounds2D} */
   function rectFromPoints(ax, ay, bx, by) {
     return {
       x: Math.min(ax, bx),
@@ -17,6 +19,7 @@ App.DesktopSelection = (function () {
   }
 
   // AABB 相交判定（含边缘相切算相交）
+  /** @param {Bounds2D} r1 @param {Bounds2D} r2 @returns {boolean} */
   function aabbIntersect(r1, r2) {
     return !(r1.x + r1.w < r2.x || r2.x + r2.w < r1.x ||
              r1.y + r1.h < r2.y || r2.y + r2.h < r1.y)
@@ -24,20 +27,25 @@ App.DesktopSelection = (function () {
 
   // 框选命中：世界坐标矩形 rect vs 图标边界表 bounds({name:{x,y,w,h}})
   // 返回命中的 name 数组（保持 bounds 遍历顺序，稳定可测）
+  /** @param {Bounds2D} rect @param {Record<string, Bounds2D> | null} bounds @returns {Array<string>} */
   function marqueeHitTest(rect, bounds) {
+    /** @type {Array<string>} */
     const hits = []
-    Object.keys(bounds || {}).forEach(function (name) {
-      if (aabbIntersect(rect, bounds[name])) hits.push(name)
+    const b = bounds || {}
+    Object.keys(b).forEach(function (name) {
+      if (aabbIntersect(rect, b[name])) hits.push(name)
     })
     return hits
   }
 
   // 点命中：世界坐标点 (wx, wy) → 命中的 name（重叠时后注册者优先，无则 null）
+  /** @param {number} wx @param {number} wy @param {Record<string, Bounds2D> | null} bounds @returns {string | null} */
   function pointHitTest(wx, wy, bounds) {
     let found = null
-    Object.keys(bounds || {}).forEach(function (name) {
-      const b = bounds[name]
-      if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) {
+    const b = bounds || {}
+    Object.keys(b).forEach(function (name) {
+      const bb = b[name]
+      if (wx >= bb.x && wx <= bb.x + bb.w && wy >= bb.y && wy <= bb.y + bb.h) {
         found = name
       }
     })
@@ -45,17 +53,23 @@ App.DesktopSelection = (function () {
   }
 
   // ── 选中集合（不可变风格：返回新 Set，便于追踪状态变化）──
+  /** @param {string} name @returns {Set<string>} */
   function selectOnly(name) { return new Set([name]) }
+  /** @param {Set<string> | null} sel @param {string} name @returns {Set<string>} */
   function add(sel, name) { const s = new Set(sel || []); s.add(name); return s }
+  /** @param {Set<string> | null} sel @param {string} name @returns {Set<string>} */
   function remove(sel, name) { const s = new Set(sel || []); s.delete(name); return s }
+  /** @param {Set<string> | null} sel @param {string} name @returns {Set<string>} */
   function toggle(sel, name) {
     const s = new Set(sel || [])
     if (s.has(name)) s.delete(name); else s.add(name)
     return s
   }
+  /** @returns {Set<string>} */
   function clear() { return new Set() }
 
   // 选中组外接矩形（union AABB）：覆盖组内所有图标 + 空隙，空集返回 null
+  /** @param {Record<string, Bounds2D>} bounds @param {Array<string>} names @returns {Bounds2D | null} */
   function unionRect(bounds, names) {
     let minX = Infinity
     let minY = Infinity
@@ -74,11 +88,13 @@ App.DesktopSelection = (function () {
   }
 
   // 点是否在矩形内（含边界）
+  /** @param {number} px @param {number} py @param {Bounds2D | null} rect @returns {boolean} */
   function pointInRect(px, py, rect) {
     if (!rect) return false
     return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h
   }
 
+  /** @type {DesktopSelection} */
   return {
     rectFromPoints: rectFromPoints,
     aabbIntersect: aabbIntersect,

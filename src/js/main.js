@@ -1,4 +1,5 @@
 /* 应用入口：初始化渲染与状态输出 */
+// @ts-check
 'use strict'
 
 App.boot = function boot() {

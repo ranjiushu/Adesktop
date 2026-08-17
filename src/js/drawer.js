@@ -1,4 +1,5 @@
 /* 左侧 Drawer 工具栏：汉堡呼出，含根目录路径与文件系统动作 */
+// @ts-check
 'use strict'
 
 App.Drawer = (function () {
@@ -6,8 +7,10 @@ App.Drawer = (function () {
   let OVERLAY_ID = 'drawer-overlay'
   let _open = false
 
+  /** @param {string} id @returns {HTMLElement | null} */
   function _getEl(id) { return document.getElementById(id) }
 
+  /** @returns {void} */
   function open() {
     if (_open) return
     _open = true
@@ -24,6 +27,7 @@ App.Drawer = (function () {
     // 无震动反馈（用户指定移除开启/关闭震动）
   }
 
+  /** @returns {void} */
   function close() {
     if (!_open) return
     _open = false
@@ -35,13 +39,16 @@ App.Drawer = (function () {
     if (o) o.classList.remove('drawer-overlay-visible')
   }
 
+  /** @returns {void} */
   function toggle() {
     if (_open) close(); else open()
   }
 
+  /** @returns {boolean} */
   function isOpen() { return _open }
 
   // 更新根目录路径显示（顶栏标题与 Drawer 头部同步）
+  /** @param {string} displayPath @param {string} rootName @param {string} mode @returns {void} */
   function updatePath(displayPath, rootName, mode) {
     let titleEl = document.getElementById('app-title')
     if (titleEl) {
@@ -57,6 +64,7 @@ App.Drawer = (function () {
     }
   }
 
+  /** @returns {void} */
   function init() {
     let btn = document.getElementById('btn-drawer')
     if (btn) App.utils.bindPress(btn, toggle)
@@ -67,7 +75,7 @@ App.Drawer = (function () {
       // 动作项（与 FAB 共享 App.Actions）
       let items = d.querySelectorAll('.drawer-item[data-action]')
       for (let i = 0; i < items.length; i++) {
-        App.utils.bindPress(items[i], function () {
+        App.utils.bindPress(/** @type {HTMLElement} */ (items[i]), /** @this {HTMLElement} */ function () {
           let action = this.getAttribute('data-action')
           if (!action) return
           close()
@@ -77,11 +85,12 @@ App.Drawer = (function () {
         })
       }
       // 头部关闭按钮
-      let closeBtn = d.querySelector('.drawer-close')
+      let closeBtn = /** @type {HTMLElement | null} */ (d.querySelector('.drawer-close'))
       if (closeBtn) App.utils.bindPress(closeBtn, close)
     }
   }
 
+  /** @type {Drawer} */
   return {
     open: open,
     close: close,

@@ -4,6 +4,7 @@
  * 依赖: namespace.js, utils.js, dialog.js, shortcut.js, file-api.js, toast.js, desktop.js
  * 导出: App.WebsiteDialog
  */
+// @ts-check
 'use strict'
 
 App.WebsiteDialog = (function () {
@@ -12,23 +13,27 @@ App.WebsiteDialog = (function () {
   const LABEL_ID = 'website-label'
   let _open = false
 
+  /** @param {string} id @returns {HTMLElement | null} */
   function _getEl(id) { return document.getElementById(id) }
 
   // 当前目录完整相对路径（'' = 根）
+  /** @returns {string} */
   function _curPath() {
     return (App.Desktop && typeof App.Desktop.getCurPath === 'function')
       ? App.Desktop.getCurPath() : ''
   }
+  /** @param {string} name @returns {string} */
   function _join(name) {
     const base = _curPath()
     return base ? base + '/' + name : name
   }
 
+  /** @returns {void} */
   function open() {
     if (_open) return
     _open = App.Dialog.open(OVERLAY_ID, close)
-    const url = _getEl(URL_ID)
-    const label = _getEl(LABEL_ID)
+    const url = /** @type {HTMLInputElement | null} */ (_getEl(URL_ID))
+    const label = /** @type {HTMLInputElement | null} */ (_getEl(LABEL_ID))
     if (url) {
       url.value = ''
       url.focus()
@@ -37,26 +42,29 @@ App.WebsiteDialog = (function () {
       }, 120)
     }
     if (label) label.value = ''
-    const trusted = _getEl('website-trusted')
+    const trusted = /** @type {HTMLInputElement | null} */ (_getEl('website-trusted'))
     if (trusted) trusted.checked = false
   }
 
+  /** @returns {void} */
   function close() {
     if (!_open) return
     _open = false
     App.Dialog.close(OVERLAY_ID)
-    const url = _getEl(URL_ID)
+    const url = /** @type {HTMLInputElement | null} */ (_getEl(URL_ID))
     if (url && document.activeElement === url) url.blur()
-    const label = _getEl(LABEL_ID)
+    const label = /** @type {HTMLInputElement | null} */ (_getEl(LABEL_ID))
     if (label && document.activeElement === label) label.blur()
   }
 
+  /** @returns {boolean} */
   function isOpen() { return _open }
 
   // 提交：规范化网址 → 写 .desktop（type=website），重名自动加序号。
+  /** @returns {void} */
   function _submit() {
-    const urlEl = _getEl(URL_ID)
-    const labelEl = _getEl(LABEL_ID)
+    const urlEl = /** @type {HTMLInputElement | null} */ (_getEl(URL_ID))
+    const labelEl = /** @type {HTMLInputElement | null} */ (_getEl(LABEL_ID))
     const raw = urlEl ? urlEl.value : ''
     const url = App.Shortcut.normalizeUrl(raw)
     if (!url) {
@@ -64,7 +72,7 @@ App.WebsiteDialog = (function () {
       return
     }
     const label = labelEl ? labelEl.value.trim() : ''
-    const trustedEl = _getEl('website-trusted')
+    const trustedEl = /** @type {HTMLInputElement | null} */ (_getEl('website-trusted'))
     const trusted = !!(trustedEl && trustedEl.checked)
     const dir = _curPath()
     close()
@@ -73,6 +81,7 @@ App.WebsiteDialog = (function () {
     App.FileAPI.list(dir).then(function (items) {
       let name = stem + '.' + ext
       let seq = 2
+      /** @param {string} n @returns {boolean} */
       const exists = function (n) {
         for (let i = 0; i < items.length; i++) {
           if (items[i].name === n && !items[i].isDir) return true
@@ -96,6 +105,7 @@ App.WebsiteDialog = (function () {
     })
   }
 
+  /** @returns {void} */
   function init() {
     const createBtn = _getEl('website-create')
     if (createBtn) App.utils.bindPress(createBtn, _submit)
@@ -104,18 +114,18 @@ App.WebsiteDialog = (function () {
       if (e.target === overlay) close()
     })
     // 网址输入框 Enter → 跳到名称输入框
-    const urlEl = _getEl(URL_ID)
+    const urlEl = /** @type {HTMLInputElement | null} */ (_getEl(URL_ID))
     if (urlEl) {
       urlEl.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.keyCode === 13) {
           e.preventDefault()
-          const labelEl = _getEl(LABEL_ID)
+          const labelEl = /** @type {HTMLInputElement | null} */ (_getEl(LABEL_ID))
           if (labelEl) labelEl.focus()
         }
       })
     }
     // 名称输入框 Enter → 提交
-    const labelEl = _getEl(LABEL_ID)
+    const labelEl = /** @type {HTMLInputElement | null} */ (_getEl(LABEL_ID))
     if (labelEl) {
       labelEl.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.keyCode === 13) {
@@ -126,6 +136,7 @@ App.WebsiteDialog = (function () {
     }
   }
 
+  /** @type {WebsiteDialog} */
   return {
     open: open,
     close: close,

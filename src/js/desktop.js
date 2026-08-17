@@ -8,6 +8,7 @@
  * 布局 key = 完整相对路径（join(curPath, name)），跨目录不冲突。
  * 根目录 = SAF 授权目录 或 私有目录兜底（由桥决定）。
  */
+// @ts-check
 'use strict'
 
 App.Desktop = (function () {
@@ -21,6 +22,7 @@ App.Desktop = (function () {
   const V = App.DesktopViewerLink
   const H = App.DesktopGestureHandlers
 
+  /** @returns {void} */
   function initGesture() {
     C.nav = App.DesktopNav.create()
     P.initLayout()
@@ -33,12 +35,14 @@ App.Desktop = (function () {
       camera: C.camera,
       // folder 容器：双指 pan 每帧钳制——zoom 锁 1、x 锁 0、y 限画布内
       // （只能上下滚动且有上下边界；钳制在 gesture 层保证 transform 同步）
+      /** @param {DesktopCameraState} c @returns {DesktopCameraState} */
       onClamp: function (c) {
         if (!C.isFolderView()) return c
         return App.DesktopCamera.clampToBounds(
           { x: 0, y: c.y, zoom: 1, rotation: 0 },
           C.viewportWidth(), C.state.canvasH, C.viewportWidth(), C.viewportHeight())
       },
+      /** @param {DesktopCameraState} c @returns {void} */
       onUpdate: function (c) {
         C.camera = c
         // 相机变化 → 同步 Viewer 拖动手柄屏幕位置（平移/缩放/Home 动画每帧）
@@ -78,9 +82,12 @@ App.Desktop = (function () {
   // 横屏切回竖屏 → 读竖屏槽位（home/fallback），落在竖屏 Home 视角。
   // 目标方向无槽位时保持当前位置只转方向（不强制回出厂）。
   // 旋转后同步手势层/Viewer 手柄/Home 高亮。
+  /** @returns {boolean} */
   function toggleRotate() {
     if (C.isFolderView()) return false
-    const next = C.camera.rotation === 90 ? 0 : 90
+    const cam = C.camera
+    if (!cam) return false
+    const next = cam.rotation === 90 ? 0 : 90
     // 1. 读目标方向（next）的 Home 槽位：快照优先 > 默认视角
     let home = null
     const data = App.HomeStore.load(C.state.rootId, next)
@@ -88,7 +95,7 @@ App.Desktop = (function () {
     else if (data && data.fallback) home = data.fallback
     // 2. 目标方向有槽位 → 落到该槽位（x/y/zoom + 目标方向 rotation）；
     //    无槽位 → 保持当前位置只转方向
-    const base = home || { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
+    const base = home || { x: cam.x, y: cam.y, zoom: cam.zoom }
     C.camera = App.DesktopCamera.create(base.x, base.y, base.zoom, next)
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
       App.DesktopGesture.setCamera(C.camera)
@@ -102,10 +109,12 @@ App.Desktop = (function () {
     return true
   }
 
+  /** @returns {boolean} */
   function isRotated() {
-    return C.camera.rotation === 90
+    return !!(C.camera && C.camera.rotation === 90)
   }
 
+  /** @type {Desktop} */
   return {
     refresh: P.refresh,
     render: R.render,

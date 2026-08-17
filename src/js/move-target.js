@@ -14,6 +14,7 @@
  *   3) 源含锁定文件（预览中）→ 拦截（与删除一致，_lockedEntry 同款）
  * 关闭（取消/返回键/点空白）= 清理暂存，选中保持（不自动清选中）。
  */
+// @ts-check
 'use strict'
 
 App.MoveTarget = (function () {
@@ -23,29 +24,36 @@ App.MoveTarget = (function () {
   let CONFIRM_ID = 'move-target-confirm'
 
   let _open = false
+  /** @type {Array<ClipboardEntry>} */
   let _entries = []   // [{path, isDir}] 待移动项（FAB 选中快照）
   let _cur = ''       // 当前浏览目录（完整相对路径，'' = 根）
+  /** @type {Array<FileItem>} */
   let _items = []     // 当前目录 FileAPI.list 结果（守卫 + 渲染用）
   let _navSeq = 0     // 导航竞态守卫：丢弃过期响应
 
+  /** @param {string} id @returns {HTMLElement | null} */
   function _getEl(id) { return document.getElementById(id) }
 
   // 取父目录：'docs/a.txt' → 'docs'；'a.txt' → ''
+  /** @param {string} [p] @returns {string} */
   function _parentDir(p) {
     if (!p) return ''
     const i = p.lastIndexOf('/')
     return i < 0 ? '' : p.slice(0, i)
   }
 
+  /** @param {string} base @param {string} name @returns {string} */
   function _join(base, name) { return base ? base + '/' + name : name }
 
   // 目标目录是否在源文件夹自身或后代内（循环移动）
+  /** @param {string} srcDir @param {string} dstDir @returns {boolean} */
   function _inside(srcDir, dstDir) {
     if (!srcDir) return false
     return dstDir === srcDir || dstDir.indexOf(srcDir + '/') === 0
   }
 
   // 守卫：返回错误消息（非 null 表示不可移动）
+  /** @param {string} dirPath @returns {string | null} */
   function _guard(dirPath) {
     for (let i = 0; i < _entries.length; i++) {
       const e = _entries[i]
@@ -55,6 +63,7 @@ App.MoveTarget = (function () {
     return null
   }
 
+  /** @returns {Array<ClipboardEntry>} */
   function _lockedEntries() {
     const locked = App.Desktop && typeof App.Desktop.getLockedPaths === 'function'
       ? App.Desktop.getLockedPaths() : []
@@ -79,8 +88,8 @@ App.MoveTarget = (function () {
     el.innerHTML = html
     const btns = el.querySelectorAll('.move-crumb')
     for (let i = 0; i < btns.length; i++) {
-      App.utils.bindPress(btns[i], (function (btn) {
-        return function () { _navigate(btn.getAttribute('data-path')) }
+      App.utils.bindPress(/** @type {HTMLElement} */ (btns[i]), (function (btn) {
+        return function () { _navigate(btn.getAttribute('data-path') || '') }
       })(btns[i]))
     }
   }
@@ -136,6 +145,7 @@ App.MoveTarget = (function () {
   }
 
   // ── 导航（竞态守卫：仅最新请求的响应生效） ──
+  /** @param {string} path @returns {void} */
   function _navigate(path) {
     _cur = path || ''
     const seq = ++_navSeq
@@ -152,6 +162,7 @@ App.MoveTarget = (function () {
   }
 
   // ── 打开：暂存选中快照，初始 = 当前浏览目录 ──
+  /** @param {Array<ClipboardEntry>} entries @returns {void} */
   function open(entries) {
     if (_open) return
     if (!entries || !entries.length) return
@@ -166,6 +177,7 @@ App.MoveTarget = (function () {
     _navigate(start)
   }
 
+  /** @returns {void} */
   function close() {
     if (!_open) return
     _open = false
@@ -176,9 +188,11 @@ App.MoveTarget = (function () {
     App.Dialog.close(OVERLAY_ID)
   }
 
+  /** @returns {boolean} */
   function isOpen() { return _open }
 
   // ── 初始化：遮罩点空白关闭 + 按钮绑定（Dialog 栈返回键已由 dialog.js 接管） ──
+  /** @returns {void} */
   function init() {
     const overlay = _getEl(OVERLAY_ID)
     if (!overlay) return
@@ -191,6 +205,7 @@ App.MoveTarget = (function () {
     if (confirm) App.utils.bindPress(confirm, _confirm)
   }
 
+  /** @type {MoveTarget} */
   return {
     open: open,
     close: close,

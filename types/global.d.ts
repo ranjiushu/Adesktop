@@ -10,10 +10,11 @@ interface AppCamera {
   zoom: number
 }
 
-/** 扩展 HTMLElement：bindPress 防重复绑定标记（utils.js） */
+/** 扩展 HTMLElement：bindPress 防重复绑定标记（utils.js）+ 移动目标守卫消息（move-target.js） */
 interface HTMLElement {
   _bindPressBound?: boolean
   _bindPressSplitBound?: boolean
+  _moveInvalidMsg?: string
 }
 
 /** 平面坐标（图标布局条目） */
@@ -271,7 +272,7 @@ interface FolderLayout {
 interface FolderSort {
   sort(items: Array<FileItem> | null, sortBy: string, sortDir: number): Array<FileItem>
   typeKey(name: any): string
-  defaultDir(sortBy: string): number
+  defaultDir(sortBy: string): 1 | -1
 }
 
 /** 高级浏览模式 + 临时操作模式（App.DesktopBrowseMode） */
@@ -444,6 +445,210 @@ interface Dialog {
   isOpen(overlayId: string): boolean
 }
 
+/** IME 键盘适配（App.ImeAdapter）：desktop:ime 事件 → 对话框 .ime-open 类 */
+interface ImeAdapter {
+  init(): void
+}
+
+/** UI 工具（App.ui）：剪贴板复制 */
+interface AppUi {
+  copyText(text: string, msg?: string): boolean
+}
+
+/** 双击窗口判定（App.DoubleTap） */
+interface TapState {
+  name: string | null
+  time: number
+}
+
+interface DoubleTap {
+  create(): TapState | null
+  hit(state: TapState | null, name: string | null, now: number, ms?: number): { state: TapState | null; double: boolean }
+  within(state: TapState | null, name: string | null, now: number, ms?: number): boolean
+}
+
+/** 网格 cell 坐标 */
+interface CellCoord {
+  cx: number
+  cy: number
+}
+
+/** 桌面网格（App.DesktopGrid）：吸附 + 放置避让纯函数 */
+interface DesktopGrid {
+  ORIGIN_X: number
+  ORIGIN_Y: number
+  GRID_W: number
+  GRID_H: number
+  snapToGrid(x: number, y: number): Position2D
+  worldToCell(x: number, y: number): CellCoord
+  cellToWorld(cx: number, cy: number): Position2D
+  findFreeCell(cx: number, cy: number, taken: Set<string>): CellCoord
+  resolvePlacement(moving: Array<{ name: string; x: number; y: number }>, statics: Array<{ name: string; x: number; y: number }>): Record<string, Position2D>
+}
+
+/** 桌面选择（App.DesktopSelection）：命中测试 + 选中集合纯函数 */
+interface DesktopSelection {
+  rectFromPoints(ax: number, ay: number, bx: number, by: number): Bounds2D
+  aabbIntersect(r1: Bounds2D, r2: Bounds2D): boolean
+  marqueeHitTest(rect: Bounds2D, bounds: Record<string, Bounds2D> | null): Array<string>
+  pointHitTest(wx: number, wy: number, bounds: Record<string, Bounds2D> | null): string | null
+  selectOnly(name: string): Set<string>
+  add(sel: Set<string> | null, name: string): Set<string>
+  remove(sel: Set<string> | null, name: string): Set<string>
+  toggle(sel: Set<string> | null, name: string): Set<string>
+  clear(): Set<string>
+  unionRect(bounds: Record<string, Bounds2D>, names: Array<string>): Bounds2D | null
+  pointInRect(px: number, py: number, rect: Bounds2D | null): boolean
+}
+
+/** Loading 当前文件行（字节级进度） */
+interface LoadingCurrent {
+  name: string
+  done: number
+  total: number
+}
+
+/** Loading 组件选项（loading.js show） */
+interface LoadingOpts {
+  title?: string
+  phaseLabel?: string
+  phaseDone?: number
+  phaseTotal?: number
+  totalLabel?: string
+  totalDone?: number
+  totalTotal?: number
+  current?: LoadingCurrent
+  cancellable?: boolean
+  onCancel?: () => void
+}
+
+interface Loading {
+  show(opts: LoadingOpts): void
+  hide(): void
+  showTag(text: string): void
+  hideTag(): void
+}
+
+/** 左侧 Drawer（App.Drawer） */
+interface Drawer {
+  open(): void
+  close(): void
+  toggle(): void
+  isOpen(): boolean
+  updatePath(displayPath: string, rootName: string, mode: string): void
+  init(): void
+}
+
+/** 底部工具栏（App.BottomBar） */
+interface BottomBar {
+  init(): void
+  updateNavButtons(): void
+  updateHomeState(): void
+}
+
+/** 桌面编排入口（App.Desktop）：各模块能力聚合 + 手势初始化 */
+interface Desktop {
+  refresh(): Promise<any>
+  render(): void
+  initGesture(): void
+  clearSelection(): void
+  hasSelection(): boolean
+  getSelectionNames(): Array<string>
+  getSelectionEntries(): Array<any>
+  applyRename(oldPath: string, newPath: string): void
+  applyMoves(moves: Array<{ src: string; dst: string }> | null): void
+  openItem: any
+  enterFolder: any
+  goBack: () => void
+  goForward: () => void
+  goUp: () => void
+  canGoBack: () => boolean
+  canGoForward: () => boolean
+  canGoUp: () => boolean
+  getCurPath: () => string
+  getLockedPaths: () => Array<string>
+  isLockedPath: (path: string) => boolean
+  closeViewer: () => void
+  isTrashPath: (path: string) => boolean
+  inTrash: () => boolean
+  getTrashName: () => string
+  getRootId: () => string
+  viewMode: () => string
+  isFolderView: () => boolean
+  applyViewPrefs: (prefs: ViewPrefs) => void
+  getViewPrefs: () => ViewPrefs
+  captureHome: () => void
+  captureDefaultView: () => void
+  goHome: () => void
+  setAdvancedBrowse: (on: boolean) => void
+  isAdvancedBrowse: () => boolean
+  exitTempMode: () => void
+  toggleRotate: () => boolean
+  isRotated: () => boolean
+}
+
+/** 顶栏排列/视图菜单（App.ViewMenu） */
+interface ViewMenu {
+  init(): void
+  open(): void
+  close(): void
+  toggle(): void
+  isOpen(): boolean
+  isEnabled(): boolean
+  setEnabled(on: boolean): void
+}
+
+/** 新建对话框（App.CreateDialog） */
+interface CreateDialog {
+  open(): void
+  close(): void
+  isOpen(): boolean
+  init(): void
+}
+
+/** 重命名对话框（App.RenameDialog） */
+interface RenameDialog {
+  open(name: string): void
+  close(): void
+  isOpen(): boolean
+  init(): void
+}
+
+/** 新建网站快捷方式对话框（App.WebsiteDialog） */
+interface WebsiteDialog {
+  open(): void
+  close(): void
+  isOpen(): boolean
+  init(): void
+}
+
+/** 移动目标选择器（App.MoveTarget） */
+interface MoveTarget {
+  open(entries: Array<ClipboardEntry>): void
+  close(): void
+  isOpen(): boolean
+  init(): void
+}
+
+/** 文件系统动作（App.Actions）：新建/重命名/复制/剪切/粘贴/删除/移动 */
+interface Actions {
+  createFolder(name: string): void
+  createFile(name: string): void
+  refresh(): void
+  setDefaultView(): void
+  switchRoot(): void
+  rename(oldPath: string, newName: string): void
+  copySelection(entries: Array<ClipboardEntry>): void
+  cutSelection(entries: Array<ClipboardEntry>): void
+  paste(): void
+  deleteSelection(entries: Array<ClipboardEntry>): void
+  moveIntoFolder(entries: Array<ClipboardEntry>, dirPath: string): void
+}
+
+/** 构建注入变量（build-web.sh 注入，见 tools/build-web.sh） */
+declare var BUILD_COUNT: number
+declare var BUILD_TIMESTAMP: string
+
 /** App 全局命名空间（namespace.js 声明，各模块挂载）。
  * 已声明模块强类型；未声明模块经索引签名退化为 any，
  * 随 @ts-check 扩展逐步补声明（渐进式路线）。 */
@@ -462,6 +667,8 @@ interface AppNamespace {
   DesktopNav: DesktopNav
   DesktopBrowseMode: DesktopBrowseMode
   DesktopViewerLink: DesktopViewerLink
+  DesktopGrid: DesktopGrid
+  DesktopSelection: DesktopSelection
   FolderLayout: FolderLayout
   FolderSort: FolderSort
   FileOpener: FileOpener
@@ -472,8 +679,21 @@ interface AppNamespace {
   Clipboard: Clipboard
   WebUpload: WebUpload
   Dialog: Dialog
+  Loading: Loading
+  Drawer: Drawer
+  BottomBar: BottomBar
+  DoubleTap: DoubleTap
+  ImeAdapter: ImeAdapter
+  Desktop: Desktop
+  ViewMenu: ViewMenu
+  CreateDialog: CreateDialog
+  RenameDialog: RenameDialog
+  WebsiteDialog: WebsiteDialog
+  MoveTarget: MoveTarget
+  Actions: Actions
   utils: AppUtils
   icons: AppIcons
+  ui: AppUi
   bridge: AppBridge
   toast: Toast
   [key: string]: any

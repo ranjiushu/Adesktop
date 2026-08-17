@@ -3,10 +3,12 @@
  * 依赖: namespace.js
  * 导出: App.DoubleTap
  */
+// @ts-check
 'use strict'
 
 App.DoubleTap = (function () {
   // 初始状态：null = 无 pending tap
+  /** @returns {TapState | null} */
   function create() { return null }
 
   // 判定一次 hit：
@@ -17,6 +19,7 @@ App.DoubleTap = (function () {
   // 返回 { state, double }：
   //   double=true  → 双击（打开），state 清空
   //   double=false → 普通 tap，state 记录本次
+  /** @param {TapState | null} state @param {string | null} name @param {number} now @param {number} [ms] @returns {{state: TapState | null, double: boolean}} */
   function hit(state, name, now, ms) {
     const windowMs = (ms && ms > 0) ? ms : 300
     if (state && state.name === name && name !== null && (now - state.time) <= windowMs) {
@@ -27,11 +30,13 @@ App.DoubleTap = (function () {
 
   // 窗口超时（反选延迟确认）：返回 false 表示窗口已关闭（无需反选）
   // state 与本次 tap 相同对象且未超时 → 仍在窗口内
+  /** @param {TapState | null} state @param {string | null} name @param {number} now @param {number} [ms] @returns {boolean} */
   function within(state, name, now, ms) {
     const windowMs = (ms && ms > 0) ? ms : 300
     return !!(state && state.name === name && name !== null && (now - state.time) <= windowMs)
   }
 
+  /** @type {DoubleTap} */
   return {
     create: create,
     hit: hit,

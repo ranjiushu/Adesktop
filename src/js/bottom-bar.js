@@ -8,12 +8,15 @@
  * 导出: App.BottomBar
  * 手势: 底栏区域右滑呼出 Drawer 由 drawer-swipe.js 负责（监听底栏 touch 事件）
  */
+// @ts-check
 'use strict'
 
 App.BottomBar = (function () {
+  /** @param {string} id @returns {HTMLElement | null} */
   function _getEl(id) { return document.getElementById(id) }
 
   // 更新后退/前进/上级/Home 禁用态（根目录可后退判定、栈尾不可前进、子文件夹容器内上级与 Home 禁用）
+  /** @returns {void} */
   function updateNavButtons() {
     let back = _getEl('bb-btn-back')
     let fwd = _getEl('bb-btn-forward')
@@ -33,6 +36,7 @@ App.BottomBar = (function () {
   }
 
   // 统一设置按钮禁用态（disabled + aria-disabled）
+  /** @param {HTMLElement} btn @param {boolean} enabled @returns {void} */
   function _setEnabled(btn, enabled) {
     if (enabled) {
       btn.removeAttribute('disabled')
@@ -45,6 +49,7 @@ App.BottomBar = (function () {
 
   // Home 快照视觉：已记录快照 → 图标强调色（用户可感知「快照存在」）。
   // 按当前画布方向（rotation）读对应槽位：竖屏/横屏各有独立快照标记。
+  /** @returns {void} */
   function updateHomeState() {
     let home = _getEl('bb-btn-home')
     if (!home || !App.HomeStore) return
@@ -57,6 +62,7 @@ App.BottomBar = (function () {
     else home.classList.remove('home-has-snapshot')
   }
 
+  /** @returns {void} */
   function init() {
     let add = _getEl('bb-btn-add')
     if (add) {
@@ -108,6 +114,7 @@ App.BottomBar = (function () {
     }
   }
 
+  /** @type {BottomBar} */
   return {
     init: init,
     updateNavButtons: updateNavButtons,

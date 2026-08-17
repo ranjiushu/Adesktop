@@ -10,6 +10,7 @@
  * 依赖: namespace.js, dialog.js
  * 导出: App.Loading
  */
+// @ts-check
 'use strict'
 
 App.Loading = (function () {
@@ -30,12 +31,15 @@ App.Loading = (function () {
   let CANCEL_ID = 'loading-cancel'
   let TAG_ID = 'drop-tag'
 
+  /** @type {(() => void) | null} */
   let _onCancel = null   // 当前对话框的取消回调（Actions 注入）
   let _cancelBound = false
 
+  /** @param {string} id @returns {HTMLElement | null} */
   function _el(id) { return document.getElementById(id) }
 
   // classList.toggle(className, force) 兼容：桩（vm 测试）可能只有 add/remove
+  /** @param {HTMLElement | null} el @param {string} cls @param {boolean} on */
   function _toggleClass(el, cls, on) {
     if (!el || !el.classList) return
     if (typeof el.classList.toggle === 'function') {
@@ -47,17 +51,21 @@ App.Loading = (function () {
     }
   }
 
+  /** @param {number} done @param {number} total @returns {number} */
   function _pct(done, total) {
     if (!total || total <= 0) return 0
     return Math.max(0, Math.min(100, Math.round(done / total * 100)))
   }
 
+  /** @param {string} text @param {number} done @param {number} total @returns {string} */
   function _label(text, done, total) {
     return total > 0 ? (text + ' ' + done + '/' + total) : (text || '')
   }
 
   // 字节人性化：1234567 → '1.2 MB'；不足 1 KB 显示 B
+  /** @param {number} done @param {number} total @returns {string} */
   function _bytes(done, total) {
+    /** @param {number} n @returns {string} */
     function fmt(n) {
       if (n < 1024) return Math.round(n) + ' B'
       if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
@@ -76,8 +84,14 @@ App.Loading = (function () {
   //   totalTotal>0 → 显示总进度条（分阶段整体）
   //   两者都无 → 不确定进度（条纹滑动，目录切换/刷新）
   // 显隐复用 App.Dialog（统一弹窗显隐 + aria），本模块只维护进度条内容。
+  /** @param {LoadingOpts} opts @returns {void} */
   function show(opts) {
     opts = opts || {}
+    const curInfo = opts.current && opts.current.name ? opts.current : null
+    const phaseTotal = opts.phaseTotal || 0
+    const phaseDone = opts.phaseDone || 0
+    const totalTotal = opts.totalTotal || 0
+    const totalDone = opts.totalDone || 0
     let dlg = _el(DIALOG_ID)
     if (!dlg) return
     App.Dialog.open(DIALOG_ID)
@@ -85,52 +99,52 @@ App.Loading = (function () {
     if (title) title.textContent = opts.title || '处理中'
     // 当前文件行（字节级进度）
     let cur = _el(CURRENT_ID)
-    let hasCurrent = !!(opts.current && opts.current.name)
+    let hasCurrent = !!curInfo
     if (cur) {
       _toggleClass(cur, 'loading-visible', hasCurrent)
-      if (hasCurrent) {
+      if (curInfo) {
         let clab = _el(CURRENT_LABEL_ID)
-        if (clab) clab.textContent = opts.current.name
+        if (clab) clab.textContent = curInfo.name
         let ccnt = _el(CURRENT_COUNT_ID)
-        if (ccnt) ccnt.textContent = _bytes(opts.current.done || 0, opts.current.total || 0)
+        if (ccnt) ccnt.textContent = _bytes(curInfo.done || 0, curInfo.total || 0)
       }
     }
     // 取消按钮（传输中）
-    _onCancel = opts.cancellable ? opts.onCancel : null
+    _onCancel = opts.cancellable ? (opts.onCancel || null) : null
     let acts = _el(ACTIONS_ID)
     if (acts) _toggleClass(acts, 'loading-visible', !!_onCancel)
     // 阶段进度条
     let phase = _el(PHASE_ID)
-    let hasPhase = opts.phaseTotal > 0
+    let hasPhase = phaseTotal > 0
     if (phase) {
       _toggleClass(phase, 'loading-visible', hasPhase)
       if (hasPhase) {
         let bar = _el(PHASE_BAR_ID)
         if (bar) {
           bar.classList.remove('loading-indeterminate')
-          bar.style.width = _pct(opts.phaseDone, opts.phaseTotal) + '%'
+          bar.style.width = _pct(phaseDone, phaseTotal) + '%'
         }
         let lab = _el(PHASE_LABEL_ID)
-        if (lab) lab.textContent = _label(opts.phaseLabel || '', opts.phaseDone, opts.phaseTotal)
+        if (lab) lab.textContent = _label(opts.phaseLabel || '', phaseDone, phaseTotal)
         let cnt = _el(PHASE_COUNT_ID)
-        if (cnt) cnt.textContent = opts.phaseDone + '/' + opts.phaseTotal
+        if (cnt) cnt.textContent = phaseDone + '/' + phaseTotal
       }
     }
     // 总进度条
     let total = _el(TOTAL_ID)
-    let hasTotal = opts.totalTotal > 0
+    let hasTotal = totalTotal > 0
     if (total) {
       _toggleClass(total, 'loading-visible', hasTotal)
       if (hasTotal) {
         let bar = _el(TOTAL_BAR_ID)
         if (bar) {
           bar.classList.remove('loading-indeterminate')
-          bar.style.width = _pct(opts.totalDone, opts.totalTotal) + '%'
+          bar.style.width = _pct(totalDone, totalTotal) + '%'
         }
         let lab = _el(TOTAL_LABEL_ID)
-        if (lab) lab.textContent = _label(opts.totalLabel || '总进度', opts.totalDone, opts.totalTotal)
+        if (lab) lab.textContent = _label(opts.totalLabel || '总进度', totalDone, totalTotal)
         let cnt = _el(TOTAL_COUNT_ID)
-        if (cnt) cnt.textContent = opts.totalDone + '/' + opts.totalTotal
+        if (cnt) cnt.textContent = totalDone + '/' + totalTotal
       }
     }
     // 不确定进度（两进度条都无）：阶段条转条纹动画
@@ -147,6 +161,7 @@ App.Loading = (function () {
     App.Dialog.open(DIALOG_ID)
   }
 
+  /** @returns {void} */
   function hide() {
     let dlg = _el(DIALOG_ID)
     if (!dlg) return
@@ -178,6 +193,7 @@ App.Loading = (function () {
   }
 
   // 取消按钮：全局绑定一次（模块加载时），回调取当前注册的 onCancel
+  /** @returns {void} */
   function _initCancel() {
     let btn = _el(CANCEL_ID)
     if (!btn || _cancelBound) return
@@ -191,6 +207,7 @@ App.Loading = (function () {
   _initCancel()
 
   // ── 实时标签（拖入文件夹提示）：跟手提示，不弹对话框 ──
+  /** @param {string} text @returns {void} */
   function showTag(text) {
     let tag = _el(TAG_ID)
     if (!tag) return
@@ -200,6 +217,7 @@ App.Loading = (function () {
     tag.setAttribute('aria-hidden', 'false')
   }
 
+  /** @returns {void} */
   function hideTag() {
     let tag = _el(TAG_ID)
     if (!tag) return
@@ -208,6 +226,7 @@ App.Loading = (function () {
     tag.textContent = ''
   }
 
+  /** @type {Loading} */
   return {
     show: show,
     hide: hide,

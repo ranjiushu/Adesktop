@@ -5,12 +5,15 @@
  * 依赖: namespace.js
  * 导出: App.ImeAdapter
  */
+// @ts-check
 'use strict'
 
 App.ImeAdapter = (function () {
+  /** @returns {void} */
   function init() {
     window.addEventListener('desktop:ime', function (e) {
-      let open = !!(e.detail && e.detail.open)
+      let detail = /** @type {CustomEvent} */ (e).detail
+      let open = !!(detail && detail.open)
       let overlays = document.querySelectorAll('.dialog-overlay')
       for (let i = 0; i < overlays.length; i++) {
         overlays[i].classList.toggle('ime-open', open)
@@ -18,5 +21,6 @@ App.ImeAdapter = (function () {
     })
   }
 
+  /** @type {ImeAdapter} */
   return { init: init }
 })()

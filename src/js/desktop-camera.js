@@ -8,6 +8,7 @@
  * 依赖: namespace.js
  * 导出: App.DesktopCamera
  */
+// @ts-check
 'use strict'
 
 App.DesktopCamera = (function () {
@@ -16,19 +17,23 @@ App.DesktopCamera = (function () {
   const ROT_0 = 0
   const ROT_90 = 90
 
+  /** @param {any} v @param {number} d @returns {number} */
   function num(v, d) {
     return (typeof v === 'number' && isFinite(v)) ? v : d
   }
 
+  /** @param {number} v @returns {number} */
   function clamp01(v) {
     return Math.min(Math.max(v, 0), 1)
   }
 
   // 旋转角归一化：仅支持 0 / 90（菜单 toggle 两态；其余输入防御回退 0）
+  /** @param {any} r @returns {number} */
   function clampRotation(r) {
     return r === ROT_90 ? ROT_90 : ROT_0
   }
 
+  /** @param {number} [x] @param {number} [y] @param {number} [zoom] @param {number} [rotation] @returns {DesktopCameraState} */
   function create(x, y, zoom, rotation) {
     return {
       x: num(x, 0),
@@ -39,6 +44,7 @@ App.DesktopCamera = (function () {
   }
 
   // 缩放钳制：NaN/非数字回退 1；Infinity 自然压到 [ZOOM_MIN, ZOOM_MAX] 边界
+  /** @param {any} z @returns {number} */
   function clampZoom(z) {
     if (typeof z !== 'number' || Number.isNaN(z)) return 1
     return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
@@ -49,6 +55,7 @@ App.DesktopCamera = (function () {
   // easeOut 弧长参数化（Leaflet flyTo 同款手感：起步轻快、收尾平滑，见 flightPath）。
   // 曾用缓出曲线（easeOutCubic）起步即全速（k=0 斜率最大）→ 视觉「弹射/甩」，
   // 前 100ms 走完 58% 路程，且 RAF 首帧延迟会被放大。缓入缓出无起步突跳，对称 f(0.5)=0.5。
+  /** @param {number} k @returns {number} */
   function easeInOutCubic(k) {
     const t = Math.min(Math.max(k, 0), 1)
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
@@ -58,6 +65,7 @@ App.DesktopCamera = (function () {
   // from 缺失时用默认相机起步（防御）。zoom 端点已 clamp，中间值必在端点之间。
   // rotation 不插值（旋转是瞬时的两态），沿用起点（插值期间保持当前旋转，
   // 防止 Home 飞行到 rotation=0 目标时中途闪回正）。
+  /** @param {DesktopCameraState | null} from @param {DesktopCameraState | null} to @param {number} k @returns {DesktopCameraState} */
   function lerp(from, to, k) {
     const f = from || create()
     const t = to || create()
@@ -90,12 +98,16 @@ App.DesktopCamera = (function () {
   // 近距离放大/缩放下 zoom 单调），zoom 沿 cosh 曲线同步协调——无分段（不断续）、无骤停
   // （不震）、数学上图标中心点不出界（全量扫描 0px）。zoom 不变时走 easeInOutCubic 原逻辑（退化一致）。
   // 双曲函数：sinh/cosh/tanh（叶利夫/Mapbox flyTo 同源）。
+  /** @param {number} n @returns {number} */
   function _sinh(n) { return (Math.exp(n) - Math.exp(-n)) / 2 }
+  /** @param {number} n @returns {number} */
   function _cosh(n) { return (Math.exp(n) + Math.exp(-n)) / 2 }
+  /** @param {number} n @returns {number} */
   function _tanh(n) { return _sinh(n) / _cosh(n) }
 
   // 飞行路径解算（Leaflet _flyTo 同款）：返回 k∈[0,1] → {x, y, zoom}
   // 世界坐标 + 连续 zoom；w0/w1 = 屏幕基准尺寸（w 大 = zoom 小 = 视野大）
+  /** @param {DesktopCameraState} f @param {DesktopCameraState} t @param {number} w @param {number} h @returns {(k: number) => DesktopCameraState} */
   function flightPath(f, t, w, h) {
     const W0x = f.x + w / (2 * f.zoom)
     const W0y = f.y + h / (2 * f.zoom)
@@ -109,6 +121,7 @@ App.DesktopCamera = (function () {
     const u1 = Math.hypot(W1x - W0x, W1y - W0y) * f.zoom || 1
     const rho = 1.42
     const rho2 = rho * rho
+    /** @param {number} i @returns {number} */
     function r(i) {
       const s1 = i ? -1 : 1
       const s2 = i ? w1 : w0
@@ -119,7 +132,9 @@ App.DesktopCamera = (function () {
       return sq < 1e-15 ? -18 : Math.log(sq)  // 浮点精度兜底（Leaflet 1e-15 同款；阈值若过大，r0/r1 同截断 → S=0 飞行静默不动）
     }
     const r0 = r(0)
+    /** @param {number} s @returns {number} */
     function wf(s) { return w0 * (_cosh(r0) / _cosh(r0 + rho * s)) }
+    /** @param {number} s @returns {number} */
     function uf(s) { return w0 * (_cosh(r0) * _tanh(r0 + rho * s) - _sinh(r0)) / rho2 }
     const S = (r(1) - r0) / rho
     return function frame(k) {
@@ -137,6 +152,7 @@ App.DesktopCamera = (function () {
 
   const ANIM_EPS = 1e-9   // zoom 差异判定阈值
 
+  /** @param {DesktopCameraState | null} from @param {DesktopCameraState | null} to @param {number} k @param {number} vw @param {number} vh @returns {DesktopCameraState} */
   function lerpCentered(from, to, k, vw, vh) {
     const f = from || create()
     const t = to || create()
@@ -165,6 +181,7 @@ App.DesktopCamera = (function () {
   }
 
   // 屏幕 → 世界（rotation=90 时先绕视口中心逆旋转屏幕坐标，再走原公式）
+  /** @param {number} sx @param {number} sy @param {DesktopCameraState | null} camera @param {number} vw @param {number} vh @returns {WorldPoint} */
   function screenToWorld(sx, sy, camera, vw, vh) {
     const c = camera || create()
     const w = num(vw, 0)
@@ -181,6 +198,7 @@ App.DesktopCamera = (function () {
   }
 
   // 世界 → 屏幕（rotation=90 时先走原公式，再绕视口中心顺时针旋转 90°）
+  /** @param {number} wx @param {number} wy @param {DesktopCameraState | null} camera @param {number} vw @param {number} vh @returns {WorldPoint} */
   function worldToScreen(wx, wy, camera, vw, vh) {
     const c = camera || create()
     const w = num(vw, 0)
@@ -198,6 +216,7 @@ App.DesktopCamera = (function () {
 
   // 平移：屏幕位移 dx/dy（手指拖动的屏幕像素）→ 相机在世界中反向移动 dx/zoom。
   // rotation=90 时屏幕位移先逆旋转到世界方向（Δc = -R⁻¹(Δs)/zoom）。
+  /** @param {DesktopCameraState | null} camera @param {number} dx @param {number} dy @returns {DesktopCameraState} */
   function panBy(camera, dx, dy) {
     const c = camera || create()
     const ddx = num(dx, 0)
@@ -211,6 +230,7 @@ App.DesktopCamera = (function () {
 
   // 捏合缩放：指距 prevDist → curDist，锚点屏幕坐标 (anchorSx, anchorSy) 处的世界点保持不动。
   // rotation=90 时锚点屏幕坐标先逆旋转到逻辑屏幕坐标（绕视口中心）再代入。
+  /** @param {DesktopCameraState | null} camera @param {number} prevDist @param {number} curDist @param {number} anchorSx @param {number} anchorSy @param {number} vw @param {number} vh @returns {DesktopCameraState} */
   function pinchBy(camera, prevDist, curDist, anchorSx, anchorSy, vw, vh) {
     const c = camera || create()
     if (typeof prevDist !== 'number' || !isFinite(prevDist) || prevDist <= 0) {
@@ -235,6 +255,7 @@ App.DesktopCamera = (function () {
   // 有限画布钳制：相机视口不能越出世界边界 [0,0]-[worldW, worldH]。
   // 世界小于视口时 max=0（相机固定原点，不出现负坐标空区）。
   // folder 容器模式用：zoom 由调用方锁定，这里只钳位置。
+  /** @param {DesktopCameraState | null} camera @param {number} worldW @param {number} worldH @param {number} viewportW @param {number} viewportH @returns {DesktopCameraState} */
   function clampToBounds(camera, worldW, worldH, viewportW, viewportH) {
     const c = camera || create()
     const ww = num(worldW, 0)
@@ -255,6 +276,7 @@ App.DesktopCamera = (function () {
   // rotation=90 时画布绕视口中心顺时针旋转：translate 补偿 =
   //   a = c.y*zoom + (vw+vh)/2，b = -c.x*zoom + (vh-vw)/2
   // （推导：世界 p → scale → rotate → translate 的矩阵链，见 worldToScreen 注释）。
+  /** @param {DesktopCameraState | null} camera @param {number} vw @param {number} vh @returns {TransformParams} */
   function transform(camera, vw, vh) {
     const c = camera || create()
     const w = num(vw, 0)
@@ -271,6 +293,7 @@ App.DesktopCamera = (function () {
   }
 
   // 应用 transform 到 DOM（合成层变换，GPU 加速，不触发布局）
+  /** @param {DesktopCameraState | null} camera @param {HTMLElement | null} el @param {number} vw @param {number} vh */
   function applyTo(camera, el, vw, vh) {
     if (!el) return
     const t = transform(camera, vw, vh)
@@ -281,6 +304,7 @@ App.DesktopCamera = (function () {
     el.style.transform = 'translate3d(' + t.tx + 'px,' + t.ty + 'px,0) scale(' + t.zoom + ')'
   }
 
+  /** @type {DesktopCamera} */
   return {
     ZOOM_MIN: ZOOM_MIN,
     ZOOM_MAX: ZOOM_MAX,

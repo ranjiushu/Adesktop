@@ -7,6 +7,7 @@
  *       layout-store.js, home-store.js, view-store.js, loading.js, drawer.js
  * 导出: App.DesktopPersist
  */
+// @ts-check
 'use strict'
 
 App.DesktopPersist = (function () {
@@ -58,9 +59,11 @@ App.DesktopPersist = (function () {
       })
       .then(function (items) {
         if (seq !== C._refreshSeq) return null
+        if (!items) return null
         C.state.items = items
         // 清理失效布局条目（仅 desktop 空间；folder 容器位置是自动的，不存 positions）
         if (!C.isFolderView()) {
+          /** @type {Record<string, boolean>} */
           const valid = {}
           items.forEach(function (it) { valid[C.fullPath(it.name)] = true })
           Object.keys(C.positions).forEach(function (key) {
@@ -98,9 +101,10 @@ App.DesktopPersist = (function () {
   function _loadLayoutAndCamera() {
     const saved = App.LayoutStore.load(C.state.rootId)
     Object.keys(C.positions).forEach(function (k) { delete C.positions[k] })
-    if (saved && saved.icons) {
-      Object.keys(saved.icons).forEach(function (key) {
-        C.positions[key] = saved.icons[key]
+    const savedIcons = saved && saved.icons
+    if (savedIcons) {
+      Object.keys(savedIcons).forEach(function (key) {
+        C.positions[key] = savedIcons[key]
       })
     }
     // 相机优先级：Home 快照 > 默认视角 > 上次布局视角（与 initLayout 原语义一致）。
@@ -150,6 +154,7 @@ App.DesktopPersist = (function () {
   }
 
   // 视图/排序偏好变更（顶栏菜单驱动）：保存 + 重渲染
+  /** @param {ViewPrefs} prefs */
   function applyViewPrefs(prefs) {
     if (!prefs) return
     C.state.viewStyle = prefs.viewStyle
@@ -181,6 +186,7 @@ App.DesktopPersist = (function () {
     }
   }
 
+  /** @type {DesktopPersist} */
   return {
     refresh: refresh,
     initLayout: initLayout,

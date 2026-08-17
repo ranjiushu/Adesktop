@@ -3,12 +3,23 @@
  *        evaluateJavascript("window.__fbResolve('cbId', {ok,data|error})")
  * 浏览器预览（无桥）时回退到内存假文件系统，保证 UI 可独立开发调试。
  */
+// @ts-check
 'use strict'
 
 App.FileAPI = (function () {
+  /**
+   * 桥调用排队项（pending 表值）
+   * @typedef {Object} PendingCall
+   * @property {(data: any) => void} resolve
+   * @property {(err: Error) => void} reject
+   * @property {((p: FbProgress) => void) | null} onProgress
+   */
+
+  /** @type {Record<string, PendingCall>} */
   let pending = {}
   let seq = 0
 
+  /** @param {string} method @param {Array<any>} args @param {number} [timeoutMs] @param {((p: FbProgress) => void) | null} [onProgress] @returns {Promise<any>} */
   function call(method, args, timeoutMs, onProgress) {
     return new Promise(function (resolve, reject) {
       if (!window.FileBridge) {
@@ -53,6 +64,7 @@ App.FileAPI = (function () {
     p.onProgress(payload)
   }
 
+  /** @type {FileApi} */
   return {
     rootInfo: function () { return call('rootInfo', []) },
     list: function (path) { return call('list', [path || '']) },

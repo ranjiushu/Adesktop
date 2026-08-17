@@ -13,6 +13,7 @@
  * 依赖: namespace.js
  * 导出: App.HomeStore
  */
+// @ts-check
 'use strict'
 
 App.HomeStore = (function () {
@@ -22,11 +23,13 @@ App.HomeStore = (function () {
 
   // 动态 key：desktop.home.<rootId>.v1；rootId 为空 → 旧 key（兼容读取）
   // Home 快照是「相对当前根目录」的空间锚点，切根不得继承（见 docs/operation-contract.md 1.6）
+  /** @param {string} rootId @returns {string} */
   function keyFor(rootId) {
     return rootId ? KEY_PREFIX + rootId + '.v1' : LEGACY_KEY
   }
 
   // 结构化校验：x/y/zoom 均为有限数字（zoom 范围由 DesktopCamera 应用时钳制）
+  /** @param {any} c @returns {boolean} */
   function validCamera(c) {
     return !!c &&
       typeof c.x === 'number' && isFinite(c.x) &&
@@ -36,6 +39,7 @@ App.HomeStore = (function () {
 
   // rotation → 数据字段映射：0/undefined = 顶层（竖屏，兼容 version 1），
   // 90 = landscape 前缀（横屏槽位）；其余输入防御回退竖屏
+  /** @param {number | undefined} rotation @returns {{home: string, fallback: string}} */
   function fields(rotation) {
     if (rotation === 90) return { home: 'landscapeHome', fallback: 'landscapeFallback' }
     return { home: 'home', fallback: 'fallback' }
@@ -43,6 +47,7 @@ App.HomeStore = (function () {
 
   // 读：返回 { home?, fallback? }（只含通过校验的字段）；无数据/全脏 → null
   // rotation=90 读横屏槽位（landscape*），否则读竖屏槽位（顶层）
+  /** @param {string} rootId @param {number} [rotation] @returns {HomeSnapshot | null} */
   function load(rootId, rotation) {
     try {
       const raw = localStorage.getItem(keyFor(rootId))
@@ -50,6 +55,7 @@ App.HomeStore = (function () {
       const data = JSON.parse(raw)
       if (!data || typeof data !== 'object') return null
       const f = fields(rotation)
+      /** @type {HomeSnapshot} */
       const out = {}
       if (validCamera(data[f.home])) out.home = { x: data[f.home].x, y: data[f.home].y, zoom: data[f.home].zoom }
       if (validCamera(data[f.fallback])) out.fallback = { x: data[f.fallback].x, y: data[f.fallback].y, zoom: data[f.fallback].zoom }
@@ -62,9 +68,13 @@ App.HomeStore = (function () {
   // 写：patch 只允许 { home? } / { fallback? }，未提供的字段保持原值。
   // rotation=90 写横屏槽位（landscape*），否则写竖屏槽位（顶层）。
   // 两套槽位独立读写互不覆盖；成功 true，失败 false（调用方告警，铁律：写入路径不吞错）
+  /** @param {HomeSnapshot} patch @param {string} rootId @param {number} [rotation] @returns {boolean} */
   function save(patch, rootId, rotation) {
+    /** @type {HomeSnapshot} */
     const cur = load(rootId) || {}
+    /** @type {HomeSnapshot} */
     const curLand = load(rootId, 90) || {}
+    /** @type {HomeStoreData} */
     const data = { version: 2 }
     if (cur.home) data.home = cur.home
     if (cur.fallback) data.fallback = cur.fallback
@@ -89,6 +99,7 @@ App.HomeStore = (function () {
 
   // 一次性迁移：旧版单根 key → 当前 root key（首见 root 吸收旧数据，随后删除旧 key）。
   // 无旧数据/无 rootId → false（幂等，可重复调用）。
+  /** @param {string} rootId @returns {boolean} */
   function migrateLegacy(rootId) {
     if (!rootId) return false
     try {
@@ -104,6 +115,7 @@ App.HomeStore = (function () {
     }
   }
 
+  /** @type {HomeStore} */
   return {
     load: load,
     saveHome: function (camera, rootId, rotation) { return save({ home: camera }, rootId, rotation) },

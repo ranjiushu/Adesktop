@@ -7,6 +7,7 @@
  * 依赖: namespace.js
  * 导出: App.LayoutStore
  */
+// @ts-check
 'use strict'
 
 App.LayoutStore = (function () {
@@ -14,11 +15,13 @@ App.LayoutStore = (function () {
   const KEY_PREFIX = 'desktop.layout.'
 
   // 动态 key：desktop.layout.<rootId>.v1；rootId 为空 → 旧 key（兼容读取）
+  /** @param {string} rootId @returns {string} */
   function keyFor(rootId) {
     return rootId ? KEY_PREFIX + rootId + '.v1' : LEGACY_KEY
   }
 
   // 读布局：失败/无数据 → null（调用方回退自动排布）
+  /** @param {string} rootId @returns {AppLayoutData | null} */
   function load(rootId) {
     try {
       const raw = localStorage.getItem(keyFor(rootId))
@@ -31,6 +34,7 @@ App.LayoutStore = (function () {
   }
 
   // 写布局：成功 true，失败 false（调用方告警）
+  /** @param {AppLayoutData} data @param {string} rootId @returns {boolean} */
   function save(data, rootId) {
     try {
       localStorage.setItem(keyFor(rootId), JSON.stringify(data))
@@ -42,6 +46,7 @@ App.LayoutStore = (function () {
 
   // 一次性迁移：旧版单根 key → 当前 root key（首见 root 吸收旧数据，随后删除旧 key）。
   // 此后各 root 布局独立，不再共享。无旧数据/无 rootId → false（幂等，可重复调用）。
+  /** @param {string} rootId @returns {boolean} */
   function migrateLegacy(rootId) {
     if (!rootId) return false
     try {
@@ -57,6 +62,7 @@ App.LayoutStore = (function () {
     }
   }
 
+  /** @type {LayoutStore} */
   return {
     load: load,
     save: save,

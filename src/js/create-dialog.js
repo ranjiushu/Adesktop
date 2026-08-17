@@ -53,6 +53,8 @@ App.CreateDialog = (function () {
   }
 
   function init() {
+    let cancelBtn = document.getElementById('create-cancel')
+    if (cancelBtn) App.utils.bindPress(cancelBtn, close)
     let fileBtn = document.getElementById('create-file')
     if (fileBtn) App.utils.bindPress(fileBtn, function () { _submit(false) })
     let folderBtn = document.getElementById('create-folder')

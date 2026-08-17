@@ -35,11 +35,13 @@ async function tap(client, x, y, holdMs = 60) {
 }
 
 // 双击：两次 touchend 间隔 < 300ms（双击窗口）
+// 注意：间隔留足余量（CDP 触摸派发有额外延迟，150ms + 派发延迟可能卡在 300ms 窗口
+// 边界导致偶发判为普通 tap；80ms 实测两击间隔 206~227ms，稳定落在窗口内）
 async function doubleTap(client, x, y) {
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
   await sleep(40)
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-  await sleep(150)
+  await sleep(80)
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
   await sleep(40)
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })

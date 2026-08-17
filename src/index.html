@@ -140,8 +140,11 @@
     <h2 id="create-dialog-title" class="dialog-title">新建</h2>
     <input id="create-name" class="dialog-input" type="text" placeholder="名称" autocomplete="off" enterkeyhint="done" aria-label="名称">
     <div class="dialog-actions dialog-actions-pair">
-      <button id="create-file" class="dialog-btn dialog-btn-primary">文件</button>
-      <button id="create-folder" class="dialog-btn dialog-btn-secondary">文件夹</button>
+      <button id="create-cancel" class="dialog-btn dialog-btn-secondary" type="button">取消</button>
+      <div class="dialog-actions-group">
+        <button id="create-file" class="dialog-btn dialog-btn-primary">文件</button>
+        <button id="create-folder" class="dialog-btn dialog-btn-primary">文件夹</button>
+      </div>
     </div>
   </div>
 </div>
@@ -275,8 +278,8 @@
     <h2 id="web-upload-confirm-title" class="dialog-title">上传文件</h2>
     <p id="web-upload-confirm-desc" class="app-list-confirm-desc"></p>
     <div class="dialog-actions dialog-actions-pair">
-      <button id="web-upload-confirm-use" class="dialog-btn dialog-btn-primary">用待上传文件</button>
       <button id="web-upload-confirm-system" class="dialog-btn dialog-btn-secondary">重新选择</button>
+      <button id="web-upload-confirm-use" class="dialog-btn dialog-btn-primary">用待上传文件</button>
     </div>
   </div>
 </div>

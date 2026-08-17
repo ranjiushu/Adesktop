@@ -3,7 +3,7 @@
  * 弹窗显隐逻辑一处维护，各对话框只保留自身业务（输入、提交、进度）。
  * 关闭途径（模块统一约定）：点击遮罩空白（业务侧绑定）+ 系统返回键（handleBack，
  * MainActivity 返回键 → App.handleSystemBack → App.Dialog.handleBack 关闭栈顶弹窗），
- * 弹窗不设「取消/关闭」按钮。
+ * 双操作弹窗另设文字式「取消」按钮（左），主操作按钮靠右（见 dialog.css）。
  * 依赖: namespace.js
  * 导出: App.Dialog
  */

@@ -109,14 +109,13 @@ App.MoveTarget = (function () {
     }
   }
 
-  // ── 底部确认按钮：文字固定「确认」；目标不可移动时变灰（move-confirm-invalid），
-  // 点击由 _confirm 拦截并吐司原因（不用 disabled 属性——disabled 不派发点击，吐司无从触发） ──
+  // ── 底部确认按钮：文字固定「确认」；目标不可移动时置灰（aria-disabled，样式
+  // 见 dialog.css .dialog-btn[aria-disabled="true"]），点击由 _confirm 拦截并吐司原因 ──
   function _updateConfirm() {
     const btn = _getEl(CONFIRM_ID)
     if (!btn) return
     const err = _guard(_cur)
     btn.textContent = '确认'
-    btn.classList.toggle('move-confirm-invalid', !!err)
     btn.setAttribute('aria-disabled', err ? 'true' : 'false')
     btn._moveInvalidMsg = err || ''
   }

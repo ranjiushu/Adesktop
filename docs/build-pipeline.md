@@ -5,15 +5,15 @@
 ## 顺序（P0 铁律，不可调换不可跳过）
 
 ```
-1. bash tools/build-web.sh        src/ → dist/desktop.bundle.html
-2. node tools/minify-bundle.js    → dist/desktop.bundle.min.html
+1. bash tools/build-web.sh        src/ → dist/adesktop.bundle.html
+2. node tools/minify-bundle.js    → dist/adesktop.bundle.min.html
 3. bash android/build-local.sh    复制 min 产物 → assets/index.html → gradlew assembleRelease（R8 混淆）→ 归档 APK
 ```
 
 ## 安装包归档（滚动保留）
 
 - `android/build-local.sh` 步骤 5 调用 `tools/collect-apk.sh`
-- 归档到 `/workspace/AAA 安装包/`，命名 `Desktop_v<版本>_<时间戳>.apk`（时间戳精确到秒）
+- 归档到 `/workspace/AAA 安装包/`，命名 `Adesktop_v<版本>_<时间戳>.apk`（时间戳精确到秒）
 - **滚动保留最新 10 个**（按 mtime，仅清理本脚本命名模式，手动放入的文件不受影响）
 - release 构建同步归档 R8 `mapping.txt` 到 `<归档目录>/mapping/`（同样保留 10 个）
 
@@ -26,7 +26,7 @@
   COS 上保留最近 50 个
 - 幂等：状态文件保证同一周期只上传一次；coscli 缺失/上传失败时仅告警不阻断构建，
   且不更新状态（下个周期自动重试，不丢备份窗口）
-- 与 LexiCull 同款方案（`tools/cos-bundle-check.sh`），Desktop 独立 bucket 路径
+- 与 LexiCull 同款方案（`tools/cos-bundle-check.sh`），Adesktop 独立 bucket 路径
 
 ## 拼接清单（JS_ORDER / CSS_ORDER）
 

@@ -1,4 +1,4 @@
-# Desktop
+# Adesktop
 
 以真实文件系统为基础的移动端空间化工作台。像 Windows 桌面：文件即对象，图标自由摆放，位置持久记忆。
 
@@ -47,5 +47,5 @@ bash tools/verify.sh           # 提交前门禁
 
 - [x] 项目骨架初始化（src / tools / tests / android / git）
 - [ ] 应用功能开发
-- [ ] 包名确认（当前 com.example.desktop 占位）
-- [ ] 应用显示名确认（当前 "Desktop" 占位）
+- [x] 应用显示名（Adesktop）
+- [x] 包名（com.ranjiushu.adesktop，与 LexiCull 同域名前缀）

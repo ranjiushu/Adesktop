@@ -3,9 +3,9 @@
 # ═══════════════════════════════════════════════════════════════
 # 用法: bash tools/collect-apk.sh [目标目录]
 # 默认目标: <项目根>/../AAA 安装包（当前环境即 /workspace/AAA 安装包）
-# 命名: Desktop_v<versionName>_<YYYYMMDD_HHMMSS>.apk
+# 命名: Adesktop_v<versionName>_<YYYYMMDD_HHMMSS>.apk
 #       —— 时间戳精确到秒，避免固定名 app-release.apk 互相覆盖
-# 保留: 仅清理本脚本命名模式（Desktop_*.apk），按 mtime 保留最新 10 个，
+# 保留: 仅清理本脚本命名模式（Adesktop_*.apk），按 mtime 保留最新 10 个，
 #       手动放入目录的其他文件不受影响
 # 关联: android/build-local.sh 构建完成后调用；与 LexiCull tools/collect-apk.sh 同款方案
 # ═══════════════════════════════════════════════════════════════
@@ -29,7 +29,7 @@ VERSION=$(grep -oP 'versionName\s+"\K[^"]+' "$PROJECT_ROOT/android/app/build.gra
 TS=$(date +%Y%m%d_%H%M%S)
 
 mkdir -p "$OUT_DIR"
-DEST="$OUT_DIR/Desktop_v${VERSION}_${TS}.apk"
+DEST="$OUT_DIR/Adesktop_v${VERSION}_${TS}.apk"
 cp "$APK_SRC" "$DEST"
 echo "[OK] 安装包已收集: $DEST ($(du -h "$DEST" | cut -f1))"
 
@@ -41,10 +41,10 @@ case "$APK_SRC" in
     if [ -f "$MAPPING" ]; then
       MAP_DIR="$OUT_DIR/mapping"
       mkdir -p "$MAP_DIR"
-      MAP_DEST="$MAP_DIR/Desktop_v${VERSION}_${TS}.mapping.txt"
+      MAP_DEST="$MAP_DIR/Adesktop_v${VERSION}_${TS}.mapping.txt"
       cp "$MAPPING" "$MAP_DEST"
       echo "[OK] R8 mapping 已归档: $MAP_DEST ($(du -h "$MAP_DEST" | cut -f1))"
-      mapfile -t OLD_MAPS < <(find "$MAP_DIR" -maxdepth 1 -name 'Desktop_*.mapping.txt' -printf '%T@ %p\n' 2>/dev/null | sort -rn | tail -n +$((KEEP + 1)) | cut -d' ' -f2-)
+      mapfile -t OLD_MAPS < <(find "$MAP_DIR" -maxdepth 1 -name 'Adesktop_*.mapping.txt' -printf '%T@ %p\n' 2>/dev/null | sort -rn | tail -n +$((KEEP + 1)) | cut -d' ' -f2-)
       for old in "${OLD_MAPS[@]}"; do
         rm -f "$old"
         echo "[CLEAN] 移除旧 mapping: $(basename "$old")"
@@ -54,7 +54,7 @@ case "$APK_SRC" in
 esac
 
 # ── 4. 滚动保留最新 KEEP 个（仅匹配本脚本命名模式，mtime 排序） ──
-mapfile -t OLD_APKS < <(find "$OUT_DIR" -maxdepth 1 -name 'Desktop_*.apk' -printf '%T@ %p\n' 2>/dev/null | sort -rn | tail -n +$((KEEP + 1)) | cut -d' ' -f2-)
+mapfile -t OLD_APKS < <(find "$OUT_DIR" -maxdepth 1 -name 'Adesktop_*.apk' -printf '%T@ %p\n' 2>/dev/null | sort -rn | tail -n +$((KEEP + 1)) | cut -d' ' -f2-)
 for old in "${OLD_APKS[@]}"; do
   rm -f "$old"
   echo "[CLEAN] 移除旧安装包: $(basename "$old")"

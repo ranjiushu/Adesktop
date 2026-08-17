@@ -1,5 +1,5 @@
 /* Android 壳主入口：WebView 加载本地单文件 bundle + 文件系统桥注册 + SAF 授权 */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;

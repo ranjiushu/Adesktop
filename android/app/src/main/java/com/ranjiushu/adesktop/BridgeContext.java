@@ -3,7 +3,7 @@
  * FileBridge 门面与各功能模块（FileStore / TransferEngine / ...）共用同一实例，
  * 保证文件操作仍全部串行于同一 executor（copy/move 与取消标志的竞态语义不变）。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.app.Activity;
 import android.net.Uri;

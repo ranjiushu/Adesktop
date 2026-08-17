@@ -3,7 +3,7 @@
 // 用法: node tools/ui/move-target-probe.js
 const { launch, openPage } = require('../../scripts/lib/browser')
 const path = require('path')
-const BUNDLE = path.join(__dirname, '..', '..', 'dist', 'desktop.bundle.html')
+const BUNDLE = path.join(__dirname, '..', '..', 'dist', 'adesktop.bundle.html')
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 const FS_JSON = JSON.stringify({

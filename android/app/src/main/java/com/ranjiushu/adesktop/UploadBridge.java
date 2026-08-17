@@ -3,7 +3,7 @@
  * 无 pending 文件选择请求时 resolveErr（前端时序错误）。
  * 本类与 MainActivity 特有方法（deliverFileChooser / cancelFileChooser / openSystemFileChooser）强耦合，独立成类。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.net.Uri;
 

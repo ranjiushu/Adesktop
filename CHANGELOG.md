@@ -1,6 +1,15 @@
-# Desktop 更新日志
+# Adesktop 更新日志
 
 ## Unreleased
+
+### 项目改名：Desktop → Adesktop（Android Desktop，2026-08-17）
+
+- **包名**：`com.example.desktop` → `com.ranjiushu.adesktop`（9 个 Java 类目录迁移 + build.gradle namespace/applicationId + AndroidManifest + proguard keep 规则同步）
+- **应用显示名**：strings.xml app_name / index.html `<title>` / `App.NAME` 统一为 Adesktop；主题 `Theme.Desktop` → `Theme.Adesktop`
+- **构建产物**：`dist/desktop.bundle.html` → `dist/adesktop.bundle.html`（build-web.sh / minify-bundle.js / verify.sh / lint.sh / build-local.sh / E2E scripts / tools/ui 探针 / test-smoke 同步）
+- **APK 命名**：归档 `Adesktop_v<版本>_<时间戳>.apk`（collect-apk.sh + test-collect-apk.sh）；COS bundle slug `desktop` → `adesktop`
+- **文档/工具**：README / AGENTS / docs 标题、build-stats repo-map 标题、bundle-source 打包名、探针 probe-repo.sh Desktop 分支识别同步
+- **保留**：功能语义命名（`App.Desktop*` 命名空间、`desktop-*.js` 模块、`desktop-grid` 等 CSS 类、「Desktop 空间 vs Folder 容器」）不动——是产品概念（桌面隐喻），非项目名
 
 ### E2E 修复：buildinfo 断言脱节 + home 双击窗口边界（2026-08-17）
 

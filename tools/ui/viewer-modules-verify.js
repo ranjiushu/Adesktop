@@ -7,7 +7,7 @@
 'use strict'
 const path = require('path')
 const { launch } = require('/skills/ui-verify/scripts/lib/browser.js')
-const HTML = 'file://' + path.join('/workspace/Desktop', 'dist', 'desktop.bundle.html')
+const HTML = 'file://' + path.join('/workspace/Desktop', 'dist', 'adesktop.bundle.html')
 let failures = 0
 function check(cond, msg) { if (cond) console.log('  [ok] ' + msg); else { console.error('  [fail] ' + msg); failures++ } }
 async function main() {

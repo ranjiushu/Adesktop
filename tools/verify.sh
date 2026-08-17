@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 完整验证门禁（治理移植：LexiCull verify 框架因地制宜版）
 # ═══════════════════════════════════════════════════════════════
-#  Desktop - 提交前验证门禁
+#  Adesktop - 提交前验证门禁
 #  按序执行: env-check → build --strict → minify-bundle → lint → 测试套件 → E2E × 5
 #  任何一步失败则 exit 1。输出机器可读 PASS/FAIL 摘要。
 #  用法: bash tools/verify.sh
@@ -38,7 +38,7 @@ run_step() {
 }
 
 echo "═══════════════════════════════════════════════════"
-echo "  Desktop 提交前验证"
+echo "  Adesktop 提交前验证"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
@@ -60,11 +60,11 @@ run_step "build --strict" bash tools/build-web.sh --strict
 # Step 2: 压缩产物（真机实际加载的版本，E2E 针对它验证）
 if [ -f "$SCRIPT_DIR/node_modules/terser/package.json" ] && [ -f "$SCRIPT_DIR/node_modules/clean-css/package.json" ]; then
   run_step "minify-bundle" node "$SCRIPT_DIR/tools/minify-bundle.js"
-  MIN_BUNDLE="$SCRIPT_DIR/dist/desktop.bundle.min.html"
+  MIN_BUNDLE="$SCRIPT_DIR/dist/adesktop.bundle.min.html"
 else
   echo "  minify-bundle ... SKIP（缺 terser/clean-css，先 npm install）"
   RESULTS+=("SKIP|minify-bundle")
-  MIN_BUNDLE="$SCRIPT_DIR/dist/desktop.bundle.html"
+  MIN_BUNDLE="$SCRIPT_DIR/dist/adesktop.bundle.html"
 fi
 
 # Step 3: 代码质量

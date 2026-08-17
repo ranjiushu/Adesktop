@@ -10,7 +10,7 @@
 #           COS_BUNDLE_THRESHOLD 覆盖）。状态记录在 <仓库>/.git/cos-bundle-count。
 #           —— 与构建频率解耦：无论何时构建/提交，只要距上次上传累计满 25 个
 #              提交就补传一次；上传失败不更新状态，下次重试。
-# 产物:     git bundle create --all → cos://backup-data/desktop-git/lexicull-<时间戳>.bundle
+# 产物:     git bundle create --all → cos://backup-data/adesktop-git/adesktop-<时间戳>.bundle
 # 保留:     COS 上保留最近 50 个（KEEP 可经 COS_BUNDLE_KEEP 覆盖）
 # 幂等:     构建管线（build-local.sh 步骤 6）与 post-commit hook 双触发点共用本脚本，
 #           状态文件保证同一周期只上传一次。
@@ -22,8 +22,8 @@ PROJECT="${2:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 MODE="${1:-run}"
 THRESHOLD="${COS_BUNDLE_THRESHOLD:-25}"
 KEEP="${COS_BUNDLE_KEEP:-50}"
-SLUG="desktop"
-COS_DIR="cos://backup-data/desktop-git"
+SLUG="adesktop"
+COS_DIR="cos://backup-data/adesktop-git"
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info() { echo -e "${GREEN}[OK]${NC}   $1"; }

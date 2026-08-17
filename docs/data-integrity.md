@@ -1,7 +1,7 @@
 # 数据完整性纪律（文件即真相）
 
-> 治理移植自 LexiCull `docs/5-data/data-integrity.md` 的**原则**，落地为 Desktop 自己的模型。
-> LexiCull 的数据真相在 localStorage（白名单重建 + `save*` 出口）；**Desktop 的数据真相在文件系统**——
+> 治理移植自 LexiCull `docs/5-data/data-integrity.md` 的**原则**，落地为 Adesktop 自己的模型。
+> LexiCull 的数据真相在 localStorage（白名单重建 + `save*` 出口）；**Adesktop 的数据真相在文件系统**——
 > 桌面布局等元数据以隐藏文件形式存于文件系统，「文件即真相」。约束语义不同，不可照搬其代码。
 
 ## 一、真相分层

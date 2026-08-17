@@ -2,8 +2,8 @@
 # =============================================================================
 # build-local.sh — 本地 APK 构建脚本（ARM64 / QEMU 转发方案，与 LexiCull 相同）
 #
-# 步骤: 1) build-web.sh → dist/desktop.bundle.html
-#       2) minify-bundle.js → dist/desktop.bundle.min.html
+# 步骤: 1) build-web.sh → dist/adesktop.bundle.html
+#       2) minify-bundle.js → dist/adesktop.bundle.min.html
 #       3) 复制 min 产物 → android/app/src/main/assets/index.html
 #       4) ./gradlew assembleRelease（R8 裁剪 + debug keystore 签名）
 #       5) 归档 APK 到 /workspace/AAA 安装包/（tools/collect-apk.sh，滚动保留最新 10 个 + R8 mapping）
@@ -51,12 +51,12 @@ node "$PROJECT_DIR/tools/minify-bundle.js"
 info "步骤 3/5: 同步产物到 assets"
 ASSETS_DIR="$SCRIPT_DIR/app/src/main/assets"
 mkdir -p "$ASSETS_DIR"
-if [ -f "$PROJECT_DIR/dist/desktop.bundle.min.html" ]; then
-  cp "$PROJECT_DIR/dist/desktop.bundle.min.html" "$ASSETS_DIR/index.html"
-  ok "assets/index.html ← desktop.bundle.min.html ($(wc -c < "$ASSETS_DIR/index.html") bytes)"
+if [ -f "$PROJECT_DIR/dist/adesktop.bundle.min.html" ]; then
+  cp "$PROJECT_DIR/dist/adesktop.bundle.min.html" "$ASSETS_DIR/index.html"
+  ok "assets/index.html ← adesktop.bundle.min.html ($(wc -c < "$ASSETS_DIR/index.html") bytes)"
 else
-  cp "$PROJECT_DIR/dist/desktop.bundle.html" "$ASSETS_DIR/index.html"
-  ok "assets/index.html ← desktop.bundle.html ($(wc -c < "$ASSETS_DIR/index.html") bytes)"
+  cp "$PROJECT_DIR/dist/adesktop.bundle.html" "$ASSETS_DIR/index.html"
+  ok "assets/index.html ← adesktop.bundle.html ($(wc -c < "$ASSETS_DIR/index.html") bytes)"
 fi
 
 # ── 步骤 4: QEMU 包装器 + Gradle 构建 ──

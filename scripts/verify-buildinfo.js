@@ -7,13 +7,13 @@
 //    4. 关闭按钮关闭面板
 //    5. 全程零 pageerror
 //
-//  用法: DESKTOP_BUNDLE=dist/desktop.bundle.min.html node scripts/verify-buildinfo.js
+//  用法: DESKTOP_BUNDLE=dist/adesktop.bundle.min.html node scripts/verify-buildinfo.js
 //  退出码: 0 通过 / 1 失败 / 2 无可用 Chromium
 // ═══════════════════════════════════════════════════════════════
 const { launch } = require('./lib/browser')
 const path = require('path')
 
-const BUNDLE = process.env.DESKTOP_BUNDLE || path.join(__dirname, '..', 'dist', 'desktop.bundle.html')
+const BUNDLE = process.env.DESKTOP_BUNDLE || path.join(__dirname, '..', 'dist', 'adesktop.bundle.html')
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const TAP_GAP = 350
 

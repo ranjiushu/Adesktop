@@ -3,7 +3,7 @@
 
 window.App = window.App || {}
 
-App.NAME = 'Desktop'
+App.NAME = 'Adesktop'
 App.VERSION = '0.1.0'
 App.BUILD = typeof BUILD_COUNT !== 'undefined' ? BUILD_COUNT : 0
 App.BUILD_TIME = typeof BUILD_TIMESTAMP !== 'undefined' ? BUILD_TIMESTAMP : ''

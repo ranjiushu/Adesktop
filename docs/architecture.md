@@ -8,7 +8,7 @@
 
 ```
 ┌─────────────────────────────────────────────┐
-│ 前端（dist/desktop.bundle.min.html）         │
+│ 前端（dist/adesktop.bundle.min.html）         │
 │  ├─ DesktopUI  桌面渲染：图标网格/自由摆放    │
 │  ├─ layout.js  布局元数据读写（隐藏文件）     │
 │  └─ FileAPI    文件操作 Promise 封装         │

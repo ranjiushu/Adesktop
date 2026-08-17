@@ -6,7 +6,7 @@
  * 实现按职责委托给 BridgeContext / FileStore / TransferEngine / ThumbnailService /
  * AppBridge / ExternalOpen / UploadBridge；文件操作仍串行于 BridgeContext 的同一 executor。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.app.Activity;
 import android.net.Uri;

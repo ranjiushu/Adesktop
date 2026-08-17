@@ -35,7 +35,7 @@ echo "fake-mapping" > "$PROJ/android/app/build/outputs/mapping/release/mapping.t
 
 # 预置 13 个旧包（mtime 递增：00001 最旧 … 00013 最新）
 for i in $(seq 1 13); do
-  f="$OUT/Desktop_v0.1.0_20260810_000$(printf '%02d' "$i").apk"
+  f="$OUT/Adesktop_v0.1.0_20260810_000$(printf '%02d' "$i").apk"
   echo "old-$i" > "$f"
   touch -d "2026-08-10 00:00:$(printf '%02d' "$i")" "$f"
 done
@@ -47,16 +47,16 @@ echo "═══ test-collect-apk.sh：归档与滚动清理 ═══"
 
 # ── 1. 归档行为 ──
 check "新 APK 归档到目标目录" bash "$COLLECT" "$OUT"
-NEW_APK=$(ls -t "$OUT"/Desktop_*.apk | head -1)
-check "归档命名匹配 Desktop_v<版本>_<时间戳>" bash -c "[[ \"$(basename "$NEW_APK")\" =~ ^Desktop_v0\.1\.0_[0-9]{8}_[0-9]{6}\.apk$ ]]"
-check "R8 mapping 归档到 mapping/ 子目录" bash -c "ls \"$OUT/mapping/\" | grep -q '^Desktop_v0\.1\.0_.*\.mapping\.txt$'"
+NEW_APK=$(ls -t "$OUT"/Adesktop_*.apk | head -1)
+check "归档命名匹配 Adesktop_v<版本>_<时间戳>" bash -c "[[ \"$(basename "$NEW_APK")\" =~ ^Adesktop_v0\.1\.0_[0-9]{8}_[0-9]{6}\.apk$ ]]"
+check "R8 mapping 归档到 mapping/ 子目录" bash -c "ls \"$OUT/mapping/\" | grep -q '^Adesktop_v0\.1\.0_.*\.mapping\.txt$'"
 
 # ── 2. 滚动保留 ──
-COUNT=$(ls "$OUT"/Desktop_*.apk | wc -l)
-check "Desktop_*.apk 恰好保留 10 个（实际 $COUNT）" bash -c "[[ $COUNT -eq 10 ]]"
+COUNT=$(ls "$OUT"/Adesktop_*.apk | wc -l)
+check "Adesktop_*.apk 恰好保留 10 个（实际 $COUNT）" bash -c "[[ $COUNT -eq 10 ]]"
 check "最旧的 3 个（00001/00002/00003）已被清理" bash -c "! ls \"$OUT\" | grep -qE '0000[123]\.apk$'"
 check "次新的旧包（00013）仍在保留列表" bash -c "ls \"$OUT\" | grep -q '00013\.apk$'"
-check "最新归档的时间戳为构建当日" bash -c "[[ \"$(basename "$NEW_APK")\" =~ ^Desktop_v0\.1\.0_$(date +%Y%m%d)_ ]]" 
+check "最新归档的时间戳为构建当日" bash -c "[[ \"$(basename "$NEW_APK")\" =~ ^Adesktop_v0\.1\.0_$(date +%Y%m%d)_ ]]" 
 
 # ── 3. 命名模式隔离（手动文件不受影响） ──
 check "手动放入的 history bundle 保留" bash -c "[[ -f \"$OUT/Desktop-history-backup-20260810.bundle\" ]]"

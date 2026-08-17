@@ -4,7 +4,7 @@
  * openExternal：ACTION_VIEW + 按扩展名推断 MIME + 读权限授权；必须 UI 线程 startActivity。
  * openUrl：系统浏览器打开网址（ACTION_VIEW + http/https Uri）。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;

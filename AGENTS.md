@@ -1,4 +1,4 @@
-# Desktop
+# Adesktop
 
 以**真实文件系统**为基础的移动端空间化工作台（Windows Desktop 隐喻：文件即对象、图标自由摆放、位置可记忆）。
 纯前端单文件 + Android WebView 壳。零框架零依赖。

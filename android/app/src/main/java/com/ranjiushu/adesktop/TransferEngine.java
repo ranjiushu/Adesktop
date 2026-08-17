@@ -3,7 +3,7 @@
  * 取消标志（ctx.cancelRequested）与 copy 循环检查保持原有串行语义。
  * 取消/失败时清理本次创建的半成品（目标原本不存在才删）。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.net.Uri;
 import android.provider.DocumentsContract;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Desktop 测试套件运行器
+# Adesktop 测试套件运行器
 # 用法: bash run-tests.sh
 # 递归发现 tests/ 下所有 test-*.js / test-*.sh，汇总 PASS/FAIL。
 # 任何测试失败则 exit 1。
@@ -30,7 +30,7 @@ FAIL=0
 FAILED_TESTS=()
 
 echo "═══════════════════════════════════════════════════"
-echo "  Desktop 测试套件 (${#TESTS[@]} 个文件)"
+echo "  Adesktop 测试套件 (${#TESTS[@]} 个文件)"
 echo "═══════════════════════════════════════════════════"
 
 for test_file in "${TESTS[@]}"; do

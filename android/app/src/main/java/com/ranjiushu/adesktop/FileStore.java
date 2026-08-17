@@ -2,7 +2,7 @@
  * 由 FileBridge 门面委托调用；执行体运行于 BridgeContext 的同一单线程 executor。
  * 数据真相在文件系统，本类只做忠实读写，不掺业务逻辑。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import androidx.documentfile.provider.DocumentFile;
 

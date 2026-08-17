@@ -18,11 +18,11 @@
         android:hardwareAccelerated="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Desktop"
+        android:theme="@style/Theme.Adesktop"
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name="com.example.desktop.MainActivity"
+            android:name="com.ranjiushu.adesktop.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:screenOrientation="portrait"

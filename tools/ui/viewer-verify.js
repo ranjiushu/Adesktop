@@ -10,7 +10,7 @@
 const path = require('path')
 const { launch } = require('/skills/ui-verify/scripts/lib/browser.js')
 
-const HTML = 'file://' + path.join(__dirname, '..', '..', 'dist', 'desktop.bundle.html')
+const HTML = 'file://' + path.join(__dirname, '..', '..', 'dist', 'adesktop.bundle.html')
 const SHOT = process.argv.indexOf('--shot') >= 0 ? process.argv[process.argv.indexOf('--shot') + 1] : null
 
 let failures = 0

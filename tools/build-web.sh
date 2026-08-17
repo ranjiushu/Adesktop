@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-# build-web.sh — 将 src/ 下的拆分源码合并为单文件 dist/desktop.bundle.html
+# build-web.sh — 将 src/ 下的拆分源码合并为单文件 dist/adesktop.bundle.html
 #
 # 用法: bash tools/build-web.sh [--strict]
 # 功能: 1) 拼接 JS/CSS 2) 注入构建变量 3) 产物结构验证
-#       验证失败则中止，不会覆盖 dist/desktop.bundle.html
+#       验证失败则中止，不会覆盖 dist/adesktop.bundle.html
 #
 # 注入变量（构建时注入到 JS 尾部，每次构建自动更新）：
 #   BUILD_COUNT     — 构建次数（从 dist/.build-count 持久化文件递增）
@@ -17,7 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_DIR="$SCRIPT_DIR/src"
-OUTPUT="$SCRIPT_DIR/dist/desktop.bundle.html"
+OUTPUT="$SCRIPT_DIR/dist/adesktop.bundle.html"
 mkdir -p "$(dirname "$OUTPUT")"
 
 JS_ORDER=(
@@ -246,11 +246,11 @@ check_consistency() {
     -I 'var CONTRIBUTION_GRID=' -I 'var SOURCE_STATS=' -I 'var FILE_STATS=' \
     -I 'var NON_SOURCE_STATS=' -I 'var CHANGELOG_MD=' \
     -q "$tmp_output" "$OUTPUT" &>/dev/null; then
-    echo "[check] src/ 与 dist/desktop.bundle.html 一致"
+    echo "[check] src/ 与 dist/adesktop.bundle.html 一致"
     rm -f "$tmp_js" "$tmp_output"
     exit 0
   else
-    echo "[check] src/ 与 dist/desktop.bundle.html 不一致——需要重建"
+    echo "[check] src/ 与 dist/adesktop.bundle.html 不一致——需要重建"
     rm -f "$tmp_js" "$tmp_output"
     exit 1
   fi
@@ -283,7 +283,7 @@ size_gate() {
 
 # ══════════════════════════ 主流程 ══════════════════════════
 echo "================================================"
-echo "  Desktop 构建（src/ → dist/desktop.bundle.html）"
+echo "  Adesktop 构建（src/ → dist/adesktop.bundle.html）"
 echo "================================================"
 
 [[ "$*" == *--check* ]] && check_consistency

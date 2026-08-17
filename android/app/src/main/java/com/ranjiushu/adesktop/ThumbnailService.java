@@ -2,7 +2,7 @@
  * 缓存 key = path@mtime@size（文件修改后自然失效）；缓存位于 cacheDir/thumbs（系统可清理）。
  * 采样解码控制内存（大图不全量加载）；解码失败回调错误（前端回退类型图标）。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;

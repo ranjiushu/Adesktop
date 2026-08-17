@@ -3,7 +3,7 @@
 const { launch, openPage } = require('../../scripts/lib/browser')
 const path = require('path')
 
-const BUNDLE = process.argv[2] || path.join(__dirname, '..', '..', 'dist', 'desktop.bundle.html')
+const BUNDLE = process.argv[2] || path.join(__dirname, '..', '..', 'dist', 'adesktop.bundle.html')
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 async function measureButtons(page, label) {

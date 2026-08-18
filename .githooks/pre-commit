@@ -28,7 +28,7 @@ fi
 # 仅当本次改动涉及 src/ 或 dist/ 时检查；无构建脚本则跳过
 if command -v node &>/dev/null && [ -f tools/build-web.sh ] && git diff --cached --name-only | grep -qE '^(src/|dist/)'; then
   if ! bash tools/build-web.sh --check > /dev/null 2>&1; then
-    echo "[pre-commit] src/ 与 dist/desktop.bundle.html 不一致——请先运行 bash tools/build-web.sh" >&2
+    echo "[pre-commit] src/ 与 dist/adesktop.bundle.html 不一致——请先运行 bash tools/build-web.sh" >&2
     exit 1
   fi
 fi

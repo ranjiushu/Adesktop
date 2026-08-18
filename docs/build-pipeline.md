@@ -71,8 +71,21 @@ build-web.sh 每次构建注入到 JS 尾部（`var` 声明，避免被 minify m
 ## Android 壳
 
 - 最小壳：`android.app.Activity` + WebView
-- 依赖策略：最小化（理念，非绝对零依赖）——androidx.documentfile（SAF 文件访问）、
-  androidx.core（edge-to-edge WindowInsets 安全区注入，与 LexiCull 同款）；
+- 依赖策略：零第三方依赖（理念，非绝对禁止）——androidx.documentfile（SAF 文件访问）、
+  androidx.core（edge-to-edge WindowInsets 安全区注入，与 LexiCull 同款）属可接受常规依赖；
   避免引入重框架/UI 库，前端保持零第三方依赖
-- 包名占位 `com.example.desktop`，发布前确认后全局替换
+- 包名 `com.ranjiushu.adesktop`
 - APK 构建在 ARM64 环境需 QEMU 转发（aapt2/aapt/zipalign 包装器），见 android/build-local.sh
+
+## 类型检查（渐进式 @ts-check）
+
+- **路线**：不写 `.ts` 源文件，JS 文件头部加 `// @ts-check` 注释，由 `tsc --noEmit` 检查
+  （tsconfig `allowJs: true`），仅类型检查、零构建侵入（build-web.sh 只拼接 JS_ORDER 登记文件）
+- **命令**：`npm run typecheck`（= `tsc --noEmit`）；verify.sh 门禁内置该步骤
+  （缺 typescript 时 SKIP，与 minify 同策略）
+- **类型声明**：`types/global.d.ts` 定义全局类型（AppCamera / Position2D / FbResult / 桥签名 /
+  HTMLElement 扩展等），仅供类型检查，不参与构建
+- **覆盖现状**：41/52 个 src/js 模块已收编（数据/状态/逻辑/桥/编排层）；手势/渲染/UI 表现层
+  模块等下次改动时顺手补——类型检查对手感/时序类 bug 收益低，真机手感测试才是防线
+- **新增模块约定**：给模块加 `// @ts-check` 后，先在 `types/global.d.ts` 补全局类型，
+  再跑 `npm run typecheck` 清零报错

@@ -22,6 +22,12 @@ App.DesktopNavigation = (function () {
   // ── 打开：文件夹进入 / 文件打开（FileOpener 分派内部查看器 / 外部应用 / 快捷方式）──
   function openItem(full) {
     if (!full) return
+    // 回收站：全盘根实体或 all-files 桌面空间的虚拟图标（items 不含）——直接进入
+    if (C.isTrashPath(full)) {
+      App.DesktopRender.clearSelection()
+      enterFolder(full)
+      return
+    }
     const item = C.state.items.filter(function (it) {
       return C.fullPath(it.name) === full
     })[0]
@@ -88,9 +94,10 @@ App.DesktopNavigation = (function () {
   }
 
   // 退回到上级目录（父目录，压栈导航——与历史后退区分；Windows「向上」语义）
+  // all-files 模式：桌面（desktopRoot）可上到全盘根（''，folder 容器）；全盘根无上级
   function goUp() {
     App.DesktopBrowseMode.exitTempMode()
-    if (!C.isFolderView()) return false
+    if (!canGoUp()) return false
     const target = App.DesktopNav.parent(C.state.curPath)
     C.nav = App.DesktopNav.enter(C.nav, target)
     C.state.curPath = target
@@ -123,7 +130,11 @@ App.DesktopNavigation = (function () {
 
   function canGoBack() { return App.DesktopNav.canBack(C.nav) }
   function canGoForward() { return App.DesktopNav.canForward(C.nav) }
-  function canGoUp() { return C.isFolderView() }
+  // 上级可用：folder 内（非全盘根）可上；all-files 桌面空间可上到全盘根（资源管理器式）
+  function canGoUp() {
+    if (C.isFolderView()) return C.state.curPath !== ''
+    return C.state.mode === 'all-files'
+  }
   function getCurPath() { return C.state.curPath }
 
   // ── Home：空间锚点（位置快照 + 默认视角）──

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 桌面根可配置 + 应用内授权对话框（2026-08-19）
+
+- **桌面根（Desktop Root）**：all-files 模式桌面空间渲染的目录默认 `Desktop`，
+  Drawer「桌面目录」可配置（常见目录：手机存储根/Desktop/下载/文档/图片/相机/音乐/电影
+  + 自定义相对路径，校验拒绝绝对路径/`..`/空段）
+- **rootId 隔离升级**：`all-files:<桌面根>`——切桌面根即切换布局/Home 域（不继承摆放）；
+  启动 curPath 初始化为桌面根，导航栈同步重建
+- **视图模式调整**：all-files 模式下手机存储根（`''`）也是 Folder 容器（资源管理器式），
+  桌面空间「上级」= 手机存储根（goUp 可达），手机存储根无上级
+- **虚拟回收站**：`.trash` 在桥层根（手机存储根），桌面空间附加虚拟图标
+  （key 固定 `.trash`，打开/删除守卫/位置持久化天然匹配）；全盘根 folder 内为实体条目
+- **应用内授权对话框**：不再裸跳系统设置页——首次启动未授权弹「授权手机存储」引导
+  （说明 + 去授权按钮 → 系统设置页），localStorage 标记防重复弹；Drawer 入口同款；
+  已授权时点击提示「已授权手机存储」；E2E 内存桩（mode=mock）不弹（非合法枚举守卫）
+- **原生简化**：MainActivity 移除 onCreate 自动跳设置页与 prefs 标记（前端驱动）
+- **测试**：新增 test-desktop-root.js（29 项：isFolderView 判定/启动初始化/rootId 拼装/
+  saveDesktopRoot 校验/虚拟回收站）
+- 文档同步：fs-scope.md 桌面根与授权流程、operation-contract.md rootId 取值
+
 ### 修复：全盘授权不生效 + 升级用户不弹引导（2026-08-19）
 
 - **模式优先级 Bug（根因）**：`isSafMode()` 原为 `rootUri != null`——升级用户保留旧 SAF

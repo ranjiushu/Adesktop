@@ -33,9 +33,10 @@ App.DesktopCore = (function () {
     rootName: '…',
     mode: 'unknown',
     items: [],
-    curPath: '',          // 当前目录（相对根，'' = 根）
+    curPath: '',          // 当前目录（相对根，'' = 根；all-files 模式桌面空间 = desktopRoot）
     trashName: '',        // 回收站文件夹名（rootInfo 返回，'' = 未知/未初始化）
-    rootId: '',           // 根目录身份（rootInfo 返回：SAF = tree uri / 全盘 = 'all-files' / 私有 = 'private'）
+    rootId: '',           // 根目录身份（rootInfo 返回：SAF = tree uri / 全盘 = 'all-files:<桌面根>' / 私有 = 'private'）
+    desktopRoot: 'Desktop', // 桌面根（all-files 模式）：桌面空间渲染的相对目录，Drawer「桌面目录」可配置
     viewStyle: 'grid',    // folder 容器视图：grid（4 列）| list（单列）
     sortBy: 'name',       // folder 容器排序：name | mtime | type | size
     sortDir: 1,           // 1 升序 | -1 降序
@@ -90,8 +91,13 @@ App.DesktopCore = (function () {
     return (vp && vp.clientHeight) || 640
   }
 
-  // 视图模式：根目录 = Desktop（空间，无限画布）；子文件夹 = Folder（容器，有限画布）
-  C.isFolderView = function () { return !!C.state.curPath }
+  // 视图模式：
+  //   all-files 模式：桌面空间 = desktopRoot（Drawer 可配置），其余（含全盘根 ''）都是 Folder 容器
+  //   SAF/私有模式：根目录 '' = 桌面空间（保持原语义）；子文件夹 = Folder 容器
+  C.isFolderView = function () {
+    if (C.state.mode === 'all-files') return C.state.curPath !== C.state.desktopRoot
+    return !!C.state.curPath
+  }
   C.viewMode = function () { return C.isFolderView() ? 'folder' : 'desktop' }
 
   // 文件大小人性化（列表视图 meta）

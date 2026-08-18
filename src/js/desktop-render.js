@@ -45,9 +45,22 @@ App.DesktopRender = (function () {
         return { item: item, key: C.fullPath(item.name), x: pts[i].x, y: pts[i].y }
       })
     }
+    // all-files 桌面空间：回收站（.trash）在桥层根（全盘根），不在桌面目录内——
+    // 附加虚拟条目（key = trashName 固定串，isTrashPath/删除目标/位置持久化天然匹配）
+    if (C.state.mode === 'all-files' && C.state.trashName) {
+      let hasTrash = false
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].name === C.state.trashName) { hasTrash = true; break }
+      }
+      if (!hasTrash) {
+        items = items.concat([{ name: C.state.trashName, isDir: true }])
+      }
+    }
     let cols = Math.max(3, Math.min(8, Math.floor(C.viewportWidth() / App.DesktopGrid.GRID_W)))
     return items.map(function (item, i) {
-      const key = C.fullPath(item.name)
+      // 虚拟回收站 key = trashName（'.trash'，相对桥层根）；其余 = 当前目录 + 名
+      const isVirtualTrash = C.state.mode === 'all-files' && item.name === C.state.trashName
+      const key = isVirtualTrash ? C.state.trashName : C.fullPath(item.name)
       let pos = C.positions[key]
       if (!pos) {
         pos = App.DesktopGrid.cellToWorld(i % cols, Math.floor(i / cols))
@@ -198,6 +211,8 @@ App.DesktopRender = (function () {
       C.state.items.forEach(function (it) {
         if (C.fullPath(it.name) === path) isDir = it.isDir
       })
+      // 虚拟回收站（all-files 桌面空间）：items 不含 .trash 条目，特判为目录
+      if (!isDir && C.isTrashPath(path)) isDir = true
       return { path: path, isDir: isDir }
     })
   }

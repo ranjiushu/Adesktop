@@ -40,7 +40,6 @@ public class MainActivity extends Activity {
     private static final int REQ_WRITE_STORAGE = 1003;   // Android 10 及以下全盘授权（运行时权限）
     private static final String PREFS = "desktop_prefs";
     private static final String KEY_ROOT_URI = "root_uri";
-    private static final String KEY_ALL_FILES_PROMPTED = "all_files_prompted";
 
     private WebView webView;
     private FileBridge fileBridge;
@@ -157,17 +156,9 @@ public class MainActivity extends Activity {
         // 单文件 bundle 由 build-local.sh 复制到 assets/index.html
         webView.loadUrl("file:///android_asset/index.html");
 
-        // 首次启动引导全盘授权（「授权访问手机存储」主模式）：跳系统设置页手动开启。
-        // 条件 = 无全盘权限 && 未提示过——**升级用户（已有旧 SAF 授权）同样引导一次**，
-        // 否则旧 rootUri 存在时永远不弹，用户无法得知新主模式（Bug：2026-08-19 真机反馈）。
-        // 拒绝/跳过 → prefs 标记置位不再重复弹（Drawer「授权手机存储」可再进）；
-        // SAF 授权/私有目录照常兜底，App 永远可用。
-        if (!allFilesGranted && !getSharedPreferences(PREFS, MODE_PRIVATE)
-                .getBoolean(KEY_ALL_FILES_PROMPTED, false)) {
-            getSharedPreferences(PREFS, MODE_PRIVATE)
-                .edit().putBoolean(KEY_ALL_FILES_PROMPTED, true).apply();
-            requestAllFilesAccess();
-        }
+        // 全盘授权引导已移至前端（all-files 引导对话框，localStorage 标记防重复弹）：
+        // 原生只保留桥调用入口（Drawer「授权手机存储」→ FileBridge.requestRootAccess →
+        // requestAllFilesAccessFromBridge → 系统设置页 / 运行时权限框）。
     }
 
     /* ── 全盘访问（MANAGE_EXTERNAL_STORAGE / legacy WRITE_EXTERNAL_STORAGE）── */

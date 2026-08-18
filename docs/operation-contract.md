@@ -65,7 +65,8 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 - 布局（图标位置/相机）与 Home 快照是**相对当前根目录**的状态：key 为相对 root 的
   fullPath，切根 A→B 不得继承 A 的布局/相机/Home。
 - 存储 key 带 rootId（2026-08-17 修复）：`desktop.layout.<rootId>.v1` / `desktop.home.<rootId>.v1`；
-  `rootId` 由 rootInfo 返回（SAF = tree uri / 全盘 = `'all-files'` / 私有 = `'private'`）。
+  `rootId` 由 rootInfo 返回（SAF = tree uri / 全盘 = `'all-files:<桌面根>'`（桌面根可配置，
+  切桌面根即切换布局域）/ 私有 = `'private'`）。
 - 启动时序契约：`initLayout` 在 rootInfo 就绪前同步执行（rootId='' → 读旧 key），
   **refresh 拿到 rootId 后必须用 rootId key 重载布局/相机**（`_reloadLayoutForRoot`）——
   否则旧 key 被迁移删除后，第二次启动起布局丢失回自动排布（回归测试：

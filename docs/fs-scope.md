@@ -13,8 +13,13 @@
   （`isSafMode() = allFilesRoot == null && rootUri != null`），所有操作走 File 分支；
   撤销全盘自动恢复 SAF 模式，无需重新授权。
 - 授权变更（授予/撤销）在 `onResume` 检测 → 桥层切换模式 → 前端收到 `App.onRootChanged` 刷新。
-- 首次启动（含从旧版升级、已有 SAF 授权的用户）引导一次全盘授权
-  （prefs 标记 `all_files_prompted`，拒绝后不重复弹；Drawer 入口可再进）。
+- 授权引导为**应用内对话框**（说明 + 「去授权」按钮 → 跳系统设置页，不裸跳）：
+  首次启动未授权时自动弹出（localStorage 标记 `all-files-prompted`，拒绝后不重复弹），
+  Drawer「授权手机存储」入口同款；已授权时点击提示。
+- **桌面根（Desktop Root）**：全盘模式下桌面空间渲染的目录，默认 `Desktop`，
+  Drawer「桌面目录」可配置（常见目录 + 自定义相对路径，`''` = 手机存储根）。
+  布局/Home 按 `rootId = 'all-files:<桌面根>'` 隔离——切换桌面根即切换布局域。
+  回收站（`.trash`）位于桥层根（手机存储根），桌面空间以虚拟图标显示（key 固定 `.trash`）。
 - 用户未授权全盘时：有旧 SAF 授权（prefs 持久化）用 SAF；否则私有目录 `filesDir/root` 兜底，App 照常可用。
 - 「授权手机存储」入口在 Drawer（`switch-root` action，桥层 `requestRootAccess`）。
 - Drawer 头部实时显示当前来源（`drawer-root-mode`：手机存储 / 外部存储 / 应用私有目录）。
@@ -40,12 +45,11 @@
 - 路径校验在桥内：拒绝绝对路径、拒绝 `..` 逃逸
 - 前端通过 `App.FileAPI`（Promise 封装）访问，与具体后端（全盘/SAF/私有）解耦
 - `rootInfo.mode` 取值：`'all-files'`（全盘）/ `'saf'` / `'private'`；
-  `rootInfo.rootId` = SAF tree uri / `'all-files'` / `'private'`（布局与 Home 快照隔离键）
-- 全盘 rootId 为**固定串** `'all-files'`：从 SAF 目录切到全盘后，旧 SAF 布局不继承
-  （rootId 隔离语义，见 operation-contract.md 1.6）
-
-## 待确认（规划中）
-
-- 桌面渲染目录收敛：全盘模式下仅 `/storage/emulated/0/Desktop/` 渲染为桌面根，
-  其余目录经 Drawer 快捷入口（下载/文档/图片…）以资源管理器方式访问
-- 「文件系统来源」切换对话框（全盘 / SAF / 私有 三选一）
+  `rootInfo.rootId` = SAF tree uri / `'all-files'`（前端在 all-files 模式拼为
+  `'all-files:<桌面根>'`）/ `'private'`（布局与 Home 快照隔离键）
+- **视图模式（isFolderView）**：
+  - all-files 模式：桌面空间 = 桌面根（默认 `Desktop`，可配置），
+    其余目录（含手机存储根 `''`）都是 Folder 容器（资源管理器式浏览）；
+    桌面空间「上级」= 手机存储根（folder 容器），手机存储根无上级
+  - SAF/私有模式：根目录 `''` = 桌面空间（原语义不变）
+- 全盘 rootId 带桌面根：切换桌面根后布局不继承（rootId 隔离语义，见 operation-contract.md 1.6）

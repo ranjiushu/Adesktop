@@ -177,6 +177,7 @@ interface DesktopPersist {
   applyViewPrefs(prefs: ViewPrefs): void
   getViewPrefs(): ViewPrefs
   saveLayout(): void
+  saveDesktopRoot(dir: string): boolean
 }
 
 /** 原生桥最小封装（App.bridge） */
@@ -194,6 +195,7 @@ interface DesktopCoreStateData {
   curPath: string
   trashName: string
   rootId: string
+  desktopRoot: string
   viewStyle: 'grid' | 'list'
   sortBy: string
   sortDir: number
@@ -537,6 +539,7 @@ interface Drawer {
   isOpen(): boolean
   updatePath(displayPath: string, rootName: string, mode: string): void
   init(): void
+  maybePromptAllFiles(): void
 }
 
 /** 底部工具栏（App.BottomBar） */
@@ -573,6 +576,8 @@ interface Desktop {
   inTrash: () => boolean
   getTrashName: () => string
   getRootId: () => string
+  getDesktopRoot: () => string
+  saveDesktopRoot: (dir: string) => boolean
   viewMode: () => string
   isFolderView: () => boolean
   applyViewPrefs: (prefs: ViewPrefs) => void

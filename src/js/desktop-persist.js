@@ -13,6 +13,22 @@
 App.DesktopPersist = (function () {
   const C = App.DesktopCore
 
+  // 桌面根持久化 key（localStorage）：all-files 模式桌面空间渲染的相对目录，默认 'Desktop'
+  const DESKTOP_ROOT_KEY = 'desktop-root'
+
+  /** 校验桌面根：允许 ''（全盘根）；拒绝绝对路径 / 空段 / .. 逃逸 */
+  /** @param {string} dir @returns {boolean} */
+  function isSafeDesktopRoot(dir) {
+    if (typeof dir !== 'string') return false
+    if (dir === '') return true
+    if (dir.indexOf('/') === 0) return false
+    const parts = dir.split('/')
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === '..' || parts[i] === '') return false
+    }
+    return true
+  }
+
   // refresh 代际守卫：异步链完成时若期间又发起了新 refresh（快速连续导航），
   // 旧路径的 list 结果必须丢弃——否则旧 items 渲染到新视图（先切视图再变目录）
   // + 用旧 items 做 valid 清空根级 positions（布局像初次启动，真机 Bug A）。
@@ -21,7 +37,6 @@ App.DesktopPersist = (function () {
   // 避免「先切视图再变目录」的空白/错位感。
   function refresh() {
     const seq = ++C._refreshSeq
-    const path = C.state.curPath   // 快照：发起时的目标路径（list 用快照，不用动态 curPath）
     if (App.Loading && typeof App.Loading.show === 'function') {
       App.Loading.show({ title: '加载中' })   // 不确定进度：无 total → 条纹滑动
     }
@@ -31,9 +46,19 @@ App.DesktopPersist = (function () {
         C.state.rootName = info.rootName
         C.state.mode = info.mode
         C.state.trashName = info.trashName || ''
+        // all-files 模式：rootId 带桌面根（布局/Home 按桌面目录隔离，切桌面根不继承布局）；
+        // 启动/模式切换时桌面空间 = desktopRoot（curPath 从 '' 初始化，导航栈同步重建）
+        let rootId = info.rootId
+        if (info.mode === 'all-files') {
+          rootId = 'all-files:' + C.state.desktopRoot
+          if (C.state.curPath === '') {
+            C.state.curPath = C.state.desktopRoot
+            C.nav = App.DesktopNav.enter(App.DesktopNav.create(), C.state.desktopRoot)
+          }
+        }
         // root 身份（布局/Home 隔离用）：首次拿到后做旧 key 一次性迁移
-        if (info.rootId && info.rootId !== C.state.rootId) {
-          C.state.rootId = info.rootId
+        if (rootId && rootId !== C.state.rootId) {
+          C.state.rootId = rootId
           App.LayoutStore.migrateLegacy(C.state.rootId)
           App.HomeStore.migrateLegacy(C.state.rootId)
           // [修复] rootId 就绪前 initLayout 用旧 key 加载（旧 key 迁移后删除）——
@@ -45,6 +70,10 @@ App.DesktopPersist = (function () {
           App.Drawer.updatePath(C.state.curPath ? base + '/' + C.state.curPath : base,
             info.rootName, info.mode)
         }
+        // 全盘授权引导（首次启动未授权时弹出；localStorage 标记防重复，Drawer 可再进）
+        if (App.Drawer && typeof App.Drawer.maybePromptAllFiles === 'function') {
+          App.Drawer.maybePromptAllFiles()
+        }
       })
       .catch(function () {
         if (seq !== C._refreshSeq) return
@@ -55,6 +84,9 @@ App.DesktopPersist = (function () {
       })
       .then(function () {
         if (seq !== C._refreshSeq) return null
+        // 快照目标路径（rootInfo 之后拍：all-files 桌面根初始化/桌面目录切换已生效；
+        // list 用快照防异步竞态——代际守卫语义不变）
+        const path = C.state.curPath
         return App.FileAPI.list(path)
       })
       .then(function (items) {
@@ -146,11 +178,34 @@ App.DesktopPersist = (function () {
   function initLayout() {
     _loadLayoutAndCamera()
     C.camera = C.camera || App.DesktopCamera.create()
+    // 桌面根（all-files 模式桌面空间渲染目录）：localStorage 持久化，损坏/非法回退默认
+    try {
+      const raw = localStorage.getItem(DESKTOP_ROOT_KEY)
+      if (raw !== null && isSafeDesktopRoot(raw)) C.state.desktopRoot = raw
+    } catch (e) { /* 忽略 */ }
     const prefs = App.ViewStore.load()
     C.state.viewStyle = prefs.viewStyle
     C.state.sortBy = prefs.sortBy
     C.state.sortDir = prefs.sortDir
     C._advancedBrowse = !!prefs.advancedBrowse
+  }
+
+  /** 切换桌面根（all-files 模式）：更新状态 + 持久化 + 回到新桌面根重新加载。
+   *  布局/Home 按 rootId（all-files:<桌面根>）隔离——切换即重置为新桌面根的布局。
+   *  @param {string} dir 相对路径（'' = 全盘根）；校验失败返回 false（调用方 toast） */
+  /** @param {string} dir @returns {boolean} */
+  function saveDesktopRoot(dir) {
+    if (!isSafeDesktopRoot(dir)) return false
+    C.state.desktopRoot = dir
+    try {
+      localStorage.setItem(DESKTOP_ROOT_KEY, dir)
+    } catch (e) { /* 忽略 */ }
+    if (C.state.mode === 'all-files') {
+      C.state.curPath = dir
+      C.nav = App.DesktopNav.enter(App.DesktopNav.create(), dir)
+      refresh()
+    }
+    return true
   }
 
   // 视图/排序偏好变更（顶栏菜单驱动）：保存 + 重渲染
@@ -193,6 +248,7 @@ App.DesktopPersist = (function () {
     initLayout: initLayout,
     applyViewPrefs: applyViewPrefs,
     getViewPrefs: getViewPrefs,
-    saveLayout: saveLayout
+    saveLayout: saveLayout,
+    saveDesktopRoot: saveDesktopRoot
   }
 })()

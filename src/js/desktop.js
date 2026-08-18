@@ -141,6 +141,8 @@ App.Desktop = (function () {
     inTrash: C.inTrash,
     getTrashName: function () { return C.state.trashName },
     getRootId: function () { return C.state.rootId },
+    getDesktopRoot: function () { return C.state.desktopRoot },
+    saveDesktopRoot: P.saveDesktopRoot,
     viewMode: C.viewMode,
     isFolderView: C.isFolderView,
     applyViewPrefs: P.applyViewPrefs,

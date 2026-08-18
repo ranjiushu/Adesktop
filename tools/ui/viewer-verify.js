@@ -2,7 +2,7 @@
 //   1. 画布实体：卡片在 #desktop-canvas 内、世界坐标定位、随画布 transform 平移缩放
 //   2. 桌面手指有效：不拦截触摸；点击 Viewer 表面不反选（文件保持选中）
 //   3. 全屏预览：点顶栏按钮 → 占满内容区 + 拦截触摸
-//   4. 关闭：FAB 选中态「关闭预览」/ 返回键 / 取消选择
+//   4. 关闭：FAB 选中态「关闭预览」/ 返回键（FAB 收起即取消选中）
 //   5. HTML 桥隔离 + 各类型渲染
 // 用法: node tools/ui/viewer-verify.js [--shot out.png]
 'use strict'

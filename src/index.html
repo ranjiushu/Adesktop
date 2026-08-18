@@ -311,7 +311,8 @@
   </div>
   <!-- 选中态操作栏按钮集（selection 非空时自动展开）：
        Viewer 打开时仅显示 全屏预览 / 关闭预览（2、3 位），文件操作隐藏；
-       Viewer 关闭时显示 打开/复制/剪切/重命名/取消选择 -->
+       Viewer 关闭时显示 打开/复制/剪切/重命名（FAB 原位即「取消」——关闭 = 取消选中，
+       见 fab-speed-dial.js collapse 语义收敛） -->
   <div class="fab-btn-set fab-set-selection">
     <button class="fab-child fab-child-up" data-action="open"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder"/></svg>
       <span class="fab-child-label">打开</span>
@@ -336,9 +337,6 @@
     </button>
     <button class="fab-child fab-child-up" data-action="delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-trash"/></svg>
       <span class="fab-child-label">删除</span>
-    </button>
-    <button class="fab-child fab-child-up" data-action="clear-selection"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-close"/></svg>
-      <span class="fab-child-label">取消选择</span>
     </button>
   </div>
 </div>
@@ -389,7 +387,8 @@
 <!-- ===== 移动目标选择器（Morph FAB「移动」弹出，移植自 LexiCull 移动功能） =====
      交互：弹层 = 当前浏览目录；点文件夹项进入子目录；点面包屑返回上级；
      底部「移动到此处」执行真移动（复用 move 管道：进度/取消/失败汇总/清选中/刷新）；
-     取消 / 返回键 / 点空白 = 清理暂存，选中保持（Windows 原则：不自动清选中）。
+     取消 / 返回键 / 点空白 = 清理暂存（选中已随 FAB 收起清空——FAB 展开 ⇔ 选中一致，
+     见 fab-speed-dial.js collapse 语义收敛）。
      守卫：目标 = 源所在目录（按钮禁用「已在目标位置」）；目标 ∈ 源文件夹自身/后代
      （循环移动）；源含锁定文件（预览中）不可移动。 -->
 <div id="move-target-overlay" class="dialog-overlay" aria-hidden="true">

@@ -138,7 +138,8 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 ## 关闭链路（Morph FAB / 返回键）
 
 - **Morph FAB（Viewer 实体选中时）**：显示「全屏预览」「关闭预览」两项
-  （文件操作隐藏，预览焦点模式）；文件选中时恢复 打开/复制/剪切/重命名/取消选择。
+  （文件操作隐藏，预览焦点模式）；文件选中时恢复 打开/复制/剪切/重命名（取消选择已移除——
+  FAB 展开 ⇔ 选中一致：关闭 Morph FAB 即取消选中）。
 - **关闭预览** = 关闭「选中的」Viewer + 解除其文件锁定（`Desktop.closeViewer` 出口）。
 - **取消选中 ≠ 关闭**：点 Viewer 外部取消 Viewer 选中（脆弱/临时），Viewer 与锁定保持。
 - **返回键**：`App.handleSystemBack` 优先级——全屏态 Viewer → 退出全屏；有选中

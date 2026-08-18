@@ -17,9 +17,9 @@ App.boot = function boot() {
         if (App.fabSpeedDial.isExpanded()) {
           App.fabSpeedDial.collapse()
         } else {
-          // 有选中（文件或 Viewer 实体）→ 唤起 selection 操作栏，而非 desktop 菜单：
-          // 移动选择器取消后 FAB 已收起但选中仍在，短按应能重新唤起文件操作
-          // （对齐 LexiCull 操作模式：收起菜单不退出操作态）。
+          // 无选中 → desktop 菜单（新建/刷新/粘贴）。
+          // 语义收敛：FAB 展开 ⇔ 选中态一致——selection 态收起（collapse）即取消选中，
+          // 故移动选择器取消后 FAB 已收起、选中已清空，短按回到 desktop 菜单。
           const hasSel = (App.Desktop && typeof App.Desktop.hasSelection === 'function' &&
             App.Desktop.hasSelection()) ||
             (App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&

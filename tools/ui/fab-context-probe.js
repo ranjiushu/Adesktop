@@ -41,7 +41,7 @@ async function snapshot(page) {
 
   await page.evaluate(() => App.fabSpeedDial.setSelection(false)); await sleep(250)
 
-  // 场景 D：选中含回收站（selHasTrash）→ 只留 打开/取消选择
+  // 场景 D：选中含回收站（selHasTrash）→ 只留 打开
   await page.evaluate(() => {
     App.InternalViewer.anySelected = () => false
     App.Desktop.getSelectionNames = () => ['.trash']
@@ -54,7 +54,7 @@ async function snapshot(page) {
 
   await page.evaluate(() => App.fabSpeedDial.setSelection(false)); await sleep(250)
 
-  // 场景 E：回收站视图内（inTrash）→ 禁 剪切/重命名/删除，保留 打开/复制/取消选择
+  // 场景 E：回收站视图内（inTrash）→ 禁 剪切/重命名/删除，保留 打开/复制
   await page.evaluate(() => {
     App.InternalViewer.anySelected = () => false
     App.Desktop.getSelectionNames = () => ['/trash/a.txt']
@@ -96,10 +96,10 @@ async function snapshot(page) {
 
   assert('C viewer选中: 按钮=全屏预览/关闭预览', actions(results.viewerSel) === 'fullscreen-preview@' + (fabTop - 48).toFixed(1) + ', close-preview@' + (fabTop - 92).toFixed(1), actions(results.viewerSel))
   assert('C viewer选中: 槽位紧凑无空缺', expectSlots(results.viewerSel, 2), JSON.stringify(tops(results.viewerSel)))
-  assert('D 回收站选中: 按钮=打开/取消选择', actions(results.trashSel).startsWith('open@') && actions(results.trashSel).includes('clear-selection@'), actions(results.trashSel))
-  assert('D 回收站选中: 槽位紧凑无空缺', expectSlots(results.trashSel, 2), JSON.stringify(tops(results.trashSel)))
+  assert('D 回收站选中: 按钮=仅打开', actions(results.trashSel) === 'open@' + (fabTop - 48).toFixed(1), actions(results.trashSel))
+  assert('D 回收站选中: 槽位紧凑无空缺', expectSlots(results.trashSel, 1), JSON.stringify(tops(results.trashSel)))
   assert('E 回收站内: 无 剪切/重命名/删除', !results.inTrash.buttons.some(b => ['cut', 'rename', 'delete'].includes(b.action)), actions(results.inTrash))
-  assert('E 回收站内: 槽位紧凑无空缺', expectSlots(results.inTrash, 3), JSON.stringify(tops(results.inTrash)))
+  assert('E 回收站内: 槽位紧凑无空缺', expectSlots(results.inTrash, 2), JSON.stringify(tops(results.inTrash)))
   assert('F desktop+剪贴板: 按钮=4 个(含粘贴)', results.desktopWithClip.buttons.length === 4 && results.desktopWithClip.buttons.some(b => b.action === 'paste'), actions(results.desktopWithClip))
   assert('F desktop+剪贴板: 槽位紧凑无空缺', expectSlots(results.desktopWithClip, 4), JSON.stringify(tops(results.desktopWithClip)))
   assert('全部场景无按钮叠 FAB', [results.viewerSel, results.trashSel, results.inTrash, results.desktopWithClip].every(r => !r.buttons.some(b => b.overlapFab)), '')

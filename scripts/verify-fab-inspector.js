@@ -88,6 +88,31 @@ async function main() {
   if (collapsed) pass('点遮罩收起')
   else fail('点遮罩未收起')
 
+  // ── 3.5 语义收敛：selection 态 FAB 原位点击 = 收起 + 取消选中（FAB 展开 ⇔ 选中一致） ──
+  await page.evaluate(() => {
+    window.__selCleared = false
+    App.InternalViewer.anySelected = () => false
+    App.Desktop.getSelectionNames = () => ['a.txt']
+    App.Desktop.hasSelection = () => true
+    const origClear = App.Desktop.clearSelection
+    App.Desktop.clearSelection = function () { window.__selCleared = true; if (origClear) origClear() }
+    App.fabSpeedDial.setSelection(true)
+  })
+  await sleep(400)
+  const selExpanded = await page.evaluate(() => {
+    const sd = document.getElementById('fab-speed-dial')
+    return !!sd && sd.classList.contains('fab-speed-dial-expanded') && sd.getAttribute('data-mode') === 'selection'
+  })
+  if (selExpanded) pass('选中后 FAB 自动展开 selection 操作栏')
+  else fail('选中后未展开 selection 操作栏')
+  await tap(client, fabInfo.x, fabInfo.y, 60)  // FAB 原位点击 = 取消
+  const selClosed = await page.evaluate(() => {
+    const sd = document.getElementById('fab-speed-dial')
+    return !!sd && !sd.classList.contains('fab-speed-dial-expanded') && window.__selCleared === true
+  })
+  if (selClosed) pass('FAB 原位点击: 收起 + 取消选中（展开 ⇔ 选中一致）')
+  else fail('FAB 原位点击未同步取消选中')
+
   // ── 4. 长按 FAB 800ms → 取景器激活 ──
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fabInfo.x, y: fabInfo.y }] })
   await sleep(900)

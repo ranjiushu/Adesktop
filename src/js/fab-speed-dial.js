@@ -8,6 +8,9 @@
  *   _state ∈ 'collapsed' | 'desktop' | 'selection'
  *   所有变更统一走 _apply()（唯一出口：class / data-mode / backdrop / 按钮显隐 / 槽位重排），
  *   避免 expand/setSelection 各自写状态导致漂移。
+ * 语义收敛（用户决策）：FAB 展开 ⇔ 选中态一致——
+ *   selection 态下关闭 Morph FAB（原位点击/动作完成后收起）= 取消选中；
+ *   「取消」= FAB 原位 morph 为 × 后点击，不设独立「取消/取消选择」按钮。
  * 上下文感知：
  *   按钮显隐集中在 _syncContext()（粘贴按钮仅 desktop 态、selection 按钮集按
  *   viewerSel/回收站/inTrash 守卫），每次 _apply 都重算——不依赖展开时机。
@@ -32,9 +35,6 @@ App.fabSpeedDial = (function () {
     let action = this.getAttribute('data-action')
     if (!action) return
     switch (action) {
-      case 'close-speed-dial':
-        collapse()
-        return
       case 'new-folder':
         App.Actions.createFolder()
         break
@@ -44,12 +44,6 @@ App.fabSpeedDial = (function () {
       case 'refresh':
         App.Actions.refresh()
         break
-      case 'clear-selection':
-        if (App.Desktop && typeof App.Desktop.clearSelection === 'function') {
-          App.Desktop.clearSelection()
-        }
-        collapse()
-        return
       case 'close-preview':
         // 关闭预览：关闭「选中的」Viewer + 解除文件锁定（Desktop 统一管理）
         if (App.Desktop && typeof App.Desktop.closeViewer === 'function') {
@@ -162,7 +156,7 @@ App.fabSpeedDial = (function () {
     } else if (_state === 'selection') {
       const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
         App.InternalViewer.anySelected()
-      // 回收站守卫：选中含回收站（根目录）→ 隐藏文件操作，只留「打开/取消选择」；
+      // 回收站守卫：选中含回收站（根目录）→ 隐藏文件操作，只留「打开」；
       // 进入回收站视图（inTrash）→ 禁用 删除/剪切/重命名（只读，防二次删除嵌套）。
       const selNames = App.Desktop && typeof App.Desktop.getSelectionNames === 'function'
         ? App.Desktop.getSelectionNames() : []
@@ -179,7 +173,6 @@ App.fabSpeedDial = (function () {
       _setBtnVisible(sd, 'move', fileOps && !inTrash)
       _setBtnVisible(sd, 'rename', fileOps && !inTrash)
       _setBtnVisible(sd, 'delete', fileOps && !inTrash)
-      _setBtnVisible(sd, 'clear-selection', !viewerSel)
     }
   }
 
@@ -236,10 +229,22 @@ App.fabSpeedDial = (function () {
     _apply()
   }
 
-  // ── 收起 ──
+  // ── 收起（语义收敛：关闭 Morph FAB = 取消选中） ──
+  // selection 态收起时先取消选中（Viewer 实体 + 文件），保证「FAB 展开 ⇔ 选中态」一致：
+  // 先置 _state='collapsed' 再清选中——clearSelection → syncFab → setSelection(false)
+  // 重入 collapse() 时直接 return，无递归风险。
   function collapse() {
     if (_state === 'collapsed') return
+    const wasSelection = _state === 'selection'
     _state = 'collapsed'
+    if (wasSelection) {
+      if (App.InternalViewer && typeof App.InternalViewer.deselectAll === 'function') {
+        App.InternalViewer.deselectAll()
+      }
+      if (App.Desktop && typeof App.Desktop.clearSelection === 'function') {
+        App.Desktop.clearSelection()
+      }
+    }
     _apply()
   }
 

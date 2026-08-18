@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Morph FAB「取消」语义收敛：FAB 展开 ⇔ 选中态一致（2026-08-19）
+
+- **关闭 Morph FAB = 取消选中**：selection 态下收起 FAB（原位点击 × / 动作完成后收起）
+  即清空选中（Viewer 实体 deselectAll + 文件 clearSelection）——「展开 ⇔ 选中」状态一致，
+  消除「FAB 已收起但选中仍在」的幽灵操作栏
+- **移除「取消选择」独立按钮**（index.html clear-selection）：取消由 FAB 原位承担
+  （图标 + → ×），不再新增取消按钮；同步删除 fab-speed-dial.js `clear-selection` 动作分支
+- **清理死代码**：删除 `close-speed-dial` action（LexiCull 移植遗留的独立取消按钮入口，
+  HTML 中无对应按钮，纯残留）
+- **联动适配**：fab-context-probe 场景 D/E 断言（回收站选中 → 仅「打开」；回收站内 →
+  打开/复制）；viewer-verify / interaction.md / viewer.md / move-target.js 注释与操作表同步
+- **E2E 补断言**：verify-fab-inspector 新增「FAB 原位点击 = 收起 + 取消选中」
+
 ### 工程：仓库目录改名 Desktop → Adesktop（2026-08-19）
 
 - 项目目录 `/workspace/Desktop` → `/workspace/Adesktop`（与包名/产物名/APK 命名对齐）

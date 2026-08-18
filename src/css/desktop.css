@@ -39,7 +39,11 @@
   left: 0;
 }
 
-/* 图标：绝对定位（left/top = 世界坐标，由 JS 设置），固定宽度 */
+/* 图标：绝对定位（left/top = 世界坐标，由 JS 设置），固定宽度 + 固定占位高度。
+ * 占位模式对齐 Windows/macOS 桌面：cell 尺寸固定统一、与内容解耦——
+ * 缩略图（48px）或类型图标（36px）都在占位内渲染（缩略图 cover 裁剪），
+ * 文件名两行区固定 38px；内容差异只影响 cell 内部，不影响 cell 尺寸，
+ * 因此排布间距与选中高亮永不重叠（106 = padding 16 + 缩略图 48 + gap 4 + 名字 38） */
 .desktop-icon {
   position: absolute;
   display: flex;
@@ -48,6 +52,7 @@
   gap: var(--space-xs);
   padding: var(--space-sm);
   width: 84px;
+  height: 106px;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -55,10 +60,9 @@
   /* 无卡片背景（真实桌面隐喻）：默认透明，选中/按压时显示淡色圆角底 */
 }
 
-/* 选中/按压高亮：紧贴内容的圆角块（inset 8px，四周留白）。
- * 图标高度随内容撑开：普通类型图标 36px → 94px；缩略图（媒体/快捷方式）
- * 48px → 106px。旧版 92px 网格位置下，高亮块 90px ≤ 92px 互不干涉；
- * 默认字体下高度全为 CSS 硬值，不随字体渲染差异变化 */
+/* 选中/按压高亮：跟随固定占位的圆角块（inset 8px，四周留白）。
+ * 占位 106px → 高亮 90px；旧版 92px 网格位置下互不干涉（余量 2px），
+ * 新 116px 步进下余量 26px。高度全为 CSS 硬值，不随字体渲染差异变化 */
 .desktop-icon.selected::before,
 .desktop-icon:active::before {
   content: '';

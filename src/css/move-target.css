@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: column;
   max-height: 72vh;
-  width: 86.5vw;
+  width: var(--dialog-width);
 }
 .move-crumb-bar {
   display: flex;

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 弹窗宽度收敛为设计 token：--dialog-width（2026-08-19）
+
+- **tokens.css 新增 `--dialog-width: 86.5vw`**（占屏幕 80%~90%），dialog.css /
+  move-target.css 由字面值改为 `var(--dialog-width)`——弹窗宽度从此单一来源，
+  调宽度只改一处全局生效（根治此前 76vw / 84vw 双魔数不一致的历史问题）
+- **注释不再携带魔法值**：loading.css ×2 / index.html 注释由「86.5vw」改为引用
+  `var(--dialog-width)`，改值后注释不会过期
+
 ### 弹窗宽度加宽：76vw → 86.5vw（2026-08-19）
 
 - **通用弹窗基座**（`dialog.css` `.dialog`）：宽 76vw → 86.5vw（占屏幕 80%~90%），

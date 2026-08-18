@@ -63,7 +63,7 @@
 | 形状 | 字段 | 说明 |
 |------|------|------|
 | `FsEntry` | `name, isDir, size, mtime` | 目录的 `size` 恒为 0 |
-| `RootInfo` | `rootName, mode, displayPath, trashName, rootId` | `mode` 取值 `'saf' \| 'private'`；`trashName` 恒为 `'.trash'`；`rootId` = SAF tree uri / 私有 `'private'`（布局与 Home 快照的 root 隔离键，见 operation-contract.md 1.6） |
+| `RootInfo` | `rootName, mode, displayPath, trashName, rootId` | `mode` 取值 `'saf' \| 'all-files' \| 'private'`；`trashName` 恒为 `'.trash'`；`rootId` = SAF tree uri / 全盘 `'all-files'` / 私有 `'private'`（布局与 Home 快照的 root 隔离键，见 operation-contract.md 1.6） |
 | `AppEntry` | `package, label, isSystem` | `isSystem` 含系统预装与更新过的系统应用 |
 
 ### 1.4 路径与安全约束

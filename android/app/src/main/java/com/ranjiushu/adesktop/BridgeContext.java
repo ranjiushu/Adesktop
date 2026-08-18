@@ -32,6 +32,13 @@ class BridgeContext {
     /** 回收站文件夹名：根目录下的隐藏文件夹，删除 = 移入回收站（安全删除，不做彻底删除） */
     static final String TRASH_NAME = ".trash";
 
+    /** 全盘模式 rootId / 私有模式 rootId（固定串；SAF 模式 = tree uri，见 rootInfo） */
+    static final String ROOT_ID_ALL_FILES = "all-files";
+    static final String ROOT_ID_PRIVATE = "private";
+
+    /** 全盘模式 rootName（Drawer 显示） */
+    static final String ROOT_NAME_ALL_FILES = "手机存储";
+
     final Activity activity;
     final WebView webView;
     final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -39,13 +46,15 @@ class BridgeContext {
     /** 传输取消标志：cancelTransfer() 置位，copy 循环检查并尽快中止（单线程串行，同一时刻仅一个传输） */
     volatile boolean cancelRequested = false;
 
-    volatile Uri rootUri;          // SAF 授权根（null 时用私有目录）
+    volatile Uri rootUri;          // SAF 授权根（非 null = SAF 模式）
+    volatile File allFilesRoot;    // 全盘根 Environment.getExternalStorageDirectory()（非 null = 全盘模式）
     volatile File privateRoot;     // 兜底根 filesDir/root
 
-    BridgeContext(Activity activity, WebView webView, Uri rootUri) {
+    BridgeContext(Activity activity, WebView webView, Uri rootUri, File allFilesRoot) {
         this.activity = activity;
         this.webView = webView;
         this.rootUri = rootUri;
+        this.allFilesRoot = allFilesRoot;
         File filesDir = activity.getFilesDir();
         this.privateRoot = new File(filesDir, "root");
         if (!privateRoot.exists()) {
@@ -57,8 +66,23 @@ class BridgeContext {
         this.rootUri = uri;
     }
 
+    /** 全盘模式切换（MainActivity 检测到权限授予/撤销时调用；null = 退出全盘） */
+    void setAllFilesRoot(File root) {
+        this.allFilesRoot = root;
+    }
+
     boolean isAuthorized() {
+        return rootUri != null || allFilesRoot != null;
+    }
+
+    /** SAF 模式（rootUri 授权树）；File 模式（全盘/私有）走 fileRoot() */
+    boolean isSafMode() {
         return rootUri != null;
+    }
+
+    /** 当前 File 模式根：全盘优先，否则私有目录兜底 */
+    File fileRoot() {
+        return allFilesRoot != null ? allFilesRoot : privateRoot;
     }
 
     /* ── 回调管道 ── */
@@ -118,7 +142,7 @@ class BridgeContext {
 
     /* ── 路径工具 ── */
 
-    /** 解析相对路径 → DocumentFile（SAF 模式）或 File（私有模式） */
+    /** 解析相对路径 → DocumentFile（SAF 模式）或 File（全盘/私有模式） */
     Object resolve(String relPath) throws IOException {
         if (!isSafeRelPath(relPath)) {
             throw new IOException("非法路径: " + relPath);
@@ -136,16 +160,16 @@ class BridgeContext {
             }
             return cur;
         }
-        File f = new File(privateRoot, relPath);
-        if (!isUnderPrivateRoot(f)) {
+        File f = new File(fileRoot(), relPath);
+        if (!isUnderFileRoot(f)) {
             throw new IOException("非法路径: " + relPath);
         }
         return f;
     }
 
-    /** 私有模式越界校验：canonical 路径必须等于根或位于根之下（带分隔符，防 /root 前缀命中 /root2） */
-    boolean isUnderPrivateRoot(File f) throws IOException {
-        String root = privateRoot.getCanonicalPath();
+    /** File 模式越界校验：canonical 路径必须等于活动根或位于根之下（带分隔符，防 /root 前缀命中 /root2） */
+    boolean isUnderFileRoot(File f) throws IOException {
+        String root = fileRoot().getCanonicalPath();
         String path = f.getCanonicalPath();
         return path.equals(root) || path.startsWith(root + File.separator);
     }
@@ -205,7 +229,7 @@ class BridgeContext {
         return "";
     }
 
-    /** 幂等确保回收站文件夹存在（SAF 模式 findFile→createDirectory / 私有模式 mkdirs） */
+    /** 幂等确保回收站文件夹存在（SAF 模式 findFile→createDirectory / File 模式 mkdirs） */
     void ensureTrash() throws IOException {
         if (rootUri != null) {
             DocumentFile dir = DocumentFile.fromTreeUri(activity, rootUri);
@@ -216,7 +240,7 @@ class BridgeContext {
                 if (trash == null) throw new IOException("无法创建回收站: " + TRASH_NAME);
             }
         } else {
-            File trash = new File(privateRoot, TRASH_NAME);
+            File trash = new File(fileRoot(), TRASH_NAME);
             if (!trash.exists() && !trash.mkdirs()) {
                 throw new IOException("无法创建回收站: " + TRASH_NAME);
             }

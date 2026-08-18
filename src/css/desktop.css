@@ -55,14 +55,15 @@
   /* 无卡片背景（真实桌面隐喻）：默认透明，选中/按压时显示淡色圆角底 */
 }
 
-/* 选中/按压高亮：紧贴内容的圆角块（inset 4px，四周留白）。
- * 图标盒子若因旧版网格位置轻微重叠（92 步进时代持久化），高亮块仍互不干涉；
- * 观感接近 macOS/Windows 的紧凑选中块 */
+/* 选中/按压高亮：紧贴内容的圆角块（inset 8px，四周留白）。
+ * 图标高度随内容撑开：普通类型图标 36px → 94px；缩略图（媒体/快捷方式）
+ * 48px → 106px。旧版 92px 网格位置下，高亮块 90px ≤ 92px 互不干涉；
+ * 默认字体下高度全为 CSS 硬值，不随字体渲染差异变化 */
 .desktop-icon.selected::before,
 .desktop-icon:active::before {
   content: '';
   position: absolute;
-  inset: 4px;
+  inset: 8px;
   border-radius: var(--radius-md);
   background: rgba(59, 130, 246, 0.12);
   z-index: -1;

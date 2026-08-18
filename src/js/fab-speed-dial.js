@@ -44,6 +44,12 @@ App.fabSpeedDial = (function () {
       case 'refresh':
         App.Actions.refresh()
         break
+      case 'organize':
+        // 整理桌面：按名称/类型排序到可见网格（仅桌面空间）
+        if (App.Actions && typeof App.Actions.organizeDesktop === 'function') {
+          App.Actions.organizeDesktop()
+        }
+        break
       case 'close-preview':
         // 关闭预览：关闭「选中的」Viewer + 解除文件锁定（Desktop 统一管理）
         if (App.Desktop && typeof App.Desktop.closeViewer === 'function') {

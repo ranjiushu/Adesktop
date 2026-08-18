@@ -1,7 +1,8 @@
-/* 布局存储模块：localStorage 维护图标位置 + 相机视角（文件即真相的临时方案）。
+/* 布局存储模块：localStorage 维护图标位置 + 相机视角（**缓存**——真相在桌面空间目录的
+ * `.adesktop-layout.json`，见 desktop-persist 的 _loadLayoutFromFile / saveLayout 双写）。
  * 结构：{ version: 1, icons: { fullPath: {x,y} }, camera: {x,y,zoom} }
- * key 带 rootId（desktop.layout.<rootId>.v1）：布局是「相对当前根目录的 fullPath」，
- * 切根 A→B 不得继承 A 的布局（见 docs/operation-contract.md 1.6）。
+ * key 带 rootId（desktop.layout.<rootId>.v1）：缓存按 root 隔离，文件不存在时兜底
+ * （旧 localStorage 布局自动兼容，无需手动迁移）。
  * rootId 为空（启动初期/兼容读取）→ 旧版单根 key desktop.layout.v1（一次性迁移后删除）。
  * 条目以完整相对路径为 key：文件删/改名 → 布局条目自然失效，回退自动排布，不报错。
  * 依赖: namespace.js

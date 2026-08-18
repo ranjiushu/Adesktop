@@ -15,6 +15,9 @@ App.DesktopPersist = (function () {
 
   // 桌面根持久化 key（localStorage）：all-files 模式桌面空间渲染的相对目录，默认 'Desktop'
   const DESKTOP_ROOT_KEY = 'desktop-root'
+  // 布局数据文件：位于**桌面空间目录**内的隐藏文件（文件即真相，localStorage 降级为缓存）。
+  // 切到某目录（设为桌面根）→ 读该目录的数据文件；布局随目录文件存在，不因 rootId 变化丢失。
+  const LAYOUT_FILE = C.LAYOUT_FILE || '.adesktop-layout.json'
 
   /** 校验桌面根：允许 ''（全盘根）；拒绝绝对路径 / 空段 / .. 逃逸 */
   /** @param {string} dir @returns {boolean} */
@@ -27,6 +30,41 @@ App.DesktopPersist = (function () {
       if (parts[i] === '..' || parts[i] === '') return false
     }
     return true
+  }
+
+  // 布局数据文件路径：桌面空间目录（curPath === 桌面根）下的隐藏文件；
+  // SAF/私有模式桌面 = '' → 根目录下。folder 容器无布局文件。
+  /** @returns {string} */
+  function layoutFilePath() {
+    return C.state.curPath ? C.state.curPath + '/' + LAYOUT_FILE : LAYOUT_FILE
+  }
+
+  // 读布局数据文件（异步）：文件为真相，localStorage 为缓存。
+  // 命中 → 覆盖缓存（LayoutStore.save，后续启动/迁移一致性）+ 返回 {icons, camera}；
+  // 文件不存在/损坏/无 read 能力 → null（用缓存数据兜底，兼容迁移）。
+  // icons key = C.positions 原样（完整相对路径），读写零转换（虚拟回收站 .trash 天然支持）。
+  /** @returns {Promise<AppLayoutData | null>} */
+  function _loadLayoutFromFile() {
+    if (!App.FileAPI || typeof App.FileAPI.read !== 'function') {
+      return Promise.resolve(null)
+    }
+    return App.FileAPI.read(layoutFilePath())
+      .then(function (raw) {
+        let data = null
+        try { data = JSON.parse(raw) } catch (e) { data = null }
+        if (!data || typeof data !== 'object') return null
+        const out = {
+          version: 1,
+          icons: (data.icons && typeof data.icons === 'object') ? data.icons : {},
+          camera: data.camera || null
+        }
+        // 覆盖缓存（文件为真相：一致性 + 迁移）
+        App.LayoutStore.save(out, C.state.rootId)
+        return out
+      })
+      .catch(function () {
+        return null
+      })
   }
 
   // refresh 代际守卫：异步链完成时若期间又发起了新 refresh（快速连续导航），
@@ -74,6 +112,7 @@ App.DesktopPersist = (function () {
         if (App.Drawer && typeof App.Drawer.maybePromptAllFiles === 'function') {
           App.Drawer.maybePromptAllFiles()
         }
+        return info
       })
       .catch(function () {
         if (seq !== C._refreshSeq) return
@@ -82,8 +121,34 @@ App.DesktopPersist = (function () {
           App.Drawer.updatePath(App.NAME, App.NAME, '')
         }
       })
-      .then(function () {
+      .then(function (info) {
         if (seq !== C._refreshSeq) return null
+        // 桌面空间：读布局数据文件（文件为真相）——rootInfo 之后、list 之前串行，
+        // 快速切换目录时被代际守卫丢弃，无竞态
+        if (info && !C.isFolderView()) {
+          return _loadLayoutFromFile()
+        }
+        return null
+      })
+      .then(function (layoutData) {
+        if (seq !== C._refreshSeq) return null
+        // 应用文件布局（文件为真相，覆盖缓存数据）：positions 清空重建（保持引用不变）
+        const icons = (layoutData && layoutData.icons) || null
+        if (icons) {
+          Object.keys(C.positions).forEach(function (k) { delete C.positions[k] })
+          Object.keys(icons).forEach(function (k) {
+            C.positions[k] = icons[k]
+          })
+        }
+        const cam = (layoutData && layoutData.camera) || null
+        if (cam) {
+          C.camera = App.DesktopCamera.create(
+            cam.x, cam.y, cam.zoom, cam.rotation || 0)
+          if (C.rootCamera) C.rootCamera = C.camera
+          if (App.DesktopNavigation && typeof App.DesktopNavigation.applyCameraForPath === 'function') {
+            App.DesktopNavigation.applyCameraForPath()
+          }
+        }
         // 快照目标路径（rootInfo 之后拍：all-files 桌面根初始化/桌面目录切换已生效；
         // list 用快照防异步竞态——代际守卫语义不变）
         const path = C.state.curPath
@@ -98,12 +163,22 @@ App.DesktopPersist = (function () {
           /** @type {Record<string, boolean>} */
           const valid = {}
           items.forEach(function (it) { valid[C.fullPath(it.name)] = true })
+          // 布局 key = 相对桥层根的完整路径；「当前目录」判定 = 前缀匹配且无更深段：
+          //   curPath=''（SAF/私有根）→ prefix=''，key 无 '/' 即根级（原语义）；
+          //   curPath='Desktop'（桌面根）→ prefix='Desktop/'，直接子项才保留——
+          //   Bug 修复（2026-08-19）：此前按「key 无 '/'」判定，桌面根 fullPath 全含
+          //   '/' → 每次刷新清空全部 positions，布局持久化被破坏
+          const prefix = C.state.curPath ? C.state.curPath + '/' : ''
           Object.keys(C.positions).forEach(function (key) {
-            const inCur = key.indexOf('/') < 0
+            // 虚拟回收站（all-files 桌面空间）：key = trashName（桥层根固定串），恒保留
+            const isVirtualTrash = C.state.mode === 'all-files' &&
+              key === C.state.trashName
+            if (isVirtualTrash) return
+            const inCur = key.indexOf(prefix) === 0 && key.indexOf('/', prefix.length) < 0
             if (!inCur) {
-              delete C.positions[key]        // 子文件夹 key 残留清理（folder 自动排布，非桌面布局）
+              delete C.positions[key]        // 非当前目录 key 残留清理（folder 自动排布，非桌面布局）
             } else if (!valid[key]) {
-              delete C.positions[key]        // 根级失效 key（文件已删）
+              delete C.positions[key]        // 失效 key（文件已删/隐藏文件）
             }
           })
         }
@@ -229,6 +304,8 @@ App.DesktopPersist = (function () {
   // 保存布局（位置 + 相机），失败告警（铁律：写入路径失败必须告警）
   // folder 容器：布局自动排布，不持久化（位置/相机均不写）
   // rotation 透传：崩溃恢复后按保存时的旋转态重建相机（竖屏/横屏视角不混淆）
+  // 双写：localStorage 缓存（同步，兼容启动读/迁移）+ 桌面空间目录布局文件（异步，文件即真相）。
+  // 文件写失败只告警不阻断（缓存仍在，下次保存重试）。
   function saveLayout() {
     if (C.isFolderView()) return
     const cam = C.camera || App.DesktopCamera.create()
@@ -239,6 +316,14 @@ App.DesktopPersist = (function () {
     }
     if (!App.LayoutStore.save(data, C.state.rootId)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败')
+    }
+    // 文件为真相：布局数据落对应目录（切桌面根/重启后按目录读取，不因 rootId 变化丢失）
+    if (App.FileAPI && typeof App.FileAPI.write === 'function') {
+      App.FileAPI.write(layoutFilePath(), JSON.stringify(data)).catch(function (err) {
+        if (App.toast && typeof App.toast.show === 'function') {
+          App.toast.show('布局文件写入失败: ' + ((err && err.message) || '未知错误'))
+        }
+      })
     }
   }
 

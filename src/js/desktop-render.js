@@ -36,6 +36,8 @@ App.DesktopRender = (function () {
   //   desktop 空间：世界坐标按网格铺开（已有位置优先，位置来自 LayoutStore 持久化）
   //   folder 容器：排序后固定排布（网格 4 列自适应 / 列表单列），不读持久化位置
   function layout(items) {
+    // 布局数据文件不渲染（隐藏元数据，文件即真相的投影排除）
+    items = items.filter(function (it) { return it.name !== C.LAYOUT_FILE })
     if (C.isFolderView()) {
       const sorted = App.FolderSort.sort(items, C.state.sortBy, C.state.sortDir)
       const pts = C.state.viewStyle === 'list'

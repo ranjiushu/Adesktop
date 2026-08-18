@@ -68,6 +68,9 @@ const localStorageStub = {
   removeItem: function (k) { delete store[k] }
 }
 
+// ── 布局数据文件（文件即真相）：路径 → JSON 文本 ──
+let fsLayout = {}
+
 // 文件树：全盘根（含 .trash）+ 桌面目录 Desktop（不含 .trash——回收站虚拟附加场景）
 const fsTree = {
   '': [
@@ -104,9 +107,16 @@ sandbox.App.FileAPI = {
     // 全盘模式：rootId 固定串 'all-files'（前端在 refresh 里拼桌面根）
     return Promise.resolve({ rootName: '手机存储', mode: 'all-files', displayPath: '/storage/emulated/0', rootId: 'all-files', trashName: '.trash' })
   },
+  // 布局数据文件（.adesktop-layout.json）：可预置/可断言写入
+  read: function (p) {
+    if (Object.prototype.hasOwnProperty.call(fsLayout, p)) return Promise.resolve(fsLayout[p])
+    return Promise.reject(new Error('不存在: ' + p))
+  },
+  write: function (p, content) {
+    fsLayout[p] = content
+    return Promise.resolve(true)
+  },
   list: function (p) { return Promise.resolve((fsTree[p || ''] || []).slice()) },
-  read: function () { return Promise.resolve('') },
-  write: function () { return Promise.resolve(true) },
   mkdir: function () { return Promise.resolve(true) },
   del: function () { return Promise.resolve(true) },
   rename: function () { return Promise.resolve(true) },
@@ -228,6 +238,43 @@ const R = sandbox.App.DesktopRender
   check(P.saveDesktopRoot('Desktop') === true, '切回 Desktop')
   await D.refresh()
   check(C.state.curPath === 'Desktop' && C.state.desktopRoot === 'Desktop', '切回 Desktop 生效')
+
+  // ── 3.5 布局数据文件（文件即真相，localStorage 为缓存）──
+  // 预置桌面根布局文件 → refresh 后按文件应用（覆盖缓存）
+  fsLayout['Desktop/.adesktop-layout.json'] = JSON.stringify({
+    version: 1,
+    icons: { 'Desktop/a.txt': { x: 55, y: 66 }, '.trash': { x: 10, y: 10 } },
+    camera: { x: 1, y: 2, zoom: 1.5, rotation: 0 }
+  })
+  await D.refresh()
+  check(C.positions['Desktop/a.txt'] && C.positions['Desktop/a.txt'].x === 55,
+    '布局文件为真相：refresh 应用文件数据（a.txt @ 55,66）')
+  check(C.positions['.trash'] && C.positions['.trash'].y === 10,
+    '虚拟回收站位置随布局文件恢复（key 直通）')
+  check(!!C.camera && C.camera.zoom === 1.5, '布局文件相机恢复（zoom=1.5）')
+  // saveLayout 双写：目录文件（真相）+ localStorage（缓存）
+  C.positions['Desktop/a.txt'] = { x: 111, y: 222 }
+  P.saveLayout()
+  const fileData = fsLayout['Desktop/.adesktop-layout.json']
+    ? JSON.parse(fsLayout['Desktop/.adesktop-layout.json']) : null
+  check(fileData && fileData.icons['Desktop/a.txt'] && fileData.icons['Desktop/a.txt'].x === 111,
+    'saveLayout 双写：布局文件含最新位置（111,222）')
+  check(store['desktop.layout.all-files:Desktop.v1'] !== undefined,
+    'saveLayout 双写：localStorage 缓存同步')
+
+  // ── 3.6 布局文件不渲染（隐藏元数据）──
+  fsLayout['Desktop/.adesktop-layout.json'] = JSON.stringify({
+    version: 1,
+    icons: {}, camera: null
+  })
+  fsTree['Desktop'] = [
+    { name: 'a.txt', isDir: false, size: 1, mtime: 3 },
+    { name: '.adesktop-layout.json', isDir: false, size: 1, mtime: 5 }
+  ]
+  await D.refresh()
+  const placedFiltered = R.layout(C.state.items.slice())
+  check(placedFiltered.every(function (p) { return p.key !== 'Desktop/.adesktop-layout.json' }),
+    '布局数据文件不渲染（过滤隐藏元数据）')
 
   // ── 5. 浏览器环境（无 FileBridge）不弹授权引导（Drawer.maybePromptAllFiles 守卫）──
   check(typeof sandbox.App.Drawer.maybePromptAllFiles === 'undefined',

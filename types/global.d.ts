@@ -211,6 +211,7 @@ interface Bounds2D {
 }
 
 interface DesktopCore {
+  LAYOUT_FILE: string
   state: DesktopCoreStateData
   positions: Record<string, Position2D>
   bounds: Record<string, Bounds2D>
@@ -549,6 +550,19 @@ interface BottomBar {
   updateHomeState(): void
 }
 
+/** 整理桌面纯函数（App.DesktopOrganize） */
+interface DesktopOrganize {
+  sortEntries(items: Array<{ name: string; isDir: boolean }>): Array<{ name: string; isDir: boolean }>
+  organize(
+    entries: Array<{ name: string; isDir: boolean }>,
+    viewportW: number,
+    viewportH: number,
+    camera: { x: number; y: number; zoom: number; rotation: number }
+  ): Array<{ name: string; x: number; y: number }>
+  GRID_W: number
+  GRID_H: number
+}
+
 /** 桌面编排入口（App.Desktop）：各模块能力聚合 + 手势初始化 */
 interface Desktop {
   refresh(): Promise<any>
@@ -640,6 +654,7 @@ interface Actions {
   createFolder(name: string): void
   createFile(name: string): void
   refresh(): void
+  organizeDesktop(): void
   setDefaultView(): void
   switchRoot(): void
   rename(oldPath: string, newName: string): void
@@ -668,6 +683,7 @@ interface AppNamespace {
   DesktopCamera: DesktopCamera
   ViewStore: ViewStore
   DesktopPersist: DesktopPersist
+  DesktopOrganize: DesktopOrganize
   DesktopCore: DesktopCore
   DesktopNav: DesktopNav
   DesktopBrowseMode: DesktopBrowseMode

@@ -65,6 +65,42 @@ App.Actions = (function () {
     App.toast.show('已刷新')
   }
 
+  // ── 整理桌面（Morph FAB「整理桌面」）：按名称/类型排序到屏幕可见完整网格。
+  //    竖屏列优先（从上到下排满一列再下一列）；横屏行优先（从左到右排满一行再下一行）。
+  //    锚定当前相机可见区域左上角；虚拟回收站（isDir）参与排序（文件夹组最前）。
+  //    仅桌面空间可用（folder 容器是自动排布，无整理语义）。
+  /** @returns {void} */
+  function organizeDesktop() {
+    if (App.Desktop && typeof App.Desktop.isFolderView === 'function' && App.Desktop.isFolderView()) {
+      App.toast.show('整理桌面仅桌面空间可用')
+      return
+    }
+    const C = App.DesktopCore
+    if (!C || !C.state || !C.state.items || !App.DesktopOrganize) return
+    const entries = C.state.items.map(function (it) {
+      return { name: it.name, isDir: it.isDir }
+    })
+    const placed = App.DesktopOrganize.organize(
+      entries, C.viewportWidth(), C.viewportHeight(),
+      C.camera || App.DesktopCamera.create())
+    placed.forEach(function (p) {
+      // key：虚拟回收站 = trashName（桥层根固定串）；其余 = 完整相对路径
+      const key = (p.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())
+        ? C.state.trashName : C.fullPath(p.name)
+      C.positions[key] = { x: p.x, y: p.y }
+      const node = C.iconEls[key]
+      if (node) {
+        node.style.left = p.x + 'px'
+        node.style.top = p.y + 'px'
+      }
+    })
+    if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
+      App.DesktopPersist.saveLayout()
+    }
+    App.Desktop.refresh()
+    App.toast.show('已整理桌面')
+  }
+
   // 设为默认摄像机视角（Drawer「设为默认视角」）：Home 无快照时的兜底视角。
   // 仅桌面空间有效（子文件夹容器相机是滚动态，Desktop.captureDefaultView 内部拒绝）
   /** @returns {void} */
@@ -430,6 +466,7 @@ App.Actions = (function () {
     createFolder: createFolder,
     createFile: createFile,
     refresh: refresh,
+    organizeDesktop: organizeDesktop,
     setDefaultView: setDefaultView,
     switchRoot: switchRoot,
     rename: rename,

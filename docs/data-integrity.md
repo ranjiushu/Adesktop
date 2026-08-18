@@ -9,7 +9,7 @@
 | 层 | 载体 | 读写出口 | 说明 |
 |---|---|---|---|
 | 用户数据 | 文件系统（SAF 授权目录 / 私有目录） | `FileBridge`（list/read/write/mkdir/delete/rename/rootInfo） | 用户文件即对象，前端不持有副本 |
-| 布局元数据 | 隐藏文件（`.desktop-*` 形式，随目录迁移） | `layout-store.js` / `home-store.js` | 位置/相机/快照等桌面状态 |
+| 布局元数据 | 隐藏文件（`.adesktop-layout.json`，位于桌面空间目录内，随目录存在） | `layout-store.js`（localStorage 降级为缓存，文件为真相） | 位置/相机/布局等桌面状态 |
 | 会话状态 | 内存 + `localStorage` | 各 store 的 `load*` / `save*` | 视图偏好/排序等非真相状态，可重建 |
 
 **铁律：用户数据的唯一真相在文件系统。前端内存中的 File 对象、缓存、选中态都只是投影。**

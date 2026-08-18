@@ -43,6 +43,9 @@ App.DesktopCore = (function () {
     canvasH: 0            // folder 容器画布高（滚动下界钳制用）
   }
 
+  // 布局数据文件名：桌面空间目录下的隐藏文件（文件即真相；渲染时过滤，见 desktop-render）
+  C.LAYOUT_FILE = '.adesktop-layout.json'
+
   C.nav = null             // App.DesktopNav 历史栈
   C.camera = null
   C.rootCamera = null      // 根目录相机快照（进入子文件夹前保存，返回根时恢复）

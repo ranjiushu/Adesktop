@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### 修复布局持久化 + 布局落目录文件 + 整理桌面（2026-08-19）
+
+- **修复布局持久化被破坏（根因）**：refresh 的 positions 清理按「key 无 '/'」判定根级——
+  桌面根改 `Desktop/` 后 fullPath 全含 '/'，每次刷新清空全部已保存位置。
+  修复：按「当前目录前缀 + 无更深段」判定直接子项；虚拟回收站（key=`.trash` 桥层根固定串）特判保留
+- **布局真相落目录文件**：桌面空间布局（图标位置 + 相机）双写——`.adesktop-layout.json`
+  （位于桌面空间目录内，**文件为真相**）+ localStorage（降级为缓存，启动/迁移兼容）；
+  refresh 串行读文件覆盖缓存，切换桌面根 = 读新目录数据文件——布局随目录存在，
+  不因 rootId/切换桌面根丢失；`migrateLegacy` 兼容旧 localStorage 数据（文件未生成前兜底）
+- **布局文件不渲染**：`.adesktop-layout.json` 为隐藏元数据，渲染时过滤
+- **整理桌面（Morph FAB 新增）**：`desktop-organize.js` 纯函数（可单测）——
+  文件夹在前（名称升序）、文件按扩展名字母序分组（组内名称升序）；
+  锚定相机可见区域左上角铺满网格：竖屏列优先（从上到下）、横屏行优先（从左到右）；
+  仅桌面空间可用（folder 自动排布无整理语义）；整理后双写持久化
+- **测试**：test-desktop-organize.js（19 项）；test-desktop-root.js 扩展布局文件
+  读写/过滤断言（36 项）；verify.sh 13/13 全绿（含 6 套 E2E）
+- 文档同步：data-integrity.md / operation-contract.md 布局存储说明更新
+
 ### 桌面根可配置 + 应用内授权对话框（2026-08-19）
 
 - **桌面根（Desktop Root）**：all-files 模式桌面空间渲染的目录默认 `Desktop`，

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 工程：仓库目录改名 Desktop → Adesktop（2026-08-19）
+
+- 项目目录 `/workspace/Desktop` → `/workspace/Adesktop`（与包名/产物名/APK 命名对齐）
+- 硬编码路径清理：AGENTS.md 探针路径更新；tools/ui ×4 探针由写死 `/workspace/Desktop`
+  改为相对路径 `path.join(__dirname, '..', '..', 'dist', ...)`（目录再移动不失效）
+- **注意**：`.git/objects` 内 lazy-object 符号链接为绝对路径，目录改名会断链
+  （`fatal: bad object HEAD`）——已全部重建为**同目录相对链接**，今后 mv 不再受影响
+
 ### 弹窗宽度收敛为设计 token：--dialog-width（2026-08-19）
 
 - **tokens.css 新增 `--dialog-width: 86.5vw`**（占屏幕 80%~90%），dialog.css /

@@ -51,12 +51,21 @@
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  /* 无卡片背景（真实桌面隐喻）：默认透明，仅选中/按压时显示淡色圆角底 */
+  isolation: isolate;   /* 高亮 ::before 的 z-index:-1 层局限在本图标内 */
+  /* 无卡片背景（真实桌面隐喻）：默认透明，选中/按压时显示淡色圆角底 */
 }
 
-.desktop-icon:active {
-  background: rgba(59, 130, 246, 0.12);
+/* 选中/按压高亮：紧贴内容的圆角块（inset 4px，四周留白）。
+ * 图标盒子若因旧版网格位置轻微重叠（92 步进时代持久化），高亮块仍互不干涉；
+ * 观感接近 macOS/Windows 的紧凑选中块 */
+.desktop-icon.selected::before,
+.desktop-icon:active::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
   border-radius: var(--radius-md);
+  background: rgba(59, 130, 246, 0.12);
+  z-index: -1;
 }
 
 .desktop-icon-glyph {
@@ -94,12 +103,6 @@
   padding: var(--space-lg);
   text-align: center;
   color: var(--color-text-secondary);
-}
-
-/* 选中态：淡蓝圆角底（无卡片背景下的选中反馈） */
-.desktop-icon.selected {
-  background: rgba(59, 130, 246, 0.12);
-  border-radius: var(--radius-md);
 }
 
 /* 剪切源标记：半透明（Windows 式视觉反馈，文件仍真实存在，刷新不穿帮） */
@@ -172,4 +175,12 @@
 .desktop-icon.desktop-list-row.selected {
   border-bottom-color: var(--color-accent);
   background: rgba(59, 130, 246, 0.08);
+}
+/* 列表视图行：整行高亮（行高 56px 固定，无重叠问题），不显示 inset 小块 */
+.desktop-icon.desktop-list-row.selected::before,
+.desktop-icon.desktop-list-row:active::before {
+  content: none;
+}
+.desktop-icon.desktop-list-row:active {
+  background: rgba(59, 130, 246, 0.12);
 }

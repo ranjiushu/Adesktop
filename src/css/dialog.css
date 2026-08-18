@@ -21,9 +21,9 @@
 }
 
 .dialog {
-  /* 统一弹窗宽：占屏幕 70%~80%（取 76vw），矩形（直角，模块约定） */
-  width: 76vw;
-  max-width: 420px;
+  /* 统一弹窗宽：占屏幕 80%~90%（取 86.5vw），矩形（直角，模块约定） */
+  width: 86.5vw;
+  max-width: 480px;
   background: var(--color-surface);
   border-radius: 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);

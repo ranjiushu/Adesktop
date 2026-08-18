@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 弹窗宽度加宽：76vw → 86.5vw（2026-08-19）
+
+- **通用弹窗基座**（`dialog.css` `.dialog`）：宽 76vw → 86.5vw（占屏幕 80%~90%），
+  max-width 420px → 480px 同步按比例放宽；覆盖新建/重命名/网站/AppList 确认/上传确认/
+  转移失败/加载进度等全部 `.dialog` 系弹窗（loading.css 复用）
+- **移动目标弹窗**（`move-target.css` `.move-target-dialog`）：84vw → 86.5vw，与通用弹窗统一
+- **注释/文案同步**：loading.css ×2、index.html 弹窗注释的「76vw」引用同步更新
+
 ### 治理补课：类型检查进门禁 + 改名残留清理 + 术语统一（2026-08-19）
 
 - **类型检查进门禁**：`tools/verify.sh` 新增 typecheck 步骤（tsc --noEmit，缺 typescript 时

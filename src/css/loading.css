@@ -1,12 +1,12 @@
 /* Loading Feedback：居中对话框（进度条）+ 实时标签（拖入文件夹提示） */
 
-/* ── 对话框：复用 dialog-overlay / dialog 结构（dialog.css 定义矩形 76vw），
+/* ── 对话框：复用 dialog-overlay / dialog 结构（dialog.css 定义矩形 86.5vw），
      这里只补进度条专属样式 ── */
 .loading-dialog {
   /* overlay 布局/遮罩由 .dialog-overlay 提供；此 ID 仅作语义锚点 */
 }
 .loading-dialog-card {
-  /* 卡片尺寸由 .dialog 提供（76vw 矩形）；此处补进度区留白 */
+  /* 卡片尺寸由 .dialog 提供（86.5vw 矩形）；此处补进度区留白 */
   padding-top: 8px;
 }
 .loading-dialog-title {

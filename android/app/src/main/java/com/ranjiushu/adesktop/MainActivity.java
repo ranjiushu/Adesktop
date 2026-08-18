@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     private static final int REQ_WRITE_STORAGE = 1003;   // Android 10 及以下全盘授权（运行时权限）
     private static final String PREFS = "desktop_prefs";
     private static final String KEY_ROOT_URI = "root_uri";
+    private static final String KEY_ALL_FILES_PROMPTED = "all_files_prompted";
 
     private WebView webView;
     private FileBridge fileBridge;
@@ -157,8 +158,14 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/index.html");
 
         // 首次启动引导全盘授权（「授权访问手机存储」主模式）：跳系统设置页手动开启。
-        // 用户拒绝/跳过 → 有旧 SAF 授权用 SAF，否则私有目录兜底（App 照常可用）。
-        if (!allFilesGranted && rootUri == null) {
+        // 条件 = 无全盘权限 && 未提示过——**升级用户（已有旧 SAF 授权）同样引导一次**，
+        // 否则旧 rootUri 存在时永远不弹，用户无法得知新主模式（Bug：2026-08-19 真机反馈）。
+        // 拒绝/跳过 → prefs 标记置位不再重复弹（Drawer「授权手机存储」可再进）；
+        // SAF 授权/私有目录照常兜底，App 永远可用。
+        if (!allFilesGranted && !getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getBoolean(KEY_ALL_FILES_PROMPTED, false)) {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit().putBoolean(KEY_ALL_FILES_PROMPTED, true).apply();
             requestAllFilesAccess();
         }
     }
@@ -181,15 +188,22 @@ public class MainActivity extends Activity {
             == PackageManager.PERMISSION_GRANTED;
     }
 
-    /** 引导全盘授权：Android 11+ 跳系统「所有文件访问权限」设置页；Android 10 及以下弹运行时权限框 */
+    /** 引导全盘授权：Android 11+ 跳系统「所有文件访问权限」设置页（优先 package 定位，
+     *  部分 ROM 不支持则退回列表页）；Android 10 及以下弹运行时权限框 */
     private void requestAllFilesAccess() {
         if (Build.VERSION.SDK_INT >= 30) {
             try {
                 Intent intent = new Intent("android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION");
                 intent.setData(Uri.parse("package:" + getPackageName()));
                 startActivity(intent);
+                return;
+            } catch (Exception ignored) {
+                // 带 package 定位失败（异常 ROM）→ 退回列表页
+            }
+            try {
+                startActivity(new Intent("android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION"));
             } catch (Exception e) {
-                // 无该设置项（异常 ROM）：静默降级（SAF / 私有目录兜底）
+                // 双失败：静默降级（SAF / 私有目录兜底，App 照常可用）
             }
         } else {
             requestPermissions(

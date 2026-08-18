@@ -9,7 +9,12 @@
   `WRITE_EXTERNAL_STORAGE` 运行时权限（Manifest 带 `requestLegacyExternalStorage`）。
 - 授权状态**动态检测**（`Environment.isExternalStorageManager()`），不持久化：
   权限被系统撤销后自动降级（有 SAF 授权用 SAF，否则私有目录），无需清理数据。
+- **模式优先级：全盘 > SAF > 私有**——全盘授权后旧 SAF rootUri 保留但被遮蔽
+  （`isSafMode() = allFilesRoot == null && rootUri != null`），所有操作走 File 分支；
+  撤销全盘自动恢复 SAF 模式，无需重新授权。
 - 授权变更（授予/撤销）在 `onResume` 检测 → 桥层切换模式 → 前端收到 `App.onRootChanged` 刷新。
+- 首次启动（含从旧版升级、已有 SAF 授权的用户）引导一次全盘授权
+  （prefs 标记 `all_files_prompted`，拒绝后不重复弹；Drawer 入口可再进）。
 - 用户未授权全盘时：有旧 SAF 授权（prefs 持久化）用 SAF；否则私有目录 `filesDir/root` 兜底，App 照常可用。
 - 「授权手机存储」入口在 Drawer（`switch-root` action，桥层 `requestRootAccess`）。
 - Drawer 头部实时显示当前来源（`drawer-root-mode`：手机存储 / 外部存储 / 应用私有目录）。

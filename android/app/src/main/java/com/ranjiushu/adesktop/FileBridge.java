@@ -88,7 +88,14 @@ public class FileBridge {
         ctx.executor.execute(() -> {
             try {
                 JSONObject o = new JSONObject();
-                if (ctx.rootUri != null) {
+                // 模式优先级：全盘 > SAF > 私有（与 isSafMode/fileRoot 一致——全盘授权后
+                // 旧 SAF rootUri 被遮蔽，rootInfo 必须反映当前实际生效的模式）
+                if (ctx.allFilesRoot != null) {
+                    o.put("rootName", BridgeContext.ROOT_NAME_ALL_FILES);
+                    o.put("mode", "all-files");
+                    o.put("displayPath", ctx.allFilesRoot.getAbsolutePath());
+                    o.put("rootId", BridgeContext.ROOT_ID_ALL_FILES);
+                } else if (ctx.rootUri != null) {
                     androidx.documentfile.provider.DocumentFile df =
                         androidx.documentfile.provider.DocumentFile.fromTreeUri(ctx.activity, ctx.rootUri);
                     o.put("rootName", df != null && df.getName() != null ? df.getName() : "外部存储");
@@ -98,11 +105,6 @@ public class FileBridge {
                     // 前端 localStorage key 带 rootId（desktop.layout.<rootId>.v1），
                     // 切根 A→B 不再继承 A 的图标位置/相机/Home 快照（见 docs/operation-contract.md 1.6）
                     o.put("rootId", ctx.rootUri.toString());
-                } else if (ctx.allFilesRoot != null) {
-                    o.put("rootName", BridgeContext.ROOT_NAME_ALL_FILES);
-                    o.put("mode", "all-files");
-                    o.put("displayPath", ctx.allFilesRoot.getAbsolutePath());
-                    o.put("rootId", BridgeContext.ROOT_ID_ALL_FILES);
                 } else {
                     o.put("rootName", "应用私有目录");
                     o.put("mode", "private");

@@ -75,9 +75,11 @@ class BridgeContext {
         return rootUri != null || allFilesRoot != null;
     }
 
-    /** SAF 模式（rootUri 授权树）；File 模式（全盘/私有）走 fileRoot() */
+    /** SAF 模式（rootUri 授权树，且未被全盘遮蔽）；File 模式（全盘/私有）走 fileRoot()。
+     *  优先级：全盘 > SAF > 私有——全盘授权后旧 SAF rootUri 保留（撤销全盘自动降级回 SAF），
+     *  但 isSafMode() 返回 false，所有操作走 File 分支（否则全盘授权永远不生效）。 */
     boolean isSafMode() {
-        return rootUri != null;
+        return allFilesRoot == null && rootUri != null;
     }
 
     /** 当前 File 模式根：全盘优先，否则私有目录兜底 */
@@ -147,7 +149,7 @@ class BridgeContext {
         if (!isSafeRelPath(relPath)) {
             throw new IOException("非法路径: " + relPath);
         }
-        if (rootUri != null) {
+        if (isSafMode()) {
             DocumentFile dir = DocumentFile.fromTreeUri(activity, rootUri);
             if (dir == null) throw new IOException("根目录不可用");
             if (relPath.isEmpty() || relPath.equals("/")) return dir;
@@ -231,7 +233,7 @@ class BridgeContext {
 
     /** 幂等确保回收站文件夹存在（SAF 模式 findFile→createDirectory / File 模式 mkdirs） */
     void ensureTrash() throws IOException {
-        if (rootUri != null) {
+        if (isSafMode()) {
             DocumentFile dir = DocumentFile.fromTreeUri(activity, rootUri);
             if (dir == null) throw new IOException("根目录不可用");
             DocumentFile trash = dir.findFile(TRASH_NAME);

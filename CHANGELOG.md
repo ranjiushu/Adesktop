@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 修复：全盘授权不生效 + 升级用户不弹引导（2026-08-19）
+
+- **模式优先级 Bug（根因）**：`isSafMode()` 原为 `rootUri != null`——升级用户保留旧 SAF
+  授权时，全盘授权后 `allFilesRoot` 被旧 rootUri 遮蔽，桥层永远走 SAF 分支，全盘永不生效。
+  修复：`isSafMode() = allFilesRoot == null && rootUri != null`（全盘 > SAF > 私有），
+  resolve/ensureTrash/rootInfo 同步统一（rootInfo 判断顺序 all-files 优先）
+- **升级引导 Bug**：启动引导条件原为 `!allFilesGranted && rootUri == null`——已有旧 SAF
+  授权的用户永远不弹引导。修复：条件改为「无全盘权限 && 未提示过」（prefs 标记
+  `all_files_prompted`，拒绝后不重复弹；Drawer「授权手机存储」可再进）
+- **设置页跳转加固**：`ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION` 优先 package 定位，
+  部分 ROM 不支持时退回列表页（双保险）
+
 ### 全盘访问转正：授权手机存储（2026-08-19）
 
 - **主方案切换**：文件系统来源从「SAF 授权目录」改为「全盘访问（MANAGE_EXTERNAL_STORAGE）」——

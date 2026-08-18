@@ -37,6 +37,23 @@ App.DesktopOrganize = (function () {
     })
   }
 
+  /** 整理锚点相机：Home 快照优先（按画布方向取槽位），无快照 → 出厂 (0,0,1)。
+   *  整理以 Home 视角可见网格为基准——用户回到 Home 即可看到全部整理结果。
+   *  @param {{home?: {x: number, y: number, zoom: number}, fallback?: {x: number, y: number, zoom: number}} | null} homeSnapshot
+   *  @param {number} [rotation] @returns {{x: number, y: number, zoom: number, rotation: number}} */
+  function anchorFromHome(homeSnapshot, rotation) {
+    const rot = rotation === 90 ? 90 : 0
+    if (homeSnapshot) {
+      if (homeSnapshot.home) {
+        return { x: homeSnapshot.home.x, y: homeSnapshot.home.y, zoom: homeSnapshot.home.zoom, rotation: rot }
+      }
+      if (homeSnapshot.fallback) {
+        return { x: homeSnapshot.fallback.x, y: homeSnapshot.fallback.y, zoom: homeSnapshot.fallback.zoom, rotation: rot }
+      }
+    }
+    return { x: 0, y: 0, zoom: 1, rotation: rot }
+  }
+
   /** 网格布局：锚定相机可见区域左上角，按视口尺寸铺满可见网格。
    *  @param {Array<{name: string, isDir: boolean}>} entries 排序后的条目
    *  @param {number} viewportW @param {number} viewportH
@@ -77,6 +94,7 @@ App.DesktopOrganize = (function () {
   return {
     sortEntries: sortEntries,
     organize: organize,
+    anchorFromHome: anchorFromHome,
     GRID_W: GRID_W,
     GRID_H: GRID_H
   }

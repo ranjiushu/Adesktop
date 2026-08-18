@@ -553,6 +553,10 @@ interface BottomBar {
 /** 整理桌面纯函数（App.DesktopOrganize） */
 interface DesktopOrganize {
   sortEntries(items: Array<{ name: string; isDir: boolean }>): Array<{ name: string; isDir: boolean }>
+  anchorFromHome(
+    homeSnapshot: { home?: { x: number; y: number; zoom: number }; fallback?: { x: number; y: number; zoom: number } } | null,
+    rotation?: number
+  ): { x: number; y: number; zoom: number; rotation: number }
   organize(
     entries: Array<{ name: string; isDir: boolean }>,
     viewportW: number,

@@ -65,10 +65,11 @@ App.Actions = (function () {
     App.toast.show('已刷新')
   }
 
-  // ── 整理桌面（Morph FAB「整理桌面」）：按名称/类型排序到屏幕可见完整网格。
+  // ── 整理桌面（Morph FAB「整理桌面」）：按名称/类型排序到 Home 视角的完整可见网格。
+  //    锚点 = Home 快照相机（无快照 → 出厂 (0,0,1)）——整理结果落在 Home 可见区域，
+  //    整理后相机复位到锚点（用户立即看到全部图标，不会「整理完不知道跑哪去了」）。
   //    竖屏列优先（从上到下排满一列再下一列）；横屏行优先（从左到右排满一行再下一行）。
-  //    锚定当前相机可见区域左上角；虚拟回收站（isDir）参与排序（文件夹组最前）。
-  //    仅桌面空间可用（folder 容器是自动排布，无整理语义）。
+  //    虚拟回收站（isDir）参与排序（文件夹组最前）。仅桌面空间可用。
   /** @returns {void} */
   function organizeDesktop() {
     if (App.Desktop && typeof App.Desktop.isFolderView === 'function' && App.Desktop.isFolderView()) {
@@ -77,12 +78,16 @@ App.Actions = (function () {
     }
     const C = App.DesktopCore
     if (!C || !C.state || !C.state.items || !App.DesktopOrganize) return
+    const rot = C.camera && C.camera.rotation === 90 ? 90 : 0
+    // 整理锚点：Home 快照（按当前画布方向取槽位）> 出厂 (0,0,1)
+    const home = App.HomeStore && typeof App.HomeStore.load === 'function'
+      ? App.HomeStore.load(C.state.rootId, rot) : null
+    const anchor = App.DesktopOrganize.anchorFromHome(home, rot)
     const entries = C.state.items.map(function (it) {
       return { name: it.name, isDir: it.isDir }
     })
     const placed = App.DesktopOrganize.organize(
-      entries, C.viewportWidth(), C.viewportHeight(),
-      C.camera || App.DesktopCamera.create())
+      entries, C.viewportWidth(), C.viewportHeight(), anchor)
     placed.forEach(function (p) {
       // key：虚拟回收站 = trashName（桥层根固定串）；其余 = 完整相对路径
       const key = (p.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())
@@ -94,6 +99,9 @@ App.Actions = (function () {
         node.style.top = p.y + 'px'
       }
     })
+    // 相机复位到整理锚点（保存/刷新后用户立即可见整理结果）
+    C.camera = App.DesktopCamera.create(anchor.x, anchor.y, anchor.zoom, anchor.rotation)
+    C.rootCamera = C.camera
     if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
       App.DesktopPersist.saveLayout()
     }

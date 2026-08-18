@@ -78,6 +78,22 @@ check(z2[0].x === -103, 'zoom=2 可见区域左边界 = -206/2 = -103')
 check(O.sortEntries([]).length === 0, '空列表排序安全')
 check(O.organize([], 412, 700, { x: 0, y: 0, zoom: 1, rotation: 0 }).length === 0, '空列表布局安全')
 
+// ── 6. 整理锚点（Home 视角）──
+const a1 = O.anchorFromHome(null, 0)
+check(a1.x === 0 && a1.y === 0 && a1.zoom === 1 && a1.rotation === 0, '无 Home 快照 → 出厂 (0,0,1) 竖屏')
+const a2 = O.anchorFromHome(null, 90)
+check(a2.rotation === 90, '无 Home 快照横屏 → rotation=90')
+const a3 = O.anchorFromHome({ home: { x: 10, y: 20, zoom: 1.5 } }, 0)
+check(a3.x === 10 && a3.y === 20 && a3.zoom === 1.5, 'Home 快照优先（home 槽位）')
+const a4 = O.anchorFromHome({ fallback: { x: 5, y: 6, zoom: 2 } }, 0)
+check(a4.x === 5 && a4.y === 6 && a4.zoom === 2, '无 home 快照 → fallback 槽位')
+const a5 = O.anchorFromHome({ home: { x: 10, y: 20, zoom: 1.5 } }, 90)
+check(a5.rotation === 90 && a5.x === 10, '横屏整理：快照槽位 + rotation=90')
+// 锚定 Home 视角的整理结果：首项在 Home 可见区域左上角
+const anchorCam = O.anchorFromHome(null, 0)
+const hv = O.organize(items, 412, 700, anchorCam)
+check(hv[0].x === -206 && hv[0].y === -350, '整理结果锚定 Home 出厂视角可见区域（用户回 Home 可见全部）')
+
 if (failures > 0) {
   console.error('[fail] organize 测试失败 ' + failures + ' 项')
   process.exit(1)

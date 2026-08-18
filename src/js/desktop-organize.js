@@ -55,6 +55,9 @@ App.DesktopOrganize = (function () {
   }
 
   /** 网格布局：锚定相机可见区域左上角，按视口尺寸铺满可见网格。
+   *  相机契约（desktop-camera.js）：x/y = **视口左上角对应的世界点**——可见区域
+   *  即 [x, x+visW] × [y, y+visH]，无需再减半视口（曾误按「中心」语义偏移半个
+   *  视口 → 整理结果偏左上，与 Home 区域不重合）。
    *  @param {Array<{name: string, isDir: boolean}>} entries 排序后的条目
    *  @param {number} viewportW @param {number} viewportH
    *  @param {{x: number, y: number, zoom: number, rotation: number}} camera
@@ -66,9 +69,9 @@ App.DesktopOrganize = (function () {
     const rotation = (camera && camera.rotation) || 0
     const visW = viewportW / zoom
     const visH = viewportH / zoom
-    // 可见区域左上角（世界坐标）：相机中心 - 半视口
-    const left = cx - visW / 2
-    const top = cy - visH / 2
+    // 可见区域左上角（世界坐标）：相机 x/y 即视口左上角对应世界点（左上角语义）
+    const left = cx
+    const top = cy
     const cols = Math.max(1, Math.floor(visW / GRID_W))
     const rows = Math.max(1, Math.floor(visH / GRID_H))
     const horizontal = rotation === 90

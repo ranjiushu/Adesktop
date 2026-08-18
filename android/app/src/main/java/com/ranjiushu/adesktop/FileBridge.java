@@ -1,5 +1,6 @@
 /* 文件系统桥门面：前端经 window.FileBridge 调用，全部异步回调。
- * 根目录 = SAF 授权 Uri（setRootUri）或私有目录 filesDir/root（兜底）。
+ * 根目录 = SAF 授权 Uri（setRootUri）/ 全盘根 Environment.getExternalStorageDirectory() /
+ * 私有目录 filesDir/root（兜底），三模式由 BridgeContext 判定。
  * 路径一律相对根目录；校验拒绝绝对路径与 .. 逃逸。
  * 回调协议: JS 调用 list(path, cbId)，完成后 evaluateJavascript("window.__fbResolve('cbId', 'json')")
  * 本类只保留 22 个 @JavascriptInterface 方法签名（window.FileBridge API 面不可变），
@@ -18,6 +19,8 @@ import android.webkit.WebView;
 
 import org.json.JSONObject;
 
+import java.io.File;
+
 public class FileBridge {
 
     private final BridgeContext ctx;
@@ -28,8 +31,8 @@ public class FileBridge {
     private final ExternalOpen externalOpen;
     private final UploadBridge uploadBridge;
 
-    FileBridge(Activity activity, WebView webView, Uri rootUri) {
-        this.ctx = new BridgeContext(activity, webView, rootUri);
+    FileBridge(Activity activity, WebView webView, Uri rootUri, File allFilesRoot) {
+        this.ctx = new BridgeContext(activity, webView, rootUri, allFilesRoot);
         this.fileStore = new FileStore(ctx);
         this.transferEngine = new TransferEngine(ctx);
         this.thumbnailService = new ThumbnailService(ctx);
@@ -42,16 +45,22 @@ public class FileBridge {
         ctx.setRootUri(uri);
     }
 
+    /** 全盘模式切换（MainActivity 权限变化时调用；null = 退出全盘） */
+    void setAllFilesRoot(File root) {
+        ctx.setAllFilesRoot(root);
+    }
+
     boolean isAuthorized() {
         return ctx.isAuthorized();
     }
 
-    /* 前端请求重新授权根目录（FAB「切换根目录」） */
+    /* 前端请求根目录授权（Drawer「切换根目录」）：主路径 = 引导全盘授权（跳系统设置页）；
+     * Android 10 及以下 = WRITE_EXTERNAL_STORAGE 运行时权限框。 */
     @JavascriptInterface
     public void requestRootAccess() {
         ctx.activity.runOnUiThread(() -> {
             if (ctx.activity instanceof MainActivity) {
-                ((MainActivity) ctx.activity).requestRootAccessFromBridge();
+                ((MainActivity) ctx.activity).requestAllFilesAccessFromBridge();
             }
         });
     }
@@ -85,15 +94,20 @@ public class FileBridge {
                     o.put("rootName", df != null && df.getName() != null ? df.getName() : "外部存储");
                     o.put("mode", "saf");
                     o.put("displayPath", ctx.safDisplayPath(ctx.rootUri));
-                    // 布局/Home 的 root 隔离 id：SAF = tree uri（稳定唯一），私有 = 固定串。
+                    // 布局/Home 的 root 隔离 id：SAF = tree uri（稳定唯一），全盘/私有 = 固定串。
                     // 前端 localStorage key 带 rootId（desktop.layout.<rootId>.v1），
                     // 切根 A→B 不再继承 A 的图标位置/相机/Home 快照（见 docs/operation-contract.md 1.6）
                     o.put("rootId", ctx.rootUri.toString());
+                } else if (ctx.allFilesRoot != null) {
+                    o.put("rootName", BridgeContext.ROOT_NAME_ALL_FILES);
+                    o.put("mode", "all-files");
+                    o.put("displayPath", ctx.allFilesRoot.getAbsolutePath());
+                    o.put("rootId", BridgeContext.ROOT_ID_ALL_FILES);
                 } else {
                     o.put("rootName", "应用私有目录");
                     o.put("mode", "private");
                     o.put("displayPath", ctx.privateRoot.getAbsolutePath());
-                    o.put("rootId", "private");
+                    o.put("rootId", BridgeContext.ROOT_ID_PRIVATE);
                 }
                 // 幂等确保回收站存在（桌面初始化即出现回收站图标）；失败不阻断 rootInfo——
                 // 删除时 copy 会自动创建目录，降级为「回收站图标延迟到首次删除后出现」

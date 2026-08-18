@@ -60,7 +60,8 @@ App.Drawer = (function () {
     }
     let modeEl = document.getElementById('drawer-root-mode')
     if (modeEl) {
-      modeEl.textContent = mode === 'saf' ? '外部存储' : (mode === 'private' ? '应用私有目录' : '')
+      modeEl.textContent = mode === 'saf' ? '外部存储'
+        : (mode === 'all-files' ? '手机存储' : (mode === 'private' ? '应用私有目录' : ''))
     }
   }
 

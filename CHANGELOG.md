@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 全盘访问转正：授权手机存储（2026-08-19）
+
+- **主方案切换**：文件系统来源从「SAF 授权目录」改为「全盘访问（MANAGE_EXTERNAL_STORAGE）」——
+  首次启动引导授权（Android 11+ 跳系统设置页 / Android 10 及以下运行时权限），
+  授权状态动态检测不持久化，被撤销自动降级（SAF → 私有目录），App 永远可用
+- **桥层三模式**：`BridgeContext` 引入 SAF / all-files / private 三态，
+  File 分支根参数化为 `fileRoot()`（全盘优先，私有兜底）——`FileStore`/`TransferEngine`
+  的私有模式代码零重写复用；越界校验泛化为 `isUnderFileRoot`
+- **rootInfo 扩展**：`mode='all-files'`、`rootId='all-files'`（固定串）、`rootName='手机存储'`；
+  前端 drawer.js 来源显示适配（手机存储/外部存储/应用私有目录）
+- **权限变化热切换**：`onResume` 检测全盘授权授予/撤销 → 桥层切模式 + `App.onRootChanged`
+  通知前端刷新（首次授权从设置页返回即生效，无需重启）
+- **Drawer 入口语义**：「切换根目录」→「授权手机存储」（桥 `requestRootAccess` 改引导全盘）；
+  SAF 选择器保留为降级路径代码（`REQ_OPEN_DOC_TREE` 处理仍在）
+- **已知限制记录**：全盘权限仍无法访问 `Android/data`、`Android/obb`（Android 11+ 硬限制）；
+  全盘 rootId 固定串 → 从旧 SAF 目录切到全盘后布局不继承（rootId 隔离语义）
+- **文档同步**：fs-scope.md 决策记录重写、bridge-and-data-contract.md / operation-contract.md /
+  architecture.md 的 mode/rootId 契约更新
+
 ### Morph FAB「取消」语义收敛：FAB 展开 ⇔ 选中态一致（2026-08-19）
 
 - **关闭 Morph FAB = 取消选中**：selection 态下收起 FAB（原位点击 × / 动作完成后收起）

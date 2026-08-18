@@ -29,13 +29,13 @@ const G = sandbox.App.DesktopGrid
 
 // ── snapToGrid ──
 check(JSON.stringify(G.snapToGrid(16, 16)) === JSON.stringify({ x: 16, y: 16 }), 'snapToGrid 已在交点 → 不动')
-check(JSON.stringify(G.snapToGrid(120, 80)) === JSON.stringify({ x: 116, y: 116 }), 'snapToGrid (120,80) → (116,116)')
+check(JSON.stringify(G.snapToGrid(120, 80)) === JSON.stringify({ x: 116, y: 132 }), 'snapToGrid (120,80) → (116,132)')
 check(JSON.stringify(G.snapToGrid(0, 0)) === JSON.stringify({ x: 16, y: 16 }), 'snapToGrid 原点外 → 回 (16,16)')
 
 // ── worldToCell / cellToWorld 互逆 ──
 check(JSON.stringify(G.worldToCell(116, 116)) === JSON.stringify({ cx: 1, cy: 1 }), 'worldToCell (116,116) → (1,1)')
-check(JSON.stringify(G.cellToWorld(1, 1)) === JSON.stringify({ x: 116, y: 116 }), 'cellToWorld (1,1) → (116,116)')
-check(JSON.stringify(G.cellToWorld(G.worldToCell(316, 316).cx, G.worldToCell(316, 316).cy)) === JSON.stringify({ x: 316, y: 316 }),
+check(JSON.stringify(G.cellToWorld(1, 1)) === JSON.stringify({ x: 116, y: 132 }), 'cellToWorld (1,1) → (116,132)')
+check(JSON.stringify(G.cellToWorld(G.worldToCell(316, 248).cx, G.worldToCell(316, 248).cy)) === JSON.stringify({ x: 316, y: 248 }),
   'worldToCell→cellToWorld 恒等')
 
 // ── findFreeCell ──
@@ -61,7 +61,7 @@ r = G.resolvePlacement(
 )
 check(JSON.stringify(r.a) === JSON.stringify({ x: 116, y: 16 }) && JSON.stringify(r.b) === JSON.stringify({ x: 216, y: 16 }),
   '组移动：a、b 放期望位')
-check(JSON.stringify(r.c) === JSON.stringify({ x: 116, y: 116 }), '组移动：c 让位到 (116,116)（右被占则下移一行）')
+check(JSON.stringify(r.c) === JSON.stringify({ x: 116, y: 132 }), '组移动：c 让位到 (116,132)（右被占则下移一行）')
 
 // ── resolvePlacement：链式让位 ──
 r = G.resolvePlacement(

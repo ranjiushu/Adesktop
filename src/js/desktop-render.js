@@ -13,7 +13,7 @@
 App.DesktopRender = (function () {
   const C = App.DesktopCore
   const ICON_W = 84
-  const ICON_H = 76
+  const ICON_H = 94  // 名字区固定两行高后图标高度恒定：16 padding + 36 glyph + 4 gap + 38 name（无边框）
 
   // 缩略图渲染：ThumbnailService 已验证 URI（可解码）后回调，创建 <img> 展示；
   // onerror 双保险（极端情况下仍回退类型图标）。缩略图的「判定/缓存/生成」全在 App.Thumbnail。

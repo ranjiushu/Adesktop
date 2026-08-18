@@ -1,7 +1,7 @@
 /* 桌面网格系统：网格吸附 + 放置避让（纯函数，可单测）。
- * 网格：origin (16,16) + step (100,100)，图标左上角对齐网格交点，一格一图标。
- * 步长取方形 cell：图标高度随文件名换行增长（两行名 ≈ 94px），
- * 100px 步进保证自动排布行间不重叠且留有真机字体行高差异余量。
+ * 网格：origin (16,16) + step (100,116)，图标左上角对齐网格交点，一格一图标。
+ * 垂直步进 116px：图标高度恒定 96px（名字区固定两行 38px，一行/两行名等高），
+ * 余量 20px 覆盖真机字体行高差异与常见系统字体缩放（≤1.15）。
  * 避让（参考成熟方案 iOS/Android 主屏「重叠者让位到最近空位」）：
  *   放置组放期望位；与之重叠的静止图标按曼哈顿距离递增，挤到最近空 cell。
  * 依赖: namespace.js
@@ -14,7 +14,7 @@ App.DesktopGrid = (function () {
   const ORIGIN_X = 16
   const ORIGIN_Y = 16
   const GRID_W = 100
-  const GRID_H = 100
+  const GRID_H = 116
 
   // 世界坐标 → 网格交点（吸附）
   /** @param {number} x @param {number} y @returns {Position2D} */

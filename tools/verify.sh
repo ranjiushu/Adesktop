@@ -67,13 +67,21 @@ else
   MIN_BUNDLE="$SCRIPT_DIR/dist/adesktop.bundle.html"
 fi
 
-# Step 3: 代码质量
+# Step 3: 类型检查（渐进式 @ts-check，tsc --noEmit；缺 typescript 时 SKIP，与 minify 同策略）
+if [ -f "$SCRIPT_DIR/node_modules/typescript/package.json" ]; then
+  run_step "typecheck" npm run typecheck
+else
+  echo "  typecheck ... SKIP（缺 typescript，先 npm install）"
+  RESULTS+=("SKIP|typecheck")
+fi
+
+# Step 4: 代码质量
 run_step "lint" bash tools/lint.sh
 
-# Step 4: 测试套件
+# Step 5: 测试套件
 run_step "tests" bash "$SCRIPT_DIR/tests/run-tests.sh"
 
-# Step 5: E2E 门禁（无头 Chromium 实地验证压缩产物，真机实际加载版本）
+# Step 6: E2E 门禁（无头 Chromium 实地验证压缩产物，真机实际加载版本）
 # 无可用 Chromium 时 SKIP（与 LexiCull 同策略：单次环境缺失不判回归）
 export CHROME_PATH="${CHROME_PATH:-/root/.cache/ms-playwright/chromium_headless_shell-1234/chrome-linux/headless_shell}"
 

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### 治理补课：类型检查进门禁 + 改名残留清理 + 术语统一（2026-08-19）
+
+- **类型检查进门禁**：`tools/verify.sh` 新增 typecheck 步骤（tsc --noEmit，缺 typescript 时
+  SKIP 与 minify 同策略）；AGENTS.md 铁律/常用命令/决策表同步（E2E 数修正为 ×6，原 ×5 过期）；
+  docs/build-pipeline.md 新增「类型检查（渐进式 @ts-check）」章节
+- **改名残留清理**（2026-08-17 改名轮遗漏项）：AGENTS.md 包名占位 `com.example.desktop`、
+  常用命令 dist/desktop.bundle.html ×2、README 产物名 ×2 + 包名占位、android/settings.gradle
+  `rootProject.name = "Desktop"`、.githooks/pre-commit 报错消息、docs/build-pipeline.md 包名占位句
+- **术语统一**：「零依赖」→「零第三方依赖」（项目理念层：AGENTS.md / README / build-pipeline.md
+  依赖策略 / loading.js 注释）；模块级语义保留（markdown.js「纯函数零依赖」、测试「零依赖运行」）
+- **保留**：功能语义命名不动（`App.Desktop*` 命名空间、`desktop-*.js` 模块、「Desktop 空间
+  vs Folder 容器」等桌面隐喻）——是产品概念，非项目名
+
 ### 项目改名：Desktop → Adesktop（Android Desktop，2026-08-17）
 
 - **包名**：`com.example.desktop` → `com.ranjiushu.adesktop`（9 个 Java 类目录迁移 + build.gradle namespace/applicationId + AndroidManifest + proguard keep 规则同步）

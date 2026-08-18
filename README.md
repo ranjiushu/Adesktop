@@ -2,7 +2,7 @@
 
 以真实文件系统为基础的移动端空间化工作台。像 Windows 桌面：文件即对象，图标自由摆放，位置持久记忆。
 
-技术栈与 LexiCull 相同：纯前端单文件 + Android WebView 壳，零框架零依赖。
+技术栈与 LexiCull 相同：纯前端单文件 + Android WebView 壳，零框架零第三方依赖。
 
 ## 定位
 
@@ -18,12 +18,12 @@ src/                     拆分源码（index.html + css/ + js/）
   css/                   样式（按 CSS_ORDER 拼接）
   js/                    逻辑（按 JS_ORDER 拼接，先定义后使用）
 tools/                   构建脚本
-  build-web.sh           src/ → dist/desktop.bundle.html
-  minify-bundle.js       压缩 → dist/desktop.bundle.min.html
+  build-web.sh           src/ → dist/adesktop.bundle.html
+  minify-bundle.js       压缩 → dist/adesktop.bundle.min.html
   build-local.sh         Android 全量构建 + 归档 APK
   verify.sh              提交前门禁
 tests/                   测试套件（run-tests.sh 自动发现）
-android/                 WebView 壳（Gradle 工程，包名 com.example.desktop 占位）
+android/                 WebView 壳（Gradle 工程，包名 com.ranjiushu.adesktop）
 docs/                    文档
 dist/                    构建产物（不入库）
 ```
@@ -31,8 +31,8 @@ dist/                    构建产物（不入库）
 ## 构建
 
 ```bash
-bash tools/build-web.sh        # 1. src/ → dist/desktop.bundle.html
-node tools/minify-bundle.js    # 2. → dist/desktop.bundle.min.html
+bash tools/build-web.sh        # 1. src/ → dist/adesktop.bundle.html
+node tools/minify-bundle.js    # 2. → dist/adesktop.bundle.min.html
 bash android/build-local.sh    # 3. 打包 APK 并归档到 /workspace/AAA 安装包/（滚动保留最新 10 个）
 bash tools/verify.sh           # 提交前门禁
 ```

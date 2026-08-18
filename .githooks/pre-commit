@@ -33,4 +33,22 @@ if command -v node &>/dev/null && [ -f tools/build-web.sh ] && git diff --cached
   fi
 fi
 
+# ── 防线 3: AGENTS.md 体积守卫（>8000 字节提醒，>10000 字节拒绝） ──
+for _af in AGENTS.md AGENT.md; do
+  [ -f "$_af" ] || continue
+  # 优先取暂存区版本（即将提交的内容）；未暂存时回退工作区
+  if git show ":$_af" >/dev/null 2>&1; then
+    _sz=$(git show ":$_af" | wc -c)
+  else
+    _sz=$(wc -c < "$_af")
+  fi
+  if [ "$_sz" -gt 10000 ]; then
+    echo "[pre-commit] ❌ $_af 已达 $_sz 字节（上限 10000），拒绝提交" >&2
+    echo "[pre-commit]    请先精简：指针化下沉到 docs/，或归档历史内容" >&2
+    exit 1
+  elif [ "$_sz" -gt 8000 ]; then
+    echo "[pre-commit] ⚠️  $_af 已达 $_sz 字节（提醒线 8000），建议精简后再提交" >&2
+  fi
+done
+
 exit 0

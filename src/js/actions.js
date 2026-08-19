@@ -81,6 +81,12 @@ App.Actions = (function () {
     }
     const C = App.DesktopCore
     if (!C || !C.state || !C.state.items || !App.DesktopOrganize) return
+    // 打断在跑的相机动画（双击 Home 的 fit / goHome 的 400ms RAF 循环）——
+    // 否则动画残留帧会在整理后继续覆盖 C.camera，把相机从锚点拖走，
+    // 网格与相机错位 → 首列出屏「文件找不见」（2026-08-19 真机反馈）
+    if (App.DesktopNavigation && typeof App.DesktopNavigation.cancelCameraAnim === 'function') {
+      App.DesktopNavigation.cancelCameraAnim()
+    }
     const rot = C.camera && C.camera.rotation === 90 ? 90 : 0
     // 整理锚点：Home 快照（按当前画布方向取槽位）> 出厂 (0,0,1)；zoom 保持当前缩放
     const home = App.HomeStore && typeof App.HomeStore.load === 'function'
@@ -110,6 +116,17 @@ App.Actions = (function () {
     // 相机复位到整理锚点（保存/刷新后用户立即可见整理结果）
     C.camera = App.DesktopCamera.create(anchor.x, anchor.y, anchor.zoom, anchor.rotation)
     C.rootCamera = C.camera
+    // **立即**同步相机到 canvas/手势层——不能只依赖 refresh() 的异步文件读：
+    // saveLayout 写 .adesktop-layout.json 是异步的，refresh 读文件存在竞态
+    // （读到旧/无文件 → 不触发 applyCameraForPath → transform 停留旧状态 →
+    // 图标按旧 transform 渲染错位「找不见」，2026-08-19 真机反馈）。
+    // 与 toggleRotate 同款：setCamera（内部 commit 应用 transform）+ Viewer 手柄同步。
+    if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
+      App.DesktopGesture.setCamera(C.camera)
+    }
+    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
+      App.InternalViewer.syncHandles(C.camera)
+    }
     // 整理锚点写入**两方向** Home 槽位（同一 x/y/zoom，仅 rotation 字段区分）：
     // 屏幕中心世界点 = (c.x + w/2z, c.y + h/2z) 与 rotation 无关（见 desktop-camera.js），
     // 因此两方向共用同一 x/y/zoom 时视野中心恒 = 整理区域中心——旋转、Home、整理
@@ -119,8 +136,15 @@ App.Actions = (function () {
       App.HomeStore.saveHome(cam0, C.state.rootId, 0)
       App.HomeStore.saveHome(cam0, C.state.rootId, 90)
     }
-    if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
-      App.DesktopPersist.saveLayout()
+    // 布局持久化失败不得阻断整理结果渲染（内存 positions/相机已更新，文件仍可见）：
+    // 曾无保护直调 → 桥方法缺失时同步抛异常 → refresh() 不执行 → canvas transform/DOM
+    // 停留旧状态 → 图标错位「找不见」、双击 Home 全览也跟着失效（2026-08-19 真机反馈）
+    try {
+      if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
+        App.DesktopPersist.saveLayout()
+      }
+    } catch (e) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败，稍后重试')
     }
     App.Desktop.refresh()
     App.toast.show('已整理桌面')

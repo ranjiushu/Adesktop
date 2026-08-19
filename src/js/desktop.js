@@ -90,6 +90,9 @@ App.Desktop = (function () {
     if (C.isFolderView()) return false
     const cam = C.camera
     if (!cam) return false
+    // 旋转前打断在跑的相机动画（fit/goHome RAF 循环）——否则残留帧会把
+    // rotation 拉回起点或继续漂移相机位置（旋转被动画覆盖）
+    if (N && typeof N.cancelCameraAnim === 'function') N.cancelCameraAnim()
     const next = cam.rotation === 90 ? 0 : 90
     C.camera = App.DesktopCamera.create(cam.x, cam.y, cam.zoom, next)
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {

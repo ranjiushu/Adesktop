@@ -80,6 +80,7 @@ run_step "lint" bash tools/lint.sh
 
 # Step 5: 测试套件
 run_step "tests" bash "$SCRIPT_DIR/tests/run-tests.sh"
+run_step "ui-verify" bash "$SCRIPT_DIR/tools/verify-ui.sh"
 
 # Step 6: E2E 门禁（无头 Chromium 实地验证压缩产物，真机实际加载版本）
 # 无可用 Chromium 时 SKIP（与 LexiCull 同策略：单次环境缺失不判回归）
@@ -111,6 +112,7 @@ e2e_step "buildinfo-e2e"   scripts/verify-buildinfo.js
 e2e_step "fab-inspector-e2e" scripts/verify-fab-inspector.js
 e2e_step "rotate-e2e"      scripts/verify-rotate.js
 e2e_step "fit-e2e"         scripts/verify-fit.js
+e2e_step "snapshot-sheet-e2e" scripts/verify-snapshot-sheet.js
 
 # ── 摘要 ──
 echo ""

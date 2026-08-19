@@ -1,11 +1,11 @@
 /* 演示快照面板（App.SnapshotSheet）：底栏上滑呼出快照列表 + 演示模式。
- * 手势：底栏区域垂直上滑跟手抬出面板，下滑/点遮罩关闭。
- * 列表：点击切换快照，长按/拖动把手进入排序，排序后第一项（或最后一项，取决于
- * 插入位置设置）为 Home。
+ * 手势：底栏区域垂直上滑跟手抬出面板，下滑/点遮罩/点关闭按钮关闭。
+ * 列表：按分组展示快照，点击切换，长按/拖动把手分组内排序。
+ * 分组：支持新建、重命名、删除；分组内快照独立排序。
  * 菜单：右上角三点按钮，可开启/关闭演示模式、切换新快照插入位置（顶部/底部）、
- * 删除当前选中的快照。
+ *       删除当前选中的快照。
  * 演示模式：开启后底栏前进/后退按钮变为「下一个/上一个快照」，边界禁用并吐司提示。
- * 依赖: namespace.js, utils.js, drag-sort.js, snapshot-store.js, desktop-core.js,
+ * 依赖: namespace.js, utils.js, dialog.js, drag-sort.js, snapshot-store.js, desktop-core.js,
  *       desktop-navigation.js, bottom-bar.js, toast.js, bridge.js
  * 导出: App.SnapshotSheet
  */
@@ -27,8 +27,8 @@ App.SnapshotSheet = (function () {
   let _list = null
   /** @type {HTMLElement | null} */
   let _menu = null
-  /** @type {any} */
-  let _dragEngine = null
+  /** @type {Array<{engine: any, groupIdx: number}>} */
+  let _dragEngines = []
   /** @type {SnapshotData | null} */
   let _currentData = null
   /** @type {number} */
@@ -68,12 +68,29 @@ App.SnapshotSheet = (function () {
 
   function _data() {
     const rootId = _rootId()
-    if (!rootId) return { version: App.SnapshotStore.VERSION, snapshots: [] }
+    if (!rootId) return { version: App.SnapshotStore.VERSION, groups: [] }
     return App.SnapshotStore.load(rootId)
   }
 
-  function _homeIndex() {
-    return App.SnapshotStore.homeIndex(_data().snapshots, App.SnapshotStore.getInsertPosition())
+  function _homeGroup() {
+    return App.SnapshotStore.getHomeGroup(_data(), App.SnapshotStore.getInsertPosition())
+  }
+
+  function _flatSnapshots() {
+    const rootId = _rootId()
+    if (!rootId) return []
+    return App.SnapshotStore.flatSnapshots(rootId)
+  }
+
+  function _findSnapshotFlatIndex(snapshotId) {
+    const data = _data()
+    const found = App.SnapshotStore.findIndex(data, snapshotId)
+    if (!found) return -1
+    let cursor = 0
+    for (let i = 0; i < found.groupIdx; i++) {
+      cursor += data.groups[i].snapshots.length
+    }
+    return cursor + found.snapshotIdx
   }
 
   // 刷新 Home 高亮（BottomBar 已有 home-has-snapshot 类，这里只更新）
@@ -83,71 +100,139 @@ App.SnapshotSheet = (function () {
     }
   }
 
-  // 渲染快照列表
+  // 渲染快照列表（按分组）
   function _renderList() {
     if (!_list) return
     const data = _data()
     _currentData = data
-    const homeIdx = _homeIndex()
+    _cleanupDragEngines()
     _list.innerHTML = ''
-    if (data.snapshots.length === 0) {
+    if (data.groups.length === 0 || !_hasAnySnapshot(data)) {
       const empty = document.createElement('div')
       empty.className = 'snapshot-empty'
       empty.textContent = '长按底栏 Home 记录快照'
       _list.appendChild(empty)
       return
     }
-    data.snapshots.forEach(function (s, idx) {
-      const item = document.createElement('div')
-      item.className = 'snapshot-item'
-      item.dataset.id = s.id
-      item.dataset.index = String(idx)
-      if (idx === homeIdx) item.classList.add('snapshot-home')
-      if (idx === _currentIndex) item.classList.add('snapshot-current')
+    const homeGroup = _homeGroup()
+    data.groups.forEach(function (group, groupIdx) {
+      const section = document.createElement('div')
+      section.className = 'snapshot-group'
 
-      const handle = document.createElement('span')
-      handle.className = 'snapshot-drag-handle'
-      handle.setAttribute('aria-label', '拖动排序')
-      handle.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>'
+      const header = document.createElement('div')
+      header.className = 'snapshot-group-header'
 
-      const name = document.createElement('span')
-      name.className = 'snapshot-name'
-      name.textContent = s.name
+      const title = document.createElement('span')
+      title.className = 'snapshot-group-title'
+      title.textContent = group.name
+      header.appendChild(title)
 
-      const meta = document.createElement('span')
-      meta.className = 'snapshot-meta'
-      meta.textContent = 'z' + Number(s.camera.zoom).toFixed(2)
+      const menuBtn = document.createElement('button')
+      menuBtn.className = 'snapshot-group-menu-btn'
+      menuBtn.setAttribute('aria-label', '分组菜单')
+      menuBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>'
+      App.utils.bindPress(menuBtn, function () { _openGroupMenu(groupIdx) })
+      header.appendChild(menuBtn)
 
-      item.appendChild(handle)
-      item.appendChild(name)
-      item.appendChild(meta)
+      section.appendChild(header)
 
-      // 点击切换快照（点在拖动把手上不触发）
-      item.addEventListener('click', function (e) {
-        if (e.target === handle || handle.contains(/** @type {Node} */(e.target))) return
-        if (item.dataset._dragSortJustFinished === '1') return
-        _flyToIndex(idx)
+      const body = document.createElement('div')
+      body.className = 'snapshot-group-body'
+      body.dataset.groupIdx = String(groupIdx)
+      group.snapshots.forEach(function (s, idx) {
+        const item = _createSnapshotItem(s, groupIdx, idx, group.id === (homeGroup && homeGroup.id))
+        body.appendChild(item)
       })
+      section.appendChild(body)
 
-      // 长按拖动把手启动排序
-      handle.addEventListener('touchstart', function (e) {
-        if (!_dragEngine) return
-        e.preventDefault()
-        if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(20)
-        _dragEngine.startDrag(item, e.touches[0].clientY)
-      }, { passive: false })
-
-      _list.appendChild(item)
+      _list.appendChild(section)
+      _bindGroupDrag(body, groupIdx)
     })
+    _markCurrentInList()
   }
 
-  function _flyToIndex(idx) {
+  function _hasAnySnapshot(data) {
+    return data.groups.some(function (g) { return g.snapshots.length > 0 })
+  }
+
+  function _createSnapshotItem(s, groupIdx, idx, isHomeGroup) {
+    const item = document.createElement('div')
+    item.className = 'snapshot-item'
+    item.dataset.id = s.id
+    item.dataset.groupIdx = String(groupIdx)
+    item.dataset.index = String(idx)
+    if (isHomeGroup && idx === App.SnapshotStore.homeSnapshotIndex([s], App.SnapshotStore.getInsertPosition())) {
+      item.classList.add('snapshot-home')
+    }
+
+    const handle = document.createElement('span')
+    handle.className = 'snapshot-drag-handle'
+    handle.setAttribute('aria-label', '拖动排序')
+    handle.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>'
+
+    const name = document.createElement('span')
+    name.className = 'snapshot-name'
+    name.textContent = s.name
+
+    const meta = document.createElement('span')
+    meta.className = 'snapshot-meta'
+    meta.textContent = 'z' + Number(s.camera.zoom).toFixed(2)
+
+    item.appendChild(handle)
+    item.appendChild(name)
+    item.appendChild(meta)
+
+    item.addEventListener('click', function (e) {
+      if (e.target === handle || handle.contains(/** @type {Node} */(e.target))) return
+      if (item.dataset._dragSortJustFinished === '1') return
+      _flyToSnapshot(groupIdx, idx)
+    })
+
+    handle.addEventListener('touchstart', function (e) {
+      const engine = _dragEngines[groupIdx]
+      if (!engine) return
+      e.preventDefault()
+      if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(20)
+      engine.engine.startDrag(item, e.touches[0].clientY)
+    }, { passive: false })
+
+    return item
+  }
+
+  function _cleanupDragEngines() {
+    _dragEngines.forEach(function (entry) {
+      if (entry && entry.engine && typeof entry.engine.cleanup === 'function') entry.engine.cleanup()
+    })
+    _dragEngines = []
+  }
+
+  function _bindGroupDrag(body, groupIdx) {
+    if (!body) return
+    const engine = App.dragSort.createDragSortEngine({
+      container: body,
+      itemSelector: '.snapshot-item',
+      dragClass: 'snapshot-item-dragging',
+      dragActiveClass: 'snapshot-list-dragging',
+      targetClass: 'snapshot-item-target',
+      isActive: function () { return true },
+      onCommit: function (from, to) { _commitReorder(groupIdx, from, to) },
+      edgeZone: 56,
+      edgeInsetTop: 0,
+      edgeInsetBottom: function () {
+        return 10 * (window.innerHeight / 100) + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom') || '0')
+      }
+    })
+    _dragEngines[groupIdx] = { engine: engine, groupIdx: groupIdx }
+  }
+
+  function _flyToSnapshot(groupIdx, snapshotIdx) {
     const rootId = _rootId()
     if (!rootId) return
     const data = App.SnapshotStore.load(rootId)
-    const s = App.SnapshotStore.at(data, idx)
+    const group = data.groups[groupIdx]
+    const s = group && group.snapshots[snapshotIdx]
     if (!s) return
-    _currentIndex = idx
+    _currentIndex = _findSnapshotFlatIndex(s.id)
     _markCurrentInList()
     if (App.DesktopNavigation && typeof App.DesktopNavigation.animateCameraTo === 'function') {
       const target = App.DesktopCamera.create(s.camera.x, s.camera.y, s.camera.zoom, s.camera.rotation || 0)
@@ -155,19 +240,47 @@ App.SnapshotSheet = (function () {
     }
   }
 
+  function _flyToIndex(idx) {
+    const rootId = _rootId()
+    if (!rootId) return
+    const data = App.SnapshotStore.load(rootId)
+    let cursor = 0
+    for (let i = 0; i < data.groups.length; i++) {
+      const g = data.groups[i]
+      if (idx >= cursor && idx < cursor + g.snapshots.length) {
+        _flyToSnapshot(i, idx - cursor)
+        return
+      }
+      cursor += g.snapshots.length
+    }
+  }
+
   function _markCurrentInList() {
     if (!_list) return
+    const data = _data()
+    let cursor = 0
+    let currentId = null
+    for (let i = 0; i < data.groups.length; i++) {
+      const g = data.groups[i]
+      if (_currentIndex >= cursor && _currentIndex < cursor + g.snapshots.length) {
+        currentId = g.snapshots[_currentIndex - cursor].id
+        break
+      }
+      cursor += g.snapshots.length
+    }
     Array.prototype.forEach.call(_list.querySelectorAll('.snapshot-item'), function (el) {
-      el.classList.toggle('snapshot-current', String(_currentIndex) === el.dataset.index)
+      el.classList.toggle('snapshot-current', el.dataset.id === currentId)
     })
   }
 
-  // 排序提交
-  function _commitReorder(from, to) {
+  // 排序提交（分组内）
+  function _commitReorder(groupIdx, from, to) {
     const rootId = _rootId()
     if (!rootId) return
     let data = App.SnapshotStore.load(rootId)
-    data = App.SnapshotStore.reorder(data, from, to)
+    const group = data.groups[groupIdx]
+    if (!group) return
+    data = App.SnapshotStore.reorder(data, group.id, from, to)
     App.SnapshotStore.save(data, rootId)
     _renderList()
     _updateHomeHighlight()
@@ -228,22 +341,69 @@ App.SnapshotSheet = (function () {
     if (action === 'delete-current') {
       _deleteCurrent()
       _closeMenu()
+      return
     }
+    if (action === 'new-group') {
+      _promptNewGroup()
+      _closeMenu()
+    }
+  }
+
+  function _promptNewGroup() {
+    const name = window.prompt('新建分组名称', '新分组')
+    if (!name) return
+    const rootId = _rootId()
+    if (!rootId) return
+    const result = App.SnapshotStore.createGroup(rootId, name)
+    if (!result) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('创建分组失败')
+      return
+    }
+    _renderList()
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已创建分组：' + result.group.name)
+  }
+
+  function _openGroupMenu(groupIdx) {
+    const data = _data()
+    const group = data.groups[groupIdx]
+    if (!group) return
+    const newName = window.prompt('重命名分组', group.name)
+    if (newName === null) return
+    const rootId = _rootId()
+    if (!rootId) return
+    const trimmed = newName.trim()
+    if (trimmed) {
+      App.SnapshotStore.renameGroup(rootId, group.id, trimmed)
+    }
+    const shouldDelete = window.confirm('是否删除分组「' + (trimmed || group.name) + '」？组内快照将一并删除。')
+    if (shouldDelete) {
+      App.SnapshotStore.deleteGroup(rootId, group.id)
+      _currentIndex = -1
+    }
+    _renderList()
+    _updateHomeHighlight()
   }
 
   function _deleteCurrent() {
     const rootId = _rootId()
     if (!rootId) return
     let data = App.SnapshotStore.load(rootId)
-    const idx = _currentIndex >= 0 ? _currentIndex : _homeIndex()
-    const s = App.SnapshotStore.at(data, idx)
+    const found = App.SnapshotStore.findIndex(data, _currentSnapshotId())
+    if (!found) return
+    const group = data.groups[found.groupIdx]
+    const s = group.snapshots[found.snapshotIdx]
     if (!s) return
-    data = App.SnapshotStore.delete(data, s.id)
+    data = App.SnapshotStore.delete(data, group.id, s.id)
     App.SnapshotStore.save(data, rootId)
-    _currentIndex = Math.min(idx, data.snapshots.length - 1)
+    _currentIndex = -1
     _renderList()
     _updateHomeHighlight()
     if (App.toast && typeof App.toast.show === 'function') App.toast.show('已删除快照')
+  }
+
+  function _currentSnapshotId() {
+    const flat = _flatSnapshots()
+    return flat[_currentIndex] ? flat[_currentIndex].id : null
   }
 
   // 面板动画
@@ -361,40 +521,71 @@ App.SnapshotSheet = (function () {
   function _initSheetDrag() {
     if (!_panel || !_overlay) return
     let startY = 0
-    let startPanelY = 0
+    let startScrollTop = 0
     let tracking = false
+    let activeTouchId = null
 
     _overlay.addEventListener('click', function () {
       _closeSheet()
     })
 
+    const closeBtn = _getEl('snapshot-close-btn')
+    if (closeBtn) closeBtn.addEventListener('click', function () { _closeSheet() })
+
+    function isHeaderOrFooter(target) {
+      return !!(target.closest('.snapshot-sheet-header') || target.closest('.snapshot-sheet-footer'))
+    }
+
     _panel.addEventListener('touchstart', function (e) {
       if (e.touches.length !== 1) return
       const t = e.touches[0]
-      // 只从面板头部拖动关闭，避免列表滚动冲突
-      if (e.target.closest('.snapshot-sheet-header')) {
-        startY = t.clientY
-        startPanelY = 0
+      const target = /** @type {HTMLElement} */(e.target)
+      activeTouchId = t.identifier
+      startY = t.clientY
+      if (isHeaderOrFooter(target)) {
         tracking = true
+        startScrollTop = 0
+        return
+      }
+      const list = target.closest('.snapshot-list')
+      if (list) {
+        startScrollTop = list.scrollTop
+        if (startScrollTop <= 0) {
+          tracking = true
+        }
       }
     }, { passive: true })
 
     _panel.addEventListener('touchmove', function (e) {
       if (!tracking) return
-      if (e.touches.length !== 1) return
-      const dy = e.touches[0].clientY - startY
-      if (dy > 0) _setPanelTranslate(dy)
+      const t = _findTouch(e.touches, activeTouchId)
+      if (!t) return
+      const dy = t.clientY - startY
+      if (dy > 0) {
+        _setPanelTranslate(dy)
+        e.preventDefault()
+      }
     }, { passive: false })
 
     function end(e) {
       if (!tracking) return
+      const t = _findTouch(e.changedTouches, activeTouchId)
+      const dy = t ? t.clientY - startY : 0
       tracking = false
-      const dy = (e.changedTouches[0] ? e.changedTouches[0].clientY : startY) - startY
+      activeTouchId = null
       if (dy > 80) _closeSheet()
       else _setPanelTranslate(0)
     }
     _panel.addEventListener('touchend', end, { passive: true })
     _panel.addEventListener('touchcancel', end, { passive: true })
+  }
+
+  function _findTouch(list, id) {
+    if (!list || id == null) return null
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].identifier === id) return list[i]
+    }
+    return null
   }
 
   // 演示模式
@@ -436,27 +627,26 @@ App.SnapshotSheet = (function () {
     const fwd = _getEl('bb-btn-forward')
     if (!back || !fwd) return
     const rootId = _rootId()
-    const data = rootId ? App.SnapshotStore.load(rootId) : { snapshots: [] }
-    const has = data.snapshots.length > 0
+    const flat = rootId ? App.SnapshotStore.flatSnapshots(rootId) : []
+    const has = flat.length > 0
     if (!_presentationMode || !has) {
       if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
         App.BottomBar.updateNavButtons()
       }
       return
     }
-    if (_currentIndex < 0 || _currentIndex >= data.snapshots.length) {
-      _currentIndex = _homeIndex()
+    if (_currentIndex < 0 || _currentIndex >= flat.length) {
+      _currentIndex = App.SnapshotStore.homeSnapshotIndex(flat, App.SnapshotStore.getInsertPosition())
     }
     back.removeAttribute('disabled')
     back.setAttribute('aria-disabled', 'false')
     fwd.removeAttribute('disabled')
     fwd.setAttribute('aria-disabled', 'false')
-    // 边界禁用
     if (_currentIndex <= 0) {
       back.setAttribute('disabled', '')
       back.setAttribute('aria-disabled', 'true')
     }
-    if (_currentIndex >= data.snapshots.length - 1) {
+    if (_currentIndex >= flat.length - 1) {
       fwd.setAttribute('disabled', '')
       fwd.setAttribute('aria-disabled', 'true')
     }
@@ -465,9 +655,9 @@ App.SnapshotSheet = (function () {
   function goNextSnapshot() {
     const rootId = _rootId()
     if (!_presentationMode || !rootId) return false
-    const data = App.SnapshotStore.load(rootId)
-    if (_currentIndex < 0) _currentIndex = _homeIndex()
-    if (_currentIndex >= data.snapshots.length - 1) {
+    const flat = App.SnapshotStore.flatSnapshots(rootId)
+    if (_currentIndex < 0) _currentIndex = App.SnapshotStore.homeSnapshotIndex(flat, App.SnapshotStore.getInsertPosition())
+    if (_currentIndex >= flat.length - 1) {
       if (App.toast && typeof App.toast.showAction === 'function') {
         App.toast.showAction('已经是最后一页了', '回到第一页', function () {
           _flyToIndex(0)
@@ -486,10 +676,10 @@ App.SnapshotSheet = (function () {
   function goPrevSnapshot() {
     const rootId = _rootId()
     if (!_presentationMode || !rootId) return false
-    const data = App.SnapshotStore.load(rootId)
-    if (_currentIndex < 0) _currentIndex = _homeIndex()
+    const flat = App.SnapshotStore.flatSnapshots(rootId)
+    if (_currentIndex < 0) _currentIndex = App.SnapshotStore.homeSnapshotIndex(flat, App.SnapshotStore.getInsertPosition())
     if (_currentIndex <= 0) {
-      const last = data.snapshots.length - 1
+      const last = flat.length - 1
       if (App.toast && typeof App.toast.showAction === 'function') {
         App.toast.showAction('已经是第一页了', '回到最后一页', function () {
           _flyToIndex(last)
@@ -520,22 +710,6 @@ App.SnapshotSheet = (function () {
     _menu = _getEl('snapshot-menu')
     if (!_panel || !_overlay || !_list) return
 
-    _dragEngine = App.dragSort.createDragSortEngine({
-      container: _list,
-      itemSelector: '.snapshot-item',
-      dragClass: 'snapshot-item-dragging',
-      dragActiveClass: 'snapshot-list-dragging',
-      targetClass: 'snapshot-item-target',
-      isActive: function () { return true },
-      onCommit: _commitReorder,
-      edgeZone: 56,
-      edgeInsetTop: 0,
-      edgeInsetBottom: function () {
-        // 底栏 + 安全区
-        return 10 * (window.innerHeight / 100) + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom') || '0')
-      }
-    })
-
     _initBarSwipe()
     _initSheetDrag()
 
@@ -549,7 +723,6 @@ App.SnapshotSheet = (function () {
       })
     }
 
-    // 点击遮罩或面板非菜单区关闭菜单
     document.addEventListener('touchstart', function (e) {
       if (!_menu || _menu.classList.contains('snapshot-menu-hidden')) return
       if (e.target.closest('#snapshot-menu') || e.target.closest('#snapshot-menu-btn')) return

@@ -445,6 +445,7 @@
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>
       </button>
       <div id="snapshot-menu" class="snapshot-menu snapshot-menu-hidden" aria-hidden="true">
+        <button class="snapshot-menu-item" data-action="new-group">新建分组</button>
         <button class="snapshot-menu-item" data-action="presentation">开启演示模式</button>
         <button class="snapshot-menu-item" data-action="insert-top">新快照插入顶部</button>
         <button class="snapshot-menu-item" data-action="insert-bottom">新快照插入底部</button>
@@ -452,6 +453,12 @@
       </div>
     </div>
     <div id="snapshot-list" class="snapshot-list"></div>
+    <div class="snapshot-sheet-footer">
+      <button id="snapshot-close-btn" class="snapshot-sheet-close-btn" aria-label="关闭快照面板">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        <span>关闭</span>
+      </button>
+    </div>
   </div>
 </div>
 

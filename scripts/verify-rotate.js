@@ -289,9 +289,9 @@ async function main() {
     await tap(client, homeRect.x, homeRect.y, 650)
     await sleep(300)
     const bundleP = await page.evaluate(() => {
-      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2')) } catch (e) { return null }
+      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
     })
-    const snapP = bundleP && bundleP.portrait && bundleP.portrait.snapshots && bundleP.portrait.snapshots[0]
+    const snapP = bundleP && bundleP.portrait && bundleP.portrait.groups[0] && bundleP.portrait.groups[0].snapshots && bundleP.portrait.groups[0].snapshots[0]
     if (snapP && snapP.camera) pass('竖屏长按 Home → 快照写入 portrait 槽位（tx=' + camPortrait.tx.toFixed(0) + '）')
     else fail('竖屏快照写入断言', JSON.stringify(bundleP))
     // 旋转到横屏：横屏槽位尚无快照 → 保持当前位置只转方向（相机位置不变，仅加 rotate）
@@ -309,9 +309,9 @@ async function main() {
     await tap(client, homeRect.x, homeRect.y, 650)
     await sleep(300)
     const bundleL = await page.evaluate(() => {
-      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2')) } catch (e) { return null }
+      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
     })
-    const snapL = bundleL && bundleL.landscape && bundleL.landscape.snapshots && bundleL.landscape.snapshots[0]
+    const snapL = bundleL && bundleL.landscape && bundleL.landscape.groups[0] && bundleL.landscape.groups[0].snapshots && bundleL.landscape.groups[0].snapshots[0]
     if (snapL && snapL.camera) pass('横屏长按 Home → 快照写入 landscape 槽位')
     else fail('横屏快照写入断言', JSON.stringify(bundleL))
     // 记录横屏平移后的相机位置（P2'——保中心转回竖屏的参照）
@@ -332,10 +332,10 @@ async function main() {
     await tap(client, homeRect.x, homeRect.y, 650)
     await sleep(300)
     const bundleP2 = await page.evaluate(() => {
-      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2')) } catch (e) { return null }
+      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
     })
-    const snapP2 = bundleP2 && bundleP2.portrait && bundleP2.portrait.snapshots && bundleP2.portrait.snapshots[0]
-    const stillLand = bundleP2 && bundleP2.landscape && bundleP2.landscape.snapshots && bundleP2.landscape.snapshots[0]
+    const snapP2 = bundleP2 && bundleP2.portrait && bundleP2.portrait.groups[0] && bundleP2.portrait.groups[0].snapshots && bundleP2.portrait.groups[0].snapshots[0]
+    const stillLand = bundleP2 && bundleP2.landscape && bundleP2.landscape.groups[0] && bundleP2.landscape.groups[0].snapshots && bundleP2.landscape.groups[0].snapshots[0]
     if (stillLand && stillLand.camera &&
         JSON.stringify(stillLand.camera) === JSON.stringify(snapL.camera)) {
       pass('更新竖屏快照 → 横屏槽位保留（互不覆盖）')

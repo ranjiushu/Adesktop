@@ -123,17 +123,41 @@ interface Snapshot {
   createdAt: number
 }
 
-/** 快照列表持久化结构（当前方向视图） */
-interface SnapshotData {
-  version: number
+/** 快照分组元数据 */
+interface SnapshotGroupMeta {
+  id: string
+  name: string
+}
+
+/** 快照分组（当前方向视图） */
+interface SnapshotGroup extends SnapshotGroupMeta {
   snapshots: Array<Snapshot>
 }
 
-/** 快照完整持久化结构（含竖屏/横屏双槽位） */
+/** 快照按方向持久化结构 */
+interface SnapshotDirData {
+  version: number
+  groups: Array<{ id: string; snapshots: Array<Snapshot> }>
+}
+
+/** 快照列表持久化结构（当前方向视图） */
+interface SnapshotData {
+  version: number
+  groups: Array<SnapshotGroup>
+}
+
+/** 快照完整持久化结构（含竖屏/横屏双槽位 + 全局分组元数据） */
 interface SnapshotBundle {
   version: number
-  portrait: SnapshotData
-  landscape: SnapshotData
+  groups: Array<SnapshotGroupMeta>
+  portrait: SnapshotDirData
+  landscape: SnapshotDirData
+}
+
+/** 快照在分组中的索引 */
+interface SnapshotIndex {
+  groupIdx: number
+  snapshotIdx: number
 }
 
 /** 快照存储（App.SnapshotStore） */
@@ -142,14 +166,21 @@ interface SnapshotStore {
   SNAPSHOTS_FILE: string
   load(rootId: string): SnapshotData
   save(data: SnapshotData, rootId: string): boolean
-  create(camera: DesktopCameraState, rootId: string): Snapshot | null
-  delete(data: SnapshotData, id: string): SnapshotData
-  reorder(data: SnapshotData, from: number, to: number): SnapshotData
+  create(camera: DesktopCameraState, rootId: string, groupId?: string): Snapshot | null
+  delete(data: SnapshotData, groupId: string, snapshotId: string): SnapshotData
+  reorder(data: SnapshotData, groupId: string, from: number, to: number): SnapshotData
+  createGroup(rootId: string, name: string): { bundle: SnapshotBundle; group: SnapshotGroupMeta } | null
+  renameGroup(rootId: string, groupId: string, name: string): boolean
+  deleteGroup(rootId: string, groupId: string): boolean
   getInsertPosition(): 'top' | 'bottom'
   setInsertPosition(pos: 'top' | 'bottom'): boolean
-  homeIndex(list: Array<Snapshot>, pos: 'top' | 'bottom'): number
-  getHome(data: SnapshotData, pos: 'top' | 'bottom'): Snapshot | null
+  homeGroupIndex(groups: Array<SnapshotGroup>, pos: 'top' | 'bottom'): number
+  getHomeGroup(data: SnapshotData, pos: 'top' | 'bottom'): SnapshotGroup | null
+  homeSnapshotIndex(list: Array<Snapshot>, pos: 'top' | 'bottom'): number
+  getHome(group: SnapshotGroup, pos: 'top' | 'bottom'): Snapshot | null
+  flatSnapshots(rootId: string, rotation?: number): Array<Snapshot>
   at(data: SnapshotData, idx: number): Snapshot | null
+  findIndex(data: SnapshotData, snapshotId: string): SnapshotIndex | null
   hasAny(rootId: string): boolean
   loadFromFile(rootId: string): Promise<SnapshotBundle | null>
 }

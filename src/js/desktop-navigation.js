@@ -205,12 +205,14 @@ App.DesktopNavigation = (function () {
     if (App.SnapshotStore) {
       const data = App.SnapshotStore.load(C.state.rootId)
       const pos = App.SnapshotStore.getInsertPosition()
-      const home = App.SnapshotStore.getHome(data, pos)
+      const group = App.SnapshotStore.getHomeGroup(data, pos)
+      const home = App.SnapshotStore.getHome(group, pos)
       if (home && home.camera) {
         target = App.DesktopCamera.create(home.camera.x, home.camera.y, home.camera.zoom, rot)
         found = true
         if (App.SnapshotSheet && typeof App.SnapshotSheet.setCurrentIndex === 'function') {
-          const idx = App.SnapshotStore.homeIndex(data.snapshots, pos)
+          const flat = App.SnapshotStore.flatSnapshots(C.state.rootId)
+          const idx = App.SnapshotStore.homeSnapshotIndex(flat, pos)
           App.SnapshotSheet.setCurrentIndex(idx)
         }
       }

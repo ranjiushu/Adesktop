@@ -185,9 +185,9 @@ async function main() {
 
   await tap(client, homeRect.x, homeRect.y, 650)  // 长按 650ms > 500ms
   const snapBundle = await page.evaluate(() => {
-    try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2')) } catch (e) { return null }
+    try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
   })
-  const snap = snapBundle && snapBundle.portrait && snapBundle.portrait.snapshots && snapBundle.portrait.snapshots[0]
+  const snap = snapBundle && snapBundle.portrait && snapBundle.portrait.groups[0] && snapBundle.portrait.groups[0].snapshots && snapBundle.portrait.groups[0].snapshots[0]
   if (snap && snap.camera && typeof snap.camera.zoom === 'number' && snap.camera.zoom > 1.3) {
     pass('长按 Home → 快照写入 localStorage（zoom=' + snap.camera.zoom.toFixed(2) + '）')
   } else {
@@ -307,9 +307,9 @@ async function main() {
   await sleep(400)
   const homeStore = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop.home.v1')))
   const snapBundle2 = await page.evaluate(() => {
-    try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2')) } catch (e) { return null }
+    try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
   })
-  const stillSnap = snapBundle2 && snapBundle2.portrait && snapBundle2.portrait.snapshots && snapBundle2.portrait.snapshots[0]
+  const stillSnap = snapBundle2 && snapBundle2.portrait && snapBundle2.portrait.groups[0] && snapBundle2.portrait.groups[0].snapshots && snapBundle2.portrait.groups[0].snapshots[0]
   if (homeStore && homeStore.fallback && stillSnap && stillSnap.camera.zoom === snap.camera.zoom) {
     pass('设为默认视角 → fallback 写入且 SnapshotStore 快照保留')
   } else {
@@ -324,8 +324,8 @@ async function main() {
   const expectT = (c) => ({ tx: -c.x * c.zoom, ty: -c.y * c.zoom, s: c.zoom })
   const homeData = await page.evaluate(() => {
     try {
-      const b = JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2'))
-      return b && b.portrait && b.portrait.snapshots && b.portrait.snapshots[0] && b.portrait.snapshots[0].camera
+      const b = JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3'))
+      return b && b.portrait && b.portrait.groups[0] && b.portrait.groups[0].snapshots && b.portrait.groups[0].snapshots[0] && b.portrait.groups[0].snapshots[0].camera
     } catch (e) { return null }
   })
   const tHomeExpect = expectT(homeData)
@@ -341,7 +341,7 @@ async function main() {
 
   // 清掉快照只留默认视角 → reload → 启动相机落在默认视角
   await page.evaluate(() => {
-    localStorage.removeItem('desktop.snapshots.legacy.v2')
+    localStorage.removeItem('desktop.snapshots.legacy.v3')
   })
   await page.reload({ waitUntil: 'networkidle0' })
   await sleep(1200)
@@ -357,7 +357,7 @@ async function main() {
 
   // 快照与默认视角都清掉 → reload → 启动出厂 (0,0,1)
   await page.evaluate(() => {
-    localStorage.removeItem('desktop.snapshots.legacy.v2')
+    localStorage.removeItem('desktop.snapshots.legacy.v3')
     localStorage.removeItem('desktop.home.v1')
   })
   await page.reload({ waitUntil: 'networkidle0' })

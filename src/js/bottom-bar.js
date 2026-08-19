@@ -66,8 +66,7 @@ App.BottomBar = (function () {
       ? App.Desktop.getRootId() : ''
     let hasSnapshot = false
     if (App.SnapshotStore) {
-      const data = App.SnapshotStore.load(rootId)
-      hasSnapshot = data.snapshots.length > 0
+      hasSnapshot = App.SnapshotStore.hasAny(rootId)
     }
     if (!hasSnapshot && App.HomeStore) {
       const rot = (App.Desktop && typeof App.Desktop.isRotated === 'function' && App.Desktop.isRotated())

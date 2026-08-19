@@ -150,7 +150,6 @@ async function main() {
         tabs: tabs,
         addBtn: !!document.querySelector('.snapshot-tab-add'),
         items: document.querySelectorAll('#snapshot-list .snapshot-item').length,
-        homeItems: document.querySelectorAll('#snapshot-list .snapshot-item.snapshot-home').length,
         groupSections: document.querySelectorAll('#snapshot-list .snapshot-group').length,
         fabVisible: (function () {
           const s = getComputedStyle(document.querySelector('#mode-switch-fab'))
@@ -167,12 +166,10 @@ async function main() {
     else fail('遮罩不可见')
     if (lay.closeBtn && lay.footer && lay.footer.height > 0) pass('关闭按钮 + footer 存在')
     else fail('关闭按钮/footer 缺失')
-    if (lay.tabsRect && lay.tabs.length === 2 && lay.tabs[0].active && lay.tabs[0].count === '3') pass('标签栏默认选中 Home 分组（默认分组 3 项）')
+    if (lay.tabsRect && lay.tabs.length === 2 && lay.tabs[0].active && lay.tabs[0].count === '3') pass('标签栏默认选中第一个分组（默认分组 3 项）')
     else fail('标签栏', JSON.stringify(lay.tabs))
-    if (lay.items === 3 && lay.groupSections === 0) pass('列表只渲染当前分组（3 项无混排）')
+    if (lay.items === 3 && lay.groupSections === 0) pass('列表只渲染当前分组（3 项无混排，无 Home 位高亮概念）')
     else fail('列表渲染', 'items=' + lay.items + ' sections=' + lay.groupSections)
-    if (lay.homeItems === 1) pass('Home 位高亮 1 项')
-    else fail('Home 高亮', String(lay.homeItems))
     if (lay.fabVisible) pass('快照面板打开时 FAB 仍可见（始终最高层级）')
     else fail('FAB 应始终可见')
 
@@ -350,16 +347,17 @@ async function main() {
     await sleep(400)
     const setHomeResult = await page.evaluate(() => {
       const rootId = App.DesktopCore.state.rootId
-      const bundle = JSON.parse(localStorage.getItem('desktop.snapshots.' + rootId + '.v3'))
-      const home = bundle.portrait.groups[0].snapshots[0]
+      const homeData = JSON.parse(localStorage.getItem('desktop.home.' + rootId + '.v1'))
+      const rot = App.DesktopCore.camera.rotation === 90 ? 'landscape' : ''
+      const home = homeData && (rot ? homeData[rot + 'Home'] : homeData.home)
       const menuOpen = document.querySelector('#view-menu').classList.contains('view-menu-open')
       const toast = (document.querySelector('.toast') || {}).textContent || ''
-      return { homeCam: home && home.camera, menuOpen, toast }
+      return { homeCam: home, menuOpen, toast }
     })
     if (setHomeResult.homeCam &&
         Math.abs(setHomeResult.homeCam.x - camBefore.x) < 0.001 &&
         Math.abs(setHomeResult.homeCam.zoom - camBefore.zoom) < 0.001 &&
-        !setHomeResult.menuOpen) pass('「设为 Home」→ Home 位快照相机 = 当前相机，菜单已关')
+        !setHomeResult.menuOpen) pass('「设为 Home」→ HomeStore 锚点相机 = 当前相机，菜单已关（Home 与快照分离）')
     else fail('设为 Home 结果', JSON.stringify({ camBefore, ...setHomeResult }))
     // toast 异步排队显示，轮询等待「已设为 Home」出现（最长 2.5s）
     let homeToast = setHomeResult.toast

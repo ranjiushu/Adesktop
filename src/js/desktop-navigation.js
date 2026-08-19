@@ -146,6 +146,8 @@ App.DesktopNavigation = (function () {
   // 长按底栏 Home = 记录当前相机为快照；点按 Home = 回快照（无则默认视角，再无则出厂 (0,0,1)）。
   // 默认视角 = 用户经 Drawer「设为默认视角」设置的兜底视角。仅桌面空间（根目录）有意义。
   // rotation 透传：竖屏（0）/横屏（90）各存各的槽位，切换画布方向后 Home 回对应槽位。
+  // 长按底栏 Home = 添加快照（Home 与快照彻底分离：快照只是快照，不影响 Home 锚点）。
+  // Home 锚点由顶栏「设为 Home」独立设置（HomeStore）。
   function captureHome() {
     if (C.isFolderView()) return false
     if (App.SnapshotStore && typeof App.SnapshotStore.create === 'function') {
@@ -161,57 +163,26 @@ App.DesktopNavigation = (function () {
       if (App.SnapshotSheet && typeof App.SnapshotSheet.refresh === 'function') {
         App.SnapshotSheet.refresh()
       }
-      if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
-        App.BottomBar.updateHomeState()
-      }
       return true
     }
-    // 降级：旧版 HomeStore
-    const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveHome(cam, C.state.rootId, C.camera.rotation)) {
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('Home 视角保存失败')
-      return false
-    }
-    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
-    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已记录 Home 视角')
-    if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
-      App.BottomBar.updateHomeState()
-    }
-    return true
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('快照功能不可用')
+    return false
   }
 
-  // 设为 Home（顶栏菜单入口）：把当前相机设为 Home 位快照。
-  // Home 位 = 当前方向快照列表由插入位置（top/bottom）决定的那一项：
-  // 已存在则更新其相机，不存在则创建新快照插入 Home 位。
-  // 底栏 Home 长按仍专职「记录快照」（插入位置设置决定是否成为 Home 位）。
+  // 设为 Home（顶栏菜单入口）：把当前相机设为 Home 锚点（HomeStore 独立存储，
+  // 与快照列表完全解耦）。
   function setHome() {
     if (C.isFolderView()) return false
-    if (App.SnapshotStore && typeof App.SnapshotStore.setHome === 'function') {
-      const s = App.SnapshotStore.setHome(C.camera, C.state.rootId)
-      if (!s) {
-        if (App.toast && typeof App.toast.show === 'function') App.toast.show('设为 Home 失败')
-        return false
-      }
-      if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
-      if (App.toast && typeof App.toast.show === 'function') {
-        App.toast.show('已设为 Home：' + s.name)
-      }
-      if (App.SnapshotSheet && typeof App.SnapshotSheet.refresh === 'function') {
-        App.SnapshotSheet.refresh()
-      }
-      if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
-        App.BottomBar.updateHomeState()
-      }
-      return true
-    }
-    // 降级：旧版 HomeStore（仅无 SnapshotStore 时）
     const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveHome(cam, C.state.rootId, C.camera.rotation)) {
+    if (!App.HomeStore || !App.HomeStore.saveHome(cam, C.state.rootId, C.camera.rotation)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('设为 Home 失败')
       return false
     }
     if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
     if (App.toast && typeof App.toast.show === 'function') App.toast.show('已设为 Home')
+    if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
+      App.BottomBar.updateHomeState()
+    }
     return true
   }
 
@@ -232,27 +203,14 @@ App.DesktopNavigation = (function () {
   // 无快照时回退到旧版 HomeStore；再无则出厂 (0,0,1)。
   // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera。
   // rotation 透传：create 第四参确保目标相机保持当前旋转态。
+  // 回到 Home：Home 锚点独立于快照列表（HomeStore.home > fallback > 出厂）。
+  // 快照列表是纯演示快照，与 Home 无任何关联。
   function goHome() {
     if (C.isFolderView()) return
     const rot = C.camera.rotation
     let target = App.DesktopCamera.create(0, 0, 1, rot)
     let found = false
-    if (App.SnapshotStore) {
-      const data = App.SnapshotStore.load(C.state.rootId)
-      const pos = App.SnapshotStore.getInsertPosition()
-      const group = App.SnapshotStore.getHomeGroup(data, pos)
-      const home = App.SnapshotStore.getHome(group, pos)
-      if (home && home.camera) {
-        target = App.DesktopCamera.create(home.camera.x, home.camera.y, home.camera.zoom, rot)
-        found = true
-        if (App.SnapshotSheet && typeof App.SnapshotSheet.setCurrentIndex === 'function') {
-          const flat = App.SnapshotStore.flatSnapshots(C.state.rootId)
-          const idx = App.SnapshotStore.homeSnapshotIndex(flat, pos)
-          App.SnapshotSheet.setCurrentIndex(idx)
-        }
-      }
-    }
-    if (!found && App.HomeStore) {
+    if (App.HomeStore) {
       const data = App.HomeStore.load(C.state.rootId, rot)
       if (data && data.home) {
         target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom, rot)

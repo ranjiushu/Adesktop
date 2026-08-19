@@ -109,11 +109,13 @@ App.ViewMenu = (function () {
   // 目录切换时由 Desktop 调用：根目录置灰（仅提示），子文件夹可选。
   // 高级浏览模式项（.view-menu-browse）始终可用；
   // 旋转画布项（.view-menu-rotate）与其他项相反——根目录可用，folder 禁用
-  // （旋转只对无限画布有意义，folder 容器是有限画布）。
+  // （旋转只对无限画布有意义，folder 容器是有限画布）；
+  // 排列/视图 section 只在子文件夹显示（Desktop 无限画布无排序/视图语义，直接隐藏）。
   /** @param {boolean} on @returns {void} */
   function setEnabled(on) {
     _enabled = !!on
     const menu = _getEl('view-menu')
+    if (menu) menu.classList.toggle('view-menu-folder', _enabled)
     const items = _queryItems(menu)
     for (let i = 0; i < items.length; i++) {
       if (items[i].classList.contains('view-menu-browse')) continue

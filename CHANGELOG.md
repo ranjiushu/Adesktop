@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Home 与演示快照彻底分离（2026-08-19）
+
+- **Home 独立锚点**：Home = 独立的空间锚点（HomeStore，含竖/横屏槽位），与快照列表完全解耦——
+  长按底栏 Home = 添加快照（进快照列表，纯演示快照）；点按 Home = 回 Home 锚点
+  （home > fallback > 出厂）；顶栏右上角菜单「设为 Home」= 设置 Home 锚点
+- **快照列表去 Home 位概念**：列表首项不再等于 Home，无 snapshot-home 高亮，打开面板
+  默认第一个分组；插入位置（顶部/底部）仅决定新快照插入顺序；演示模式独立
+- **顶栏菜单精简**：排列方式/视图 section 只在子文件夹显示（Desktop 无限画布无排序/
+  视图语义直接隐藏）；设为 Home / 高级浏览 / 切换画布方向始终在 Desktop 可用
+- **启动相机**：reload 启动 = fallback > 上次布局 > 出厂，快照不再影响启动位置
+- **存储**：移除 SnapshotStore.setHome（Home 位快照语义废弃）；HomeStore 恢复为
+  Home 锚点的唯一真相
+- **E2E**：verify-home.js 22 项（长按 Home 记录快照不触发锚点类 / 点按回出厂 /
+  reload 落默认视角 / 清快照无影响）；verify-snapshot-sheet.js 25 项（无 Home 高亮 /
+  设为 Home 写 HomeStore）；verify.sh 15 项全绿（含 8 套 E2E）
+
 ### 修复拖拽手势冲突 + Morph FAB 层级（2026-08-19）
 
 - **拖拽不跟手/面板跟随关闭（根因）**：面板下滑关闭手势在列表 scrollTop=0 时无条件接管

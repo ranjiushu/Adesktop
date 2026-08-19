@@ -56,25 +56,22 @@ App.BottomBar = (function () {
     }
   }
 
-  // Home 快照视觉：存在快照列表 → 图标强调色（用户可感知「快照存在」）。
-  // 快照列表已取代单一 Home 快照语义，但仍保留 HomeStore 数据兼容。
+  // Home 锚点视觉：HomeStore 存在 home/fallback（独立锚点）→ 图标强调色。
+  // 快照列表与 Home 彻底分离，不影响此状态。
   /** @returns {void} */
   function updateHomeState() {
     let home = _getEl('bb-btn-home')
     if (!home) return
     const rootId = (App.Desktop && typeof App.Desktop.getRootId === 'function')
       ? App.Desktop.getRootId() : ''
-    let hasSnapshot = false
-    if (App.SnapshotStore) {
-      hasSnapshot = App.SnapshotStore.hasAny(rootId)
-    }
-    if (!hasSnapshot && App.HomeStore) {
+    let hasAnchor = false
+    if (App.HomeStore) {
       const rot = (App.Desktop && typeof App.Desktop.isRotated === 'function' && App.Desktop.isRotated())
         ? 90 : 0
       const data = App.HomeStore.load(rootId, rot)
-      hasSnapshot = !!(data && data.home)
+      hasAnchor = !!(data && (data.home || data.fallback))
     }
-    if (hasSnapshot) home.classList.add('home-has-snapshot')
+    if (hasAnchor) home.classList.add('home-has-snapshot')
     else home.classList.remove('home-has-snapshot')
   }
 

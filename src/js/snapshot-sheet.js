@@ -89,16 +89,6 @@ App.SnapshotSheet = (function () {
     return App.SnapshotStore.load(rootId)
   }
 
-  function _homeGroupIdx() {
-    return App.SnapshotStore.homeGroupIndex(_data().groups, App.SnapshotStore.getInsertPosition())
-  }
-
-  function _homeGroup() {
-    const data = _data()
-    const idx = _homeGroupIdx()
-    return idx >= 0 ? data.groups[idx] : null
-  }
-
   function _flatSnapshots() {
     const rootId = _rootId()
     if (!rootId) return []
@@ -133,7 +123,6 @@ App.SnapshotSheet = (function () {
     if (!_tabs) return
     const data = _data()
     _tabs.innerHTML = ''
-    const homeIdx = _homeGroupIdx()
     data.groups.forEach(function (group, idx) {
       const tab = document.createElement('button')
       tab.className = 'snapshot-tab' + (idx === _currentGroupIdx ? ' snapshot-tab-active' : '')
@@ -190,10 +179,8 @@ App.SnapshotSheet = (function () {
       _list.appendChild(empty)
       return
     }
-    const isHomeGroup = _homeGroup() !== null && group.id === _homeGroup().id
-    const pos = App.SnapshotStore.getInsertPosition()
     group.snapshots.forEach(function (s, idx) {
-      const item = _createSnapshotItem(s, _currentGroupIdx, idx, isHomeGroup && idx === App.SnapshotStore.homeSnapshotIndex(group.snapshots, pos))
+      const item = _createSnapshotItem(s, _currentGroupIdx, idx)
       _list.appendChild(item)
     })
     _bindGroupDrag(_list, _currentGroupIdx)
@@ -201,13 +188,12 @@ App.SnapshotSheet = (function () {
     _syncOpSelection()
   }
 
-  function _createSnapshotItem(s, groupIdx, idx, isHome) {
+  function _createSnapshotItem(s, groupIdx, idx) {
     const item = document.createElement('div')
     item.className = 'snapshot-item'
     item.dataset.id = s.id
     item.dataset.groupIdx = String(groupIdx)
     item.dataset.index = String(idx)
-    if (isHome) item.classList.add('snapshot-home')
     if (_opSelection.has(s.id)) item.classList.add('op-selected')
 
     const name = document.createElement('span')
@@ -684,9 +670,8 @@ App.SnapshotSheet = (function () {
     if (_state === 'open' || _state === 'opening') return
     if (!_panel || !_overlay) return
     _state = 'opening'
-    // 默认打开 Home 分组 tab
-    const homeIdx = _homeGroupIdx()
-    if (homeIdx >= 0) _currentGroupIdx = homeIdx
+    // 默认打开第一个分组 tab（Home 与快照彻底分离，无 Home 位概念）
+    _currentGroupIdx = 0
     _renderList()
     document.body.classList.add('snapshot-sheet-open')
     _overlay.classList.add('snapshot-sheet-overlay-visible')

@@ -39,22 +39,6 @@ App.BuildInfo = (function () {
       ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes())
   }
 
-  // git %ai 时间（"YYYY-MM-DD HH:MM:SS +HHMM"，UTC 或带偏移）→ 北京时区（+08:00）显示。
-  // 口径统一：构建信息页其他时间（构建时间/首次构建）均为北京时间，提交/文件时间若不转换
-  // 会差 8 小时（历史上「信息不准确」的根因：git 时间原样显示 UTC）。
-  function formatGitTime(gitStr) {
-    if (!gitStr) return '--'
-    let m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) ([+-])(\d{2})(\d{2})$/.exec(gitStr)
-    if (!m) return formatBuildTime(gitStr)
-    let sign = m[7] === '-' ? -1 : 1
-    let offMin = sign * (parseInt(m[8], 10) * 60 + parseInt(m[9], 10))
-    let utcMs = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - offMin * 60000
-    let d = new Date(utcMs + 8 * 3600000)
-    let p = function (n) { return (n < 10 ? '0' : '') + n }
-    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) +
-      ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes())
-  }
-
   function _copyToClipboard(text, msg) {
     if (App.ui && typeof App.ui.copyText === 'function') App.ui.copyText(text, msg)
   }
@@ -489,7 +473,7 @@ App.BuildInfo = (function () {
         if (nsStats[i].type === 'doc') nsDocChars += nsStats[i].chars || 0
         else nsOtherLines += nsStats[i].lines
       }
-      let srcTotalFiles = sourceStats.js.files + (sourceStats.css ? sourceStats.css.files : 0) + (sourceStats.html ? sourceStats.html.files : 0) + (sourceStats.java ? sourceStats.java.files : 0)
+      let srcTotalFiles = sourceStats.js.files + (sourceStats.css ? sourceStats.css.files : 0) + (sourceStats.html ? sourceStats.html.files : 0) + (sourceStats.java ? sourceStats.java.files : 0) + (sourceStats.ts ? sourceStats.ts.files : 0)
       let grandTotalFiles = srcTotalFiles + nsStats.length
       let repoRows = [
         { label: 'JavaScript', value: sourceStats.js.files + ' 个文件 · ' + sourceStats.js.lines + ' 行', valueStyle: 'font-size:12px;font-weight:500' },
@@ -498,6 +482,9 @@ App.BuildInfo = (function () {
       ]
       if (sourceStats.java) {
         repoRows.push({ label: 'Java（壳）', value: sourceStats.java.files + ' 个文件 · ' + sourceStats.java.lines + ' 行', valueStyle: 'font-size:12px;font-weight:500' })
+      }
+      if (sourceStats.ts && sourceStats.ts.files > 0) {
+        repoRows.push({ label: 'TypeScript（类型声明）', value: sourceStats.ts.files + ' 个文件 · ' + sourceStats.ts.lines + ' 行', valueStyle: 'font-size:12px;font-weight:500' })
       }
       repoRows.push({ divider: true })
       repoRows.push(
@@ -509,7 +496,7 @@ App.BuildInfo = (function () {
       sections.push(wrapSection('仓库规模', renderKvCard(repoRows)))
     }
     if (fileStats.length > 0) {
-      let colorMap = { js: '#F7DF1E', css: '#2965F1', html: '#E34F26', java: '#E76F00', sh: '#4EAA25', json: '#8BC34A', md: '#9E9E9E' }
+      let colorMap = { js: '#F7DF1E', css: '#2965F1', html: '#E34F26', java: '#E76F00', ts: '#3178C6', sh: '#4EAA25', json: '#8BC34A', md: '#9E9E9E' }
       sections.push(wrapSection('源码规模', '<div id="build-source-body">' + renderBarList(fileStats, {
         rowClass: 'file-bar-row', colorMap: colorMap, globalRef: 'FILE_STATS',
         toggleId: 'file-bar-toggle', expandUnit: '文件',

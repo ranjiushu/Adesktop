@@ -183,10 +183,17 @@ if [ -d "$JAVA_DIR" ]; then
   JAVA_FILES=$(find "$JAVA_DIR" -name '*.java' -type f 2>/dev/null | wc -l)
   JAVA_LINES=$(find "$JAVA_DIR" -name '*.java' -type f -exec cat {} + 2>/dev/null | wc -l)
 fi
+# TypeScript 类型声明（types/ 目录，tsc --noEmit 用；与 FILE_STATS 同口径）
+TS_DIR="$SCRIPT_DIR/types"
+TS_LINES=0; TS_FILES=0
+if [ -d "$TS_DIR" ]; then
+  TS_FILES=$(find "$TS_DIR" -name '*.ts' -type f 2>/dev/null | wc -l)
+  TS_LINES=$(find "$TS_DIR" -name '*.ts' -type f -exec cat {} + 2>/dev/null | wc -l)
+fi
 if [ "$JS_FILES" -gt 0 ] 2>/dev/null; then
-  TOTAL_LINES=$((JS_LINES + CSS_LINES + HTML_LINES + JAVA_LINES))
-  echo "var SOURCE_STATS={js:{files:${JS_FILES},lines:${JS_LINES}},java:{files:${JAVA_FILES},lines:${JAVA_LINES}},css:{files:${CSS_FILES},lines:${CSS_LINES}},html:{files:${HTML_FILES},lines:${HTML_LINES}},total:${TOTAL_LINES}};" >> "$TMP_JS"
-  echo "  [7/10] 源码规模: JS ${JS_FILES}文件/${JS_LINES}行 + CSS ${CSS_FILES}文件/${CSS_LINES}行 + HTML ${HTML_FILES}文件/${HTML_LINES}行 + Java ${JAVA_FILES}文件/${JAVA_LINES}行 = ${TOTAL_LINES}行"
+  TOTAL_LINES=$((JS_LINES + CSS_LINES + HTML_LINES + JAVA_LINES + TS_LINES))
+  echo "var SOURCE_STATS={js:{files:${JS_FILES},lines:${JS_LINES}},java:{files:${JAVA_FILES},lines:${JAVA_LINES}},css:{files:${CSS_FILES},lines:${CSS_LINES}},html:{files:${HTML_FILES},lines:${HTML_LINES}},ts:{files:${TS_FILES},lines:${TS_LINES}},total:${TOTAL_LINES}};" >> "$TMP_JS"
+  echo "  [7/10] 源码规模: JS ${JS_FILES}文件/${JS_LINES}行 + CSS ${CSS_FILES}文件/${CSS_LINES}行 + HTML ${HTML_FILES}文件/${HTML_LINES}行 + Java ${JAVA_FILES}文件/${JAVA_LINES}行 + TS ${TS_FILES}文件/${TS_LINES}行 = ${TOTAL_LINES}行"
 else
   echo "var SOURCE_STATS=null;" >> "$TMP_JS"
   echo "  [7/10] 源码规模: 统计失败，注入 null"
@@ -236,7 +243,7 @@ def extract_desc(fp):
     except: return ''
 
 try:
-    times = git_file_times(['src/js','src/css','src/index.html','android/app/src/main/java'])
+    times = git_file_times(['src/js','src/css','src/index.html','android/app/src/main/java','types'])
 except Exception:
     times = {}
 
@@ -293,6 +300,22 @@ try:
                     t = times.get(rel, ['', ''])
                     files.append({'name': rel, 'lines': lines, 'type': 'java',
                         'created': t[1], 'modified': t[0], 'desc': extract_desc(fp)})
+except: pass
+
+# types/ - TypeScript 类型声明（.d.ts / .ts，tsc --noEmit 用；不进产物，随源码规模展示）
+try:
+    types_dir = os.path.join(SCRIPT, 'types')
+    if os.path.isdir(types_dir):
+        for f in sorted(os.listdir(types_dir)):
+            if not (f.endswith('.d.ts') or f.endswith('.ts')): continue
+            fp = os.path.join(types_dir, f)
+            try:
+                with open(fp, 'r') as fh: lines = len(fh.readlines())
+            except: lines = 0
+            rel = 'types/' + f
+            t = times.get(rel, ['', ''])
+            files.append({'name': rel, 'lines': lines, 'type': 'ts',
+                'created': t[1], 'modified': t[0], 'desc': extract_desc(fp)})
 except: pass
 
 files.sort(key=lambda x: -x['lines'])

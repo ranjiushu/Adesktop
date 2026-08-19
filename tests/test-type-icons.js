@@ -87,7 +87,7 @@ check(pdfIcon.indexOf('<svg') === 0, 'iconFor pdf 返回 <svg>')
 check(pdfIcon.indexOf('type-icon type-pdf') >= 0, 'iconFor pdf 含 type-pdf class')
 check(pdfIcon.indexOf('viewBox="0 0 24 24"') >= 0, 'iconFor pdf 为 24x24 瓷砖')
 check(pdfIcon.indexOf('stroke="currentColor"') < 0, 'iconFor pdf 非线条版')
-check(pdfIcon.indexOf('#e53935') >= 0, 'iconFor pdf 含红色瓷砖底色')
+check(pdfIcon.indexOf('#D81E06') >= 0, 'iconFor pdf 含红色瓷砖底色')
 
 // 扩展名归并：png/jpg 都走 image 瓷砖（同一种）
 check(T.iconFor('a.png', false) === T.iconFor('a.jpg', false), 'png/jpg 归并为同一 image 瓷砖')

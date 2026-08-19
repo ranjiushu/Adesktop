@@ -18,24 +18,25 @@ if (!SRC) { console.error('用法: node gen-type-icons-data.js <mdi-svg-dir> [�
 // kind → { glyph: MDI 图标文件名, color: 瓷砖底色, label: 说明 }
 // 对齐 MT 管理器(Apktool M) 15 类文件图标 + markdown/code 两个额外细分
 // 合并: json→text, word→text, ppt→text; 新增: dex, jar, lib, file
+// 颜色来自 MT 管理器实机截图提取（用户2026-08-19提供）
 const SPEC = {
-  text:       { glyph: 'file-document',     color: '#607d8b', label: '文本' },
-  markdown:   { glyph: 'language-markdown', color: '#7b1fa2', label: 'Markdown' },
-  html:       { glyph: 'language-html5',    color: '#f4511e', label: 'HTML' },
-  code:       { glyph: 'code-tags',         color: '#0288d1', label: '代码' },
-  image:      { glyph: 'image',             color: '#26a69a', label: '图片' },
-  video:      { glyph: 'video',             color: '#c2185b', label: '视频' },
-  audio:      { glyph: 'music',             color: '#ec407a', label: '音频' },
-  archive:    { glyph: 'zip-box',           color: '#fbc02d', label: '压缩包' },
-  pdf:        { glyph: 'file-pdf-box',      color: '#e53935', label: 'PDF' },
-  excel:      { glyph: 'file-excel',        color: '#43a047', label: 'Excel' },
-  font:       { glyph: 'format-font',       color: '#546e7a', label: '字体' },
-  executable: { glyph: 'android',           color: '#00897b', label: '可执行' },
-  dex:        { glyph: 'file-cog',          color: '#5c6bc0', label: 'DEX' },
-  jar:        { glyph: 'archive-cog',       color: '#8d6e63', label: 'JAR' },
-  lib:        { glyph: 'library',           color: '#546e7a', label: '共享库' },
-  file:       { glyph: 'file',              color: '#78909c', label: '通用文件' },
-  folder:     { glyph: 'folder',            color: '#ffb300', label: '目录（无瓷砖，经典黄色文件夹）' }
+  text:       { glyph: 'file-document',     color: '#3860AF', label: '文本' },
+  markdown:   { glyph: 'language-markdown', color: '#7B1FA2', label: 'Markdown' },
+  html:       { glyph: 'language-html5',    color: '#2083BD', label: 'HTML' },
+  code:       { glyph: 'code-tags',         color: '#3860AF', label: '代码' },
+  image:      { glyph: 'image',             color: '#777777', label: '图片' },
+  video:      { glyph: 'video',             color: '#FB8C00', label: '视频' },
+  audio:      { glyph: 'music',             color: '#E53935', label: '音频' },
+  archive:    { glyph: 'zip-box',           color: '#795548', label: '压缩包' },
+  pdf:        { glyph: 'file-pdf-box',      color: '#D81E06', label: 'PDF' },
+  excel:      { glyph: 'file-excel',        color: '#6D9B00', label: 'Excel' },
+  font:       { glyph: 'format-font',       color: '#3F51B5', label: '字体' },
+  executable: { glyph: 'android',           color: '#40AD3E', label: '可执行' },
+  dex:        { glyph: 'file-cog',          color: '#5F9EA0', label: 'DEX' },
+  jar:        { glyph: 'archive-cog',       color: '#795548', label: 'JAR' },
+  lib:        { glyph: 'library',           color: '#607D8B', label: '共享库' },
+  file:       { glyph: 'file',              color: '#795548', label: '通用文件' },
+  folder:     { glyph: 'folder',            color: '#2B2B2B', label: '目录' }
 }
 
 function glyphPath(svgFile) {

@@ -11,7 +11,8 @@
 
 .snapshot-sheet-overlay {
   position: absolute;
-  top: 0;
+  /* 从顶栏下方开始：header 保持可交互（顶栏菜单「设为 Home」等）不被遮罩盖住 */
+  top: calc(var(--header-height) + var(--safe-top, 0px));
   left: 0;
   right: 0;
   bottom: 0;
@@ -295,6 +296,11 @@
 
 .snapshot-list-dragging .snapshot-item {
   transition: transform 0.18s ease;
+}
+
+/* 被拖项实时跟手：不受避让过渡影响（否则每次 touchmove 更新都滞后 0.18s） */
+.snapshot-list-dragging .snapshot-item-dragging {
+  transition: none;
 }
 
 /* 面板关闭条 */

@@ -172,6 +172,14 @@ App.ViewMenu = (function () {
     close()
   }
 
+  // 设为 Home：只在桌面空间可用（folder 容器内由 Desktop.setHome 守卫忽略）
+  /** @returns {void} */
+  function _onSetHome() {
+    if (!App.Desktop || typeof App.Desktop.setHome !== 'function') return
+    App.Desktop.setHome()
+    close()
+  }
+
   /** @returns {void} */
   function init() {
     const btn = _getEl('btn-view-menu')
@@ -181,16 +189,19 @@ App.ViewMenu = (function () {
     const menu = _getEl('view-menu')
     const items = _queryItems(menu)
     for (let i = 0; i < items.length; i++) {
-      // 高级浏览模式 / 旋转画布项走独立处理器（不受 _enabled 限制）
+      // 高级浏览模式 / 旋转画布 / 设为 Home 项走独立处理器（不受 _enabled 限制，
+      // 各自守卫：browse 始终可用；rotate/home 根目录可用 folder 内守卫忽略）
       if (items[i].classList.contains('view-menu-browse')) {
         App.utils.bindPress(/** @type {HTMLElement} */ (items[i]), _onBrowseToggle)
       } else if (items[i].classList.contains('view-menu-rotate')) {
         App.utils.bindPress(/** @type {HTMLElement} */ (items[i]), _onRotateToggle)
+      } else if (items[i].classList.contains('view-menu-sethome')) {
+        App.utils.bindPress(/** @type {HTMLElement} */ (items[i]), _onSetHome)
       } else {
         App.utils.bindPress(/** @type {HTMLElement} */ (items[i]), _onItemClick)
       }
     }
-    setEnabled(false)   // 初始根目录：置灰（旋转/浏览模式项不受影响）
+    setEnabled(false)   // 初始根目录：置灰（旋转/浏览模式/设为 Home 项不受影响）
   }
 
   /** @type {ViewMenu} */

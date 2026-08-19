@@ -170,6 +170,7 @@ interface SnapshotStore {
   delete(data: SnapshotData, groupId: string, snapshotId: string): SnapshotData
   reorder(data: SnapshotData, groupId: string, from: number, to: number): SnapshotData
   move(data: SnapshotData, fromGroupId: string, toGroupId: string, snapshotIds: Array<string>): SnapshotData
+  setHome(camera: DesktopCameraState, rootId: string): Snapshot | null
   createGroup(rootId: string, name: string): { bundle: SnapshotBundle; group: SnapshotGroupMeta } | null
   renameGroup(rootId: string, groupId: string, name: string): boolean
   deleteGroup(rootId: string, groupId: string): boolean
@@ -751,6 +752,7 @@ interface Desktop {
   getViewPrefs: () => ViewPrefs
   captureHome: () => void
   captureDefaultView: () => void
+  setHome: () => boolean
   goHome: () => void
   fitAllFiles: () => boolean
   setAdvancedBrowse: (on: boolean) => void

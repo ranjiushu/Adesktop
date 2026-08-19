@@ -1,4 +1,6 @@
-/* 顶栏排列/视图菜单：header 右上弹出，子文件夹（容器）可用，根目录（空间）置灰 */
+/* 顶栏排列/视图菜单：header 右上弹出，子文件夹（容器）可用，根目录（空间）置灰。
+   z-index 700/699：高于快照面板（650）——面板打开时顶栏菜单仍浮于其上可用可点；
+   低于 Morph FAB（1500）。 */
 
 /* 遮罩：点击外部关闭 */
 .view-menu-overlay {
@@ -7,7 +9,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 20;
+  z-index: 699;
   background: transparent;
   display: none;
 }
@@ -21,7 +23,7 @@
   position: fixed;
   top: calc(var(--header-height) + var(--safe-top, 0px) + 4px);
   right: var(--space-md);
-  z-index: 21;
+  z-index: 700;
   min-width: 168px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);

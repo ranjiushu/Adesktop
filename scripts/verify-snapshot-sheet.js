@@ -327,6 +327,49 @@ async function main() {
     if (afterTab === 2) pass('tab 切换正常（项目A 2 条可见快照）')
     else fail('tab 切换', 'items=' + afterTab)
 
+    // ── 9. 顶栏「设为 Home」：把当前相机设为 Home 位快照 ──
+    const vmBtn = await page.evaluate(() => {
+      const b = document.querySelector('#btn-view-menu').getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    })
+    await tap(client, vmBtn.x, vmBtn.y, 60)
+    await sleep(300)
+    const setHomeBtn = await page.evaluate(() => {
+      const el = document.querySelector('.view-menu-sethome')
+      if (!el) return null
+      const b = el.getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2, text: el.textContent }
+    })
+    if (setHomeBtn && setHomeBtn.text.indexOf('设为 Home') >= 0) pass('顶栏菜单含「设为 Home」')
+    else fail('设为 Home 菜单项', JSON.stringify(setHomeBtn))
+    const camBefore = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
+    })
+    await tap(client, setHomeBtn.x, setHomeBtn.y, 60)
+    await sleep(400)
+    const setHomeResult = await page.evaluate(() => {
+      const rootId = App.DesktopCore.state.rootId
+      const bundle = JSON.parse(localStorage.getItem('desktop.snapshots.' + rootId + '.v3'))
+      const home = bundle.portrait.groups[0].snapshots[0]
+      const menuOpen = document.querySelector('#view-menu').classList.contains('view-menu-open')
+      const toast = (document.querySelector('.toast') || {}).textContent || ''
+      return { homeCam: home && home.camera, menuOpen, toast }
+    })
+    if (setHomeResult.homeCam &&
+        Math.abs(setHomeResult.homeCam.x - camBefore.x) < 0.001 &&
+        Math.abs(setHomeResult.homeCam.zoom - camBefore.zoom) < 0.001 &&
+        !setHomeResult.menuOpen) pass('「设为 Home」→ Home 位快照相机 = 当前相机，菜单已关')
+    else fail('设为 Home 结果', JSON.stringify({ camBefore, ...setHomeResult }))
+    // toast 异步排队显示，轮询等待「已设为 Home」出现（最长 2.5s）
+    let homeToast = setHomeResult.toast
+    for (let i = 0; i < 10 && homeToast.indexOf('已设为 Home') < 0; i++) {
+      await sleep(250)
+      homeToast = await page.evaluate(() => (document.querySelector('.toast') || {}).textContent || '')
+    }
+    if (homeToast.indexOf('已设为 Home') >= 0) pass('设为 Home toast')
+    else fail('设为 Home toast', homeToast)
+
     await page.screenshot({ path: SHOT })
     console.log('SHOT: ' + SHOT)
 

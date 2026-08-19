@@ -180,6 +180,41 @@ App.DesktopNavigation = (function () {
     return true
   }
 
+  // 设为 Home（顶栏菜单入口）：把当前相机设为 Home 位快照。
+  // Home 位 = 当前方向快照列表由插入位置（top/bottom）决定的那一项：
+  // 已存在则更新其相机，不存在则创建新快照插入 Home 位。
+  // 底栏 Home 长按仍专职「记录快照」（插入位置设置决定是否成为 Home 位）。
+  function setHome() {
+    if (C.isFolderView()) return false
+    if (App.SnapshotStore && typeof App.SnapshotStore.setHome === 'function') {
+      const s = App.SnapshotStore.setHome(C.camera, C.state.rootId)
+      if (!s) {
+        if (App.toast && typeof App.toast.show === 'function') App.toast.show('设为 Home 失败')
+        return false
+      }
+      if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+      if (App.toast && typeof App.toast.show === 'function') {
+        App.toast.show('已设为 Home：' + s.name)
+      }
+      if (App.SnapshotSheet && typeof App.SnapshotSheet.refresh === 'function') {
+        App.SnapshotSheet.refresh()
+      }
+      if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
+        App.BottomBar.updateHomeState()
+      }
+      return true
+    }
+    // 降级：旧版 HomeStore（仅无 SnapshotStore 时）
+    const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
+    if (!App.HomeStore.saveHome(cam, C.state.rootId, C.camera.rotation)) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('设为 Home 失败')
+      return false
+    }
+    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已设为 Home')
+    return true
+  }
+
   // 设为默认视角（Drawer 操作项）：Home 无快照时的兜底视角
   function captureDefaultView() {
     if (C.isFolderView()) return false
@@ -317,6 +352,7 @@ App.DesktopNavigation = (function () {
     getCurPath: getCurPath,
     captureHome: captureHome,
     captureDefaultView: captureDefaultView,
+    setHome: setHome,
     goHome: goHome,
     fitAllFiles: fitAllFiles,
     cancelCameraAnim: cancelCameraAnim,

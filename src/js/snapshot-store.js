@@ -429,6 +429,26 @@ App.SnapshotStore = (function () {
     return { version: VERSION, groups: groups }
   }
 
+  /** @param {DesktopCameraState} camera @param {string} rootId @returns {Snapshot | null} */
+  function setHomeSnapshot(camera, rootId) {
+    if (!validCamera(camera)) return null
+    const data = loadSnapshots(rootId)
+    const pos = getInsertPosition()
+    const homeGroup = getHomeGroup(data, pos)
+    if (!homeGroup) return null
+    const hi = homeSnapshotIndex(homeGroup.snapshots, pos)
+    if (hi >= 0) {
+      // 更新 Home 位快照相机（保留 id/createdAt，名称刷新为当前时间）
+      const s = homeGroup.snapshots[hi]
+      s.camera = { x: camera.x, y: camera.y, zoom: camera.zoom, rotation: camera.rotation || 0 }
+      s.name = formatName()
+      if (!saveSnapshots(data, rootId)) return null
+      return s
+    }
+    // Home 分组无快照 → 创建并插入 Home 位
+    return createSnapshot(camera, rootId)
+  }
+
   /** @param {string} rootId @param {string} name @returns {{bundle: SnapshotBundle, group: SnapshotGroupMeta} | null} */
   function createGroup(rootId, name) {
     const bundle = loadBundle(rootId)
@@ -554,6 +574,7 @@ App.SnapshotStore = (function () {
     delete: deleteSnapshot,
     reorder: reorderSnapshot,
     move: moveSnapshots,
+    setHome: setHomeSnapshot,
     createGroup: createGroup,
     renameGroup: renameGroup,
     deleteGroup: deleteGroup,

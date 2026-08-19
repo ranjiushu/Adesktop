@@ -236,6 +236,21 @@ check(S.move(d, d.groups[0].id, d.groups[0].id, ['x']) === d, '同组 move 返�
 d = S.move(d, d.groups[0].id, mg.id, ['nope'])
 check(d.groups[1].snapshots.length === 2, '不存在的 id 无影响')
 
+// ── setHome（顶栏「设为 Home」：更新 Home 位快照或创建）──
+store = {}
+fakeCore.camera.rotation = 0
+S.create(cam1, 'rootA') // Home 位 = 默认分组第一项（s1）
+const sh = S.setHome({ x: 777, y: 888, zoom: 2.5, rotation: 0 }, 'rootA')
+d = S.load('rootA')
+check(sh && sh.camera.x === 777 && sh.camera.zoom === 2.5, 'setHome 更新已有 Home 位快照相机')
+check(firstGroup(d).snapshots.length === 1, 'setHome 更新不新增快照')
+// 无快照时 setHome 创建
+store = {}
+fakeCore.camera.rotation = 0
+const sh2 = S.setHome({ x: 1, y: 2, zoom: 1, rotation: 0 }, 'emptyRoot')
+d = S.load('emptyRoot')
+check(sh2 && firstGroup(d).snapshots.length === 1 && firstGroup(d).snapshots[0].id === sh2.id, '无快照时 setHome 创建 Home 位快照')
+
 // ── flatSnapshots ──
 store = {}
 fakeCore.camera.rotation = 0

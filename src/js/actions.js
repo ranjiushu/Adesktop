@@ -95,13 +95,27 @@ App.Actions = (function () {
     anchor.zoom = (C.camera && C.camera.zoom) || 1
     // 布局数据文件（.adesktop-layout.json）不参与整理（渲染时同样过滤——否则它被排进
     // 网格（json 组恰在 html/md 之间）但不可见 → 网格留空位，2026-08-19 真机反馈）
+    // 锁定文件（正在预览）不参与整理：图标与 Viewer 预览窗口双向锚定（窗口在文件上方），
+    // 排走图标 = 与窗口分家/重叠；锁定文件保持原位，其余文件排布跳过其占位格子
+    /** @type {Array<{x: number, y: number}>} */
+    const lockedPoints = []
     const entries = C.state.items
-      .filter(function (it) { return it.name !== C.LAYOUT_FILE })
+      .filter(function (it) {
+        if (it.name === C.LAYOUT_FILE) return false
+        const key = (it.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())
+          ? C.state.trashName : C.fullPath(it.name)
+        if (C._lockedPaths && C._lockedPaths.has(key)) {
+          const p = C.positions[key]
+          if (p) lockedPoints.push({ x: p.x, y: p.y })
+          return false
+        }
+        return true
+      })
       .map(function (it) {
         return { name: it.name, isDir: it.isDir }
       })
     const placed = App.DesktopOrganize.organize(
-      entries, C.viewportWidth(), C.viewportHeight(), anchor)
+      entries, C.viewportWidth(), C.viewportHeight(), anchor, lockedPoints)
     placed.forEach(function (p) {
       // key：虚拟回收站 = trashName（桥层根固定串）；其余 = 完整相对路径
       const key = (p.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())

@@ -286,6 +286,10 @@ App.DesktopGestureHandlers = (function () {
         node.style.left = x + 'px'
         node.style.top = y + 'px'
       }
+      // 锁定文件图标拖动 → Viewer 预览窗口实时跟随（双向锚定防分家：图标与窗口始终对齐）
+      if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+        App.InternalViewer.syncRectForPath(n, x, y)
+      }
     })
     if (App.Loading && typeof App.Loading.showTag === 'function') {
       const hitWebsite = websiteHitAt(world)
@@ -355,6 +359,10 @@ App.DesktopGestureHandlers = (function () {
           node.style.left = back.x + 'px'
           node.style.top = back.y + 'px'
         }
+        // 锁定文件：Viewer 预览窗口同步还原（拖动中已实时跟随，取消须一同退回）
+        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+          App.InternalViewer.syncRectForPath(n, back.x, back.y)
+        }
       }
     })
   }
@@ -412,6 +420,10 @@ App.DesktopGestureHandlers = (function () {
               if (node) {
                 node.style.left = back.x + 'px'
                 node.style.top = back.y + 'px'
+              }
+              // 锁定文件：Viewer 预览窗口同步还原
+              if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+                App.InternalViewer.syncRectForPath(n, back.x, back.y)
               }
             }
           })
@@ -502,8 +514,13 @@ App.DesktopGestureHandlers = (function () {
       }).map(function (n) {
         return { name: n, x: C.positions[n].x, y: C.positions[n].y }
       })
-      // 3. 避让解析：移动组放期望位，冲突的静止图标让位到最近空位
-      const resolved = App.DesktopGrid.resolvePlacement(moving, statics)
+      // 3. 避让解析：移动组放期望位，冲突的静止图标让位到最近空位。
+      //    锁定文件（正在预览）为钉子户：不可让位——其它文件拖动不能顶开它，
+      //    冲突时移动组让位（否则图标与 Viewer 预览窗口分家/重叠）
+      const lockedStatics = statics.filter(function (s) {
+        return C._lockedPaths.has(s.name)
+      }).map(function (s) { return s.name })
+      const resolved = App.DesktopGrid.resolvePlacement(moving, statics, lockedStatics)
       Object.keys(resolved).forEach(function (n) {
         C.positions[n] = resolved[n]
         C.bounds[n] = { x: resolved[n].x, y: resolved[n].y, w: C.bounds[n].w, h: C.bounds[n].h }
@@ -511,6 +528,11 @@ App.DesktopGestureHandlers = (function () {
         if (node) {
           node.style.left = resolved[n].x + 'px'
           node.style.top = resolved[n].y + 'px'
+        }
+        // 锁定文件：最终落位（网格吸附后）同步 Viewer——拖动中跟随的是未吸附位置，
+        // 吸附变化若不回传则图标与 Viewer 窗口错位（分家）
+        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+          App.InternalViewer.syncRectForPath(n, resolved[n].x, resolved[n].y)
         }
       })
       // Windows 原则：选中态是临时/脆弱状态——移动完成即失效（清空选中 + 收起 FAB 操作栏）
@@ -546,6 +568,10 @@ App.DesktopGestureHandlers = (function () {
         if (node) {
           node.style.left = back.x + 'px'
           node.style.top = back.y + 'px'
+        }
+        // 锁定文件：Viewer 预览窗口同步还原（拖动中已实时跟随，取消须一同退回）
+        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+          App.InternalViewer.syncRectForPath(n, back.x, back.y)
         }
       }
       setPickedUp(n, false)

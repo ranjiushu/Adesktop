@@ -76,8 +76,9 @@ App.DesktopOrganize = (function () {
    *  @param {Array<{name: string, isDir: boolean}>} entries 排序后的条目
    *  @param {number} viewportW @param {number} viewportH
    *  @param {{x: number, y: number, zoom: number, rotation: number}} camera
+   *  @param {Array<{x: number, y: number}> | null | undefined} [occupiedWorldPoints] 被占格子（锁定文件等钉子户）世界坐标点
    *  @returns {Array<{name: string, x: number, y: number}>} */
-  function organize(entries, viewportW, viewportH, camera) {
+  function organize(entries, viewportW, viewportH, camera, occupiedWorldPoints) {
     const zoom = (camera && camera.zoom) || 1
     const cx = (camera && camera.x) || 0
     const cy = (camera && camera.y) || 0
@@ -97,35 +98,54 @@ App.DesktopOrganize = (function () {
       // 与竖屏「行多向下溢出」对称）。曾居中（首列浮空/窄条）与锚画布上边
       // （首列在屏幕右缘，列向左铺）——均不符合用户「像 Windows」的拍板。
       const perCol = Math.max(1, Math.floor((h / zoom) / GRID_W))   // 每列格子数（屏幕高方向 = 画布 x 向可见宽）
-      const cols = Math.max(1, Math.ceil(n / perCol))               // 实际列数
       const x0 = cx + (w - h) / (2 * zoom) + PAD_TOP                // 画布左 = 屏幕顶 + 16（顶栏那条边基线）
       const y0 = cy + (w + h) / (2 * zoom) - ICON_H - PAD_TOP       // 屏幕左缘 + 16（首列盒左缘贴屏幕左）
-      return sorted.map(function (item, i) {
-        const col = Math.floor(i / perCol)
-        const row = i % perCol
-        return {
-          name: item.name,
-          x: Math.round(x0 + row * GRID_W),
-          y: Math.round(y0 - col * GRID_H)
-        }
-      })
+      return scanPlace(sorted, perCol, x0, y0, -1, occupiedWorldPoints)
     }
     // 竖屏：行内沿世界 +x（屏幕向右，步长 GRID_W），换行沿世界 +y（屏幕向下，步长 GRID_H）。
     // 顶边基线 = 视口顶部世界 y = camera.y；x 方向水平居中。
     const perRow = Math.max(1, Math.floor((w / zoom) / GRID_W))     // 每行格子数（屏幕宽方向）
-    const rows = Math.max(1, Math.ceil(n / perRow))                 // 实际行数
-    const colsInRow = Math.min(n, perRow)                           // 实际每行格数
     const y0 = cy + PAD_TOP
-    const x0 = centerX - ((colsInRow - 1) * GRID_W + ICON_W) / 2
-    return sorted.map(function (item, i) {
-      const row = Math.floor(i / perRow)
-      const col = i % perRow
-      return {
-        name: item.name,
-        x: Math.round(x0 + col * GRID_W),
-        y: Math.round(y0 + row * GRID_H)
-      }
+    const x0 = centerX - ((perRow - 1) * GRID_W + ICON_W) / 2
+    return scanPlace(sorted, perRow, x0, y0, 1, occupiedWorldPoints)
+  }
+
+  // 网格扫描排布：从 (0,0) 起按方向逐格分配，跳过被占格子（occupiedWorldPoints =
+  // 锁定文件等钉子户的世界坐标点，转排布 cell 后跳过——整理桌面不能挪动锁定文件，
+  // 否则图标与 Viewer 预览窗口分家/重叠）。colDir = 换列方向（竖屏 +y=+1，横屏 -y=-1）。
+  // 世界坐标 → 排布 cell 与索引同式（竖屏：x0 行起点/y0 行基线；横屏：x0 列内起点/
+  // y0 屏幕左缘基线，colDir 吸收方向差），无 occupied 时与旧连续索引排布结果一致。
+  /** @param {Array<{name: string, isDir: boolean}>} sorted @param {number} per
+   *  @param {number} x0 @param {number} y0 @param {number} colDir
+   *  @param {Array<{x: number, y: number}> | null | undefined} occupiedWorldPoints
+   *  @returns {Array<{name: string, x: number, y: number}>} */
+  function scanPlace(sorted, per, x0, y0, colDir, occupiedWorldPoints) {
+    /** @type {Set<string>} */
+    const taken = new Set()
+    ;(occupiedWorldPoints || []).forEach(function (p) {
+      const pcx = Math.round((p.x - x0) / GRID_W)
+      const pcy = Math.round((p.y - y0) / (GRID_H * colDir))
+      taken.add(pcx + ',' + pcy)
     })
+    /** @type {Array<{name: string, x: number, y: number}>} */
+    const placed = []
+    let cx = 0
+    let cy = 0
+    const advance = function () {
+      cx++
+      if (cx >= per) { cx = 0; cy++ }
+    }
+    sorted.forEach(function (item) {
+      while (taken.has(cx + ',' + cy)) advance()
+      taken.add(cx + ',' + cy)
+      placed.push({
+        name: item.name,
+        x: Math.round(x0 + cx * GRID_W),
+        y: Math.round(y0 + cy * GRID_H * colDir)
+      })
+      advance()
+    })
+    return placed
   }
 
   /** @type {DesktopOrganize} */

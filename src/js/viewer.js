@@ -215,6 +215,8 @@ App.InternalViewer = (function () {
   let _fullscreenId = null  // 当前全屏实例 id（同时最多一个）
   /** @type {((viewers: Array<ViewerRecord>) => void) | null} 持久化监听（Desktop 层注入，画布态变化时回调） */
   let _persistListener = null
+  /** @type {((inst: any) => void) | null} 位置变化监听（Desktop 层注入：Viewer 拖动/自适应 → 同步锁定文件图标） */
+  let _moveListener = null
 
   // ── 实例工厂：每个 Viewer 独立 DOM + 状态 + 拖动 ──
   function createInstance(opts) {
@@ -238,6 +240,7 @@ App.InternalViewer = (function () {
     let drag = null
     let reader = { scale: 1, wrap: true }   // 文本完整预览态：字号缩放 + 自动换行
     let handleEl = null    // 拖动手柄（屏幕层固定尺寸，随相机/卡片位置同步）
+    let onMove = null      // 位置变化回调（Desktop 注入：Viewer 拖动/自适应 → 同步锁定文件图标）
     let state = {
       open: false, mode: null, fsFrom: null, selected: false,
       path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null,
@@ -416,6 +419,7 @@ App.InternalViewer = (function () {
         const rect = fitAspectRect(state.rect, natW, natH, _layer.clientWidth, _layer.clientHeight)
         if (rect) {
           applyCanvasRect(rect)
+          if (onMove) onMove(state.rect)   // 媒体自适应：图标锚定新窗口左上（双向锚定防分家）
           _notifyPersist()   // 媒体自适应改变尺寸：持久化最终矩形
         }
       }
@@ -508,6 +512,7 @@ App.InternalViewer = (function () {
       const dx = world.x - drag.startWorld.x
       const dy = world.y - drag.startWorld.y
       applyCanvasRect(shiftRect(drag.startRect, dx, dy))
+      if (onMove) onMove(state.rect)
     }
 
     function endDrag() {
@@ -523,9 +528,25 @@ App.InternalViewer = (function () {
       syncHandleAfterMove()
       drag = null
       card.classList.remove('viewer-card-dragging')
+      if (onMove) onMove(state.rect)
     }
 
     function isDragging() { return !!drag }
+
+    // 图标拖动同步：Viewer 卡片左上角贴图标位置（锁定文件的图标是位置真相锚点）。
+    // 不触发 onMove——图标 → Viewer 方向同步由调用方（手势层图标拖动）驱动，
+    // 避免 图标→Viewer→图标 循环同步。
+    /** @param {number} x @param {number} y @returns {boolean} */
+    function setRectFromIcon(x, y) {
+      if (!state.open || state.mode !== 'canvas' || !state.rect) return false
+      applyCanvasRect({ x: x, y: y, w: state.rect.w, h: state.rect.h })
+      return true
+    }
+
+    /** @param {((rect: {x: number, y: number, w: number, h: number}) => void) | null} fn */
+    function _setOnMove(fn) {
+      onMove = typeof fn === 'function' ? fn : null
+    }
 
     function hitTestWorld(wx, wy) {
       if (!state.open || state.mode !== 'canvas' || !state.rect) return false
@@ -837,6 +858,8 @@ App.InternalViewer = (function () {
       endDrag: endDrag,
       cancelDrag: cancelDrag,
       isDragging: isDragging,
+      setRectFromIcon: setRectFromIcon,
+      _setOnMove: _setOnMove,
       getRect: getRect,
       hitTestWorld: hitTestWorld,
       rectHitWorld: rectHitWorld,
@@ -855,6 +878,7 @@ App.InternalViewer = (function () {
     if (!opts || !opts.path) return null
     if (!ensureHosts()) return null
     const inst = createInstance(opts)
+    if (_moveListener) inst._setOnMove(_moveListener)
     const ok = inst.open()
     if (!ok) return null
     _instances.push(inst)
@@ -880,6 +904,26 @@ App.InternalViewer = (function () {
   /** @param {((viewers: Array<ViewerRecord>) => void) | null} fn */
   function setPersistListener(fn) {
     _persistListener = typeof fn === 'function' ? fn : null
+  }
+
+  /** 位置变化监听（Desktop 层注入：Viewer 拖动/媒体自适应 → 同步锁定文件图标到窗口左上）。
+   *  @param {((inst: any) => void) | null} fn */
+  function setMoveListener(fn) {
+    _moveListener = typeof fn === 'function' ? fn : null
+  }
+
+  // 图标拖动同步：把 path 对应 Viewer 卡片左上角贴到 (x, y)（图标位置 → 预览窗口位置）。
+  // 命中 canvas 态实例且移动成功返回 true；无对应实例/非 canvas 态返回 false。
+  /** @param {string} path @param {number} x @param {number} y @returns {boolean} */
+  function syncRectForPath(path, x, y) {
+    if (!path) return false
+    for (let i = 0; i < _instances.length; i++) {
+      const inst = _instances[i]
+      if (inst.getPath && inst.getPath() === path) {
+        if (inst.setRectFromIcon(x, y)) return true
+      }
+    }
+    return false
   }
 
   // 关闭指定实例（实例 close 内部会从集合移除自己）
@@ -1025,6 +1069,8 @@ App.InternalViewer = (function () {
   return {
     open: open,
     setPersistListener: setPersistListener,
+    setMoveListener: setMoveListener,
+    syncRectForPath: syncRectForPath,
     closeById: closeById,
     closeAll: closeAll,
     getById: getById,

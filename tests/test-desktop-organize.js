@@ -174,6 +174,36 @@ const hp24 = O.organize(grid24, 412, 700, { x: 0, y: 0, zoom: 1, rotation: 90 })
 crossVisibility(vp24, { x: 0, y: 0, zoom: 1, rotation: 90 }, '[交叉] 竖屏整理 → 横屏')
 crossVisibility(hp24, { x: 0, y: 0, zoom: 1, rotation: 0 }, '[交叉] 横屏整理 → 竖屏')
 
+// ── 7. occupied 跳过（锁定文件占位，整理不动钉子户）──
+// 竖屏相机 (0,0,1)：perRow=4，x0=14, y0=16，首格世界 (14,16)；第二格 (114,16)
+const items8 = [
+  { name: 'a.txt', isDir: false },
+  { name: 'b.txt', isDir: false },
+  { name: 'c.txt', isDir: false },
+  { name: 'd.txt', isDir: false },
+  { name: 'e.txt', isDir: false },
+  { name: 'f.txt', isDir: false },
+  { name: 'g.txt', isDir: false },
+  { name: 'h.txt', isDir: false }
+]
+const camV = { x: 0, y: 0, zoom: 1, rotation: 0 }
+const occupiedPt = [{ x: 14, y: 16 }]   // 锁定文件占首格（世界坐标）
+const ocV = O.organize(items8, 412, 700, camV, occupiedPt)
+check(ocV.length === 8, 'occupied：条目数不变（8 个仍全部排布）')
+check(ocV.every(function (p) { return !(p.x === 14 && p.y === 16) }),
+  'occupied：无条目占用锁定文件格子 (14,16)')
+check(ocV[0].x === 114 && ocV[0].y === 16, 'occupied：首格被跳过 → 第一项排到 (114,16)，实际 (' + ocV[0].x + ',' + ocV[0].y + ')')
+check(ocV[3].x === 14 && ocV[3].y === 132, 'occupied：跳过格后第一行 3 项 → 第 4 项换行 (14,132)，实际 (' + ocV[3].x + ',' + ocV[3].y + ')')
+// 无 occupied 时结果与旧版一致（首格不被跳过）
+const noOccV = O.organize(items8, 412, 700, camV)
+check(noOccV[0].x === 14 && noOccV[0].y === 16, '无 occupied：首格正常排布 (14,16)')
+// 横屏 occupied：相机 (0,0,1)，x0=-128, y0=434（首列首格），第二格沿画布 +x = (x0+100, 434)
+const camH = { x: 0, y: 0, zoom: 1, rotation: 90 }
+const ocH = O.organize(items8, 412, 700, camH, [{ x: -128, y: 434 }])
+check(ocH.length === 8 && ocH.every(function (p) { return !(p.x === -128 && p.y === 434) }),
+  '横屏 occupied：条目数不变且不占用锁定文件格子 (-128,434)')
+check(ocH[0].x === -28 && ocH[0].y === 434, '横屏 occupied：首格被跳过 → 第一项 (x0+100, 434)，实际 (' + ocH[0].x + ',' + ocH[0].y + ')')
+
 // ── 7. 旋转保持位置 = 中心不变（防回归：曾误加相机位移把图标移出视野）──
 // 屏幕中心 (w/2, h/2) 在 rotation=0 与 rotation=90 下对应**同一世界点** → 旋转无需动相机。
 // 注意：中心不变 ≠ 全部图标不丢——视口矩形旋转 90° 后覆盖的世界区域宽高互换，

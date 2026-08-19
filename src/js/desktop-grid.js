@@ -64,33 +64,51 @@ App.DesktopGrid = (function () {
   }
 
   // 放置避让：moving（移动组，世界坐标已吸附）放期望位，冲突的 statics 让位到最近空位。
-  // 返回 { name: {x,y} }（移动组 + 被挤开的静止图标）
-  /** @param {Array<{name: string, x: number, y: number}>} moving @param {Array<{name: string, x: number, y: number}>} statics @returns {Record<string, Position2D>} */
-  function resolvePlacement(moving, statics) {
-    /** @type {Set<string>} */
-    const occupied = new Set()
-    moving.forEach(function (m) {
-      const c = worldToCell(m.x, m.y)
-      occupied.add(c.cx + ',' + c.cy)
-    })
-
+  // immovable（statics 中不可让位的名字集合，如被 Viewer 锁定的文件）为「钉子户」：
+  // 先占位后不可让位——移动组与钉子户冲突时**移动组让位**（Windows 式占用语义，
+  // 防止整理/拖动把锁定文件顶开，造成图标与 Viewer 预览窗口分家）。
+  // 返回 { name: {x,y} }（移动组 + 被挤开的静止图标 + 钉子户原位）
+  /** @param {Array<{name: string, x: number, y: number}>} moving @param {Array<{name: string, x: number, y: number}>} statics @param {Array<string> | Set<string>} [immovable] @returns {Record<string, Position2D>} */
+  function resolvePlacement(moving, statics, immovable) {
+    const immovableSet = new Set(immovable || [])
+    /** @type {Map<string, string>} */
+    const occupied = new Map()   // cellKey → name（先占者优先）
     /** @type {Record<string, Position2D>} */
     const result = {}
+
+    // 1. 钉子户（锁定文件）先占位：不可让位，冲突时移动组/普通静止让位。
+    //    保持**原始世界坐标**（钉子户可能不在网格点上——Viewer 预览窗口自由拖动位），
+    //    不能 cellToWorld 吸附，否则钉子户自身被挪动（分家）
+    statics.forEach(function (s) {
+      if (!immovableSet.has(s.name)) return
+      const c = worldToCell(s.x, s.y)
+      occupied.set(c.cx + ',' + c.cy, s.name)
+      result[s.name] = { x: s.x, y: s.y }
+    })
+    // 2. 移动组放期望位；与钉子户（或先到的移动组）冲突 → 移动组让位到最近空位
     moving.forEach(function (m) {
       const c = worldToCell(m.x, m.y)
-      result[m.name] = cellToWorld(c.cx, c.cy)
+      const key = c.cx + ',' + c.cy
+      if (occupied.has(key)) {
+        const free = findFreeCell(c.cx, c.cy, new Set(occupied.keys()))
+        occupied.set(free.cx + ',' + free.cy, m.name)
+        result[m.name] = cellToWorld(free.cx, free.cy)
+      } else {
+        occupied.set(key, m.name)
+        result[m.name] = cellToWorld(c.cx, c.cy)
+      }
     })
-
-    const taken = new Set(occupied)
+    // 3. 普通静止图标：被占 → 让位到最近空位；否则原地
     statics.forEach(function (s) {
+      if (immovableSet.has(s.name)) return
       const c = worldToCell(s.x, s.y)
       const key = c.cx + ',' + c.cy
-      if (taken.has(key)) {
-        const free = findFreeCell(c.cx, c.cy, taken)
-        taken.add(free.cx + ',' + free.cy)
+      if (occupied.has(key)) {
+        const free = findFreeCell(c.cx, c.cy, new Set(occupied.keys()))
+        occupied.set(free.cx + ',' + free.cy, s.name)
         result[s.name] = cellToWorld(free.cx, free.cy)
       } else {
-        taken.add(key)
+        occupied.set(key, s.name)
         result[s.name] = cellToWorld(c.cx, c.cy)
       }
     })

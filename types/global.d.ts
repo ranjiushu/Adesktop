@@ -629,7 +629,7 @@ interface DesktopGrid {
   worldToCell(x: number, y: number): CellCoord
   cellToWorld(cx: number, cy: number): Position2D
   findFreeCell(cx: number, cy: number, taken: Set<string>): CellCoord
-  resolvePlacement(moving: Array<{ name: string; x: number; y: number }>, statics: Array<{ name: string; x: number; y: number }>): Record<string, Position2D>
+  resolvePlacement(moving: Array<{ name: string; x: number; y: number }>, statics: Array<{ name: string; x: number; y: number }>, immovable?: Array<string> | Set<string>): Record<string, Position2D>
 }
 
 /** 桌面选择（App.DesktopSelection）：命中测试 + 选中集合纯函数 */
@@ -720,7 +720,8 @@ interface DesktopOrganize {
     entries: Array<{ name: string; isDir: boolean }>,
     viewportW: number,
     viewportH: number,
-    camera: { x: number; y: number; zoom: number; rotation: number }
+    camera: { x: number; y: number; zoom: number; rotation: number },
+    occupiedWorldPoints?: Array<{ x: number; y: number }> | null
   ): Array<{ name: string; x: number; y: number }>
   GRID_W: number
   GRID_H: number

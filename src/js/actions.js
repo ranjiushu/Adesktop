@@ -83,9 +83,13 @@ App.Actions = (function () {
     const home = App.HomeStore && typeof App.HomeStore.load === 'function'
       ? App.HomeStore.load(C.state.rootId, rot) : null
     const anchor = App.DesktopOrganize.anchorFromHome(home, rot)
-    const entries = C.state.items.map(function (it) {
-      return { name: it.name, isDir: it.isDir }
-    })
+    // 布局数据文件（.adesktop-layout.json）不参与整理（渲染时同样过滤——否则它被排进
+    // 网格（json 组恰在 html/md 之间）但不可见 → 网格留空位，2026-08-19 真机反馈）
+    const entries = C.state.items
+      .filter(function (it) { return it.name !== C.LAYOUT_FILE })
+      .map(function (it) {
+        return { name: it.name, isDir: it.isDir }
+      })
     const placed = App.DesktopOrganize.organize(
       entries, C.viewportWidth(), C.viewportHeight(), anchor)
     placed.forEach(function (p) {

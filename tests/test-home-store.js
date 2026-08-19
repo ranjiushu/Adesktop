@@ -103,6 +103,56 @@ check(H.load('rootA').home.x === 123.5, '旧数据被首见 root 吸收')
 check(!store['desktop.home.v1'], '迁移后删除旧 key（不再共享）')
 check(H.migrateLegacy('rootA') === false, 'migrateLegacy 无旧数据 → false（幂等）')
 
+// ── [横屏槽位] rotation=90 读写 landscape*，与竖屏槽位互不覆盖 ──
+store = {}
+const CAM_PORTRAIT = { x: 111, y: 222, zoom: 1.1 }
+const CAM_LANDSCAPE = { x: 333, y: 444, zoom: 2.2 }
+// 竖屏存 home，横屏存 home
+check(H.saveHome(CAM_PORTRAIT, 'rootA') === true, '竖屏槽位 saveHome 成功')
+check(H.saveHome(CAM_LANDSCAPE, 'rootA', 90) === true, '横屏槽位 saveHome 成功（rotation=90）')
+// 各自读到自己的
+let dp = H.load('rootA')
+let dl = H.load('rootA', 90)
+check(dp && dp.home && dp.home.x === 111, '竖屏 load 读顶层 home（111）')
+check(dl && dl.home && dl.home.x === 333, '横屏 load(rotation=90) 读 landscapeHome（333）')
+check(!dp.landscapeHome, '竖屏 load 结果不含横屏字段')
+// 横屏数据确实写入 landscapeHome（结构检查）
+let raw = JSON.parse(store['desktop.home.rootA.v1'])
+check(raw.version === 2 && raw.home.x === 111 && raw.landscapeHome.x === 333,
+  '数据结构 version 2：home 与 landscapeHome 并存')
+// 只存竖屏 → 横屏 load null（各槽位独立）
+store = {}
+check(H.saveHome(CAM_PORTRAIT, 'rootA') === true, '仅竖屏槽位 saveHome')
+check(H.load('rootA', 90) === null, '横屏槽位无数据 → load(rotation=90) null')
+// 只存横屏 → 竖屏 load null
+store = {}
+check(H.saveFallback(CAM_LANDSCAPE, 'rootA', 90) === true, '仅横屏槽位 saveFallback(rotation=90)')
+check(H.load('rootA') === null, '竖屏槽位无数据 → load null')
+check(H.load('rootA', 90).fallback.x === 333, '横屏槽位独立读到 fallback')
+// 横屏 fallback 与竖屏 home 并存互不覆盖
+store = {}
+check(H.saveHome(CAM_PORTRAIT, 'rootA') === true, '竖屏 home')
+check(H.saveFallback(CAM_LANDSCAPE, 'rootA', 90) === true, '横屏 fallback')
+raw = JSON.parse(store['desktop.home.rootA.v1'])
+check(raw.home.x === 111 && raw.landscapeFallback.x === 333,
+  '竖屏 home 与横屏 fallback 并存互不覆盖')
+// 再次写竖屏不碰横屏
+check(H.saveHome({ x: 555, y: 0, zoom: 1 }, 'rootA') === true, '更新竖屏 home')
+dl = H.load('rootA', 90)
+check(dl.fallback.x === 333, '更新竖屏后横屏 fallback 保留')
+
+// ── [兼容] version 1 旧数据（无 landscape 字段）读作竖屏槽位 ──
+store = {}
+store['desktop.home.rootA.v1'] = JSON.stringify({ version: 1, home: CAM })
+dp = H.load('rootA')
+check(dp && dp.home && dp.home.x === 123.5, 'version 1 旧数据 load 读竖屏槽位')
+check(H.load('rootA', 90) === null, 'version 1 旧数据横屏槽位为空')
+// 旧数据上写横屏 → 升级 version 2 且竖屏保留
+check(H.saveHome(CAM_LANDSCAPE, 'rootA', 90) === true, '旧数据上写横屏成功')
+raw = JSON.parse(store['desktop.home.rootA.v1'])
+check(raw.version === 2 && raw.home.x === 123.5 && raw.landscapeHome.x === 333,
+  '旧数据升级 version 2：竖屏保留 + 横屏新增')
+
 if (failures > 0) {
   console.error('  [FAIL] home-store 测试 ' + failures + ' 项失败')
   process.exit(1)

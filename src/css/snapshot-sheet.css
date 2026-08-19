@@ -1,0 +1,489 @@
+/* 演示快照面板：底栏上滑呼出 */
+.snapshot-sheet {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 650;
+  pointer-events: none;
+}
+
+.snapshot-sheet-overlay {
+  position: absolute;
+  /* 从顶栏下方开始：header 保持可交互（顶栏菜单「设为 Home」等）不被遮罩盖住 */
+  top: calc(var(--header-height) + var(--safe-top, 0px));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.35);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: none;
+}
+
+.snapshot-sheet-overlay-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.snapshot-sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 70vh;
+  max-height: 70vh;
+  background: var(--color-surface);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.16);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  pointer-events: auto;
+  padding-bottom: var(--safe-bottom, 0px);
+}
+
+.snapshot-sheet-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+  border-bottom: none;
+  flex: none;
+}
+
+.snapshot-sheet-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* 分组标签栏：横排可滚动，点击/左右滑动切换分组 */
+.snapshot-tabs {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--color-border);
+  min-height: 42px;
+}
+
+.snapshot-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.snapshot-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 0 14px;
+  height: 42px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-tab::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2.5px;
+  border-radius: 0;
+  background: var(--color-accent);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.snapshot-tab-active {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.snapshot-tab-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.snapshot-tab-count {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border-radius: 0;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+
+.snapshot-tab-active .snapshot-tab-count {
+  background: rgba(59,130,246,0.12);
+  color: var(--color-accent);
+}
+
+.snapshot-tab-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  align-self: center;
+  margin-left: 2px;
+  border: none;
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-tab-add:active {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.snapshot-sheet-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-sheet-menu-btn:active {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.snapshot-menu {
+  position: absolute;
+  top: 44px;
+  right: 12px;
+  min-width: 180px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+  z-index: 10;
+  overflow: hidden;
+}
+
+.snapshot-menu-hidden {
+  display: none;
+}
+
+.snapshot-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-menu-item + .snapshot-menu-item {
+  border-top: 1px solid var(--color-border);
+}
+
+.snapshot-menu-item:active {
+  background: var(--color-bg);
+}
+
+.snapshot-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.snapshot-empty {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.snapshot-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 字母编号徽标（页代码）：随快照稳定，拖动排序不改变；当前页高亮强调 */
+.snapshot-code {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
+  background: var(--color-border);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.snapshot-item.snapshot-current .snapshot-code {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.snapshot-item.snapshot-home {
+  background: rgba(59,130,246,0.06);
+}
+
+.snapshot-item.snapshot-current {
+  color: var(--color-accent);
+}
+
+.snapshot-item.snapshot-home .snapshot-name::before {
+  content: 'Home · ';
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.snapshot-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--color-text-secondary);
+  cursor: grab;
+  border-radius: 0;
+  flex: none;
+}
+
+.snapshot-drag-handle:active {
+  background: var(--color-bg);
+  cursor: grabbing;
+}
+
+.snapshot-name {
+  flex: 1;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snapshot-meta {
+  flex: none;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.snapshot-item-dragging {
+  background: var(--color-bg);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 10;
+}
+
+.snapshot-item-target {
+  opacity: 0.55;
+}
+
+.snapshot-list-dragging .snapshot-item {
+  transition: transform 0.18s ease;
+}
+
+/* 被拖项实时跟手：不受避让过渡影响（否则每次 touchmove 更新都滞后 0.18s） */
+.snapshot-list-dragging .snapshot-item-dragging {
+  transition: none;
+}
+
+/* 面板关闭条 */
+.snapshot-sheet-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px calc(8px + var(--safe-bottom, 0px));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.snapshot-sheet-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-sheet-close-btn:active {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+/* 分组标题（旧版同列表渲染，保留兼容样式；当前 Tab 模式不再使用） */
+.snapshot-group {
+  flex: none;
+}
+
+.snapshot-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 6px;
+  background: var(--color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.snapshot-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.snapshot-group-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-group-menu-btn:active {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.snapshot-group-body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 操作模式：行选中高亮 + 可拖动整行 */
+.snapshot-item.op-selected {
+  background: rgba(59,130,246,0.10);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.snapshot-item.op-selected .snapshot-name {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.snapshot-list.op-mode .snapshot-item {
+  touch-action: pan-y;
+}
+
+/* 移动分组选择浮层（面板内覆盖） */
+.snapshot-move-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--color-surface);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+.snapshot-move-title {
+  padding: 14px 16px 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.snapshot-move-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.snapshot-move-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-move-item + .snapshot-move-item {
+  border-top: 1px solid var(--color-border);
+}
+
+.snapshot-move-item:active {
+  background: var(--color-bg);
+}
+
+.snapshot-move-item .snapshot-move-count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.snapshot-move-cancel {
+  flex: none;
+  margin: 8px 16px calc(8px + var(--safe-bottom, 0px));
+  padding: 11px 0;
+  border: none;
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-move-cancel:active {
+  background: var(--color-border);
+  color: var(--color-text);
+}

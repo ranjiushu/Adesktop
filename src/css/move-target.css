@@ -1,0 +1,66 @@
+/* 移动目标选择器（Morph FAB「移动」弹出，移植自 LexiCull 移动功能）
+   结构: dialog-overlay（dialog.css 通用）+ 面包屑 + 文件夹列表 + 底部操作
+   交互: 点文件夹项进入子目录；点面包屑返回上级；底部「移动到此处」执行
+   守卫: 目标 = 源所在目录时按钮禁用（显示「已在目标位置」） */
+.move-target-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 72vh;
+  width: var(--dialog-width);
+}
+.move-crumb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding-bottom: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+.move-crumb {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 0;
+  color: var(--color-accent);
+  font-size: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.move-crumb:active { background: var(--color-bg); }
+.move-crumb-sep { color: var(--color-text-secondary); margin: 0 1px; }
+.move-target-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 140px;
+  max-height: 44vh;
+  user-select: none;
+}
+.move-dir-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  height: 46px;
+  padding: 0 var(--space-sm);
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.move-dir-row:active { background: var(--color-bg); }
+.move-dir-row svg { color: var(--color-text-secondary); flex-shrink: 0; }
+.move-empty {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+/* 按钮样式已泛化至 dialog.css（文字式 + pair 两端对齐 + aria-disabled 禁用态） */

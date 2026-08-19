@@ -265,6 +265,75 @@ check(cb.x === 216, 'clampToBounds zoom=2 越界 → 216（416-400/2）')
 cb = C.clampToBounds(C.create(0, 0, 1.5), 416, 600, 400, 500)
 check(cb.zoom === 1.5, 'clampToBounds 不改变 zoom')
 
+// ── rotation=90（旋转画布）──
+// 视口 360×640，画布绕视口中心顺时针旋转 90°
+const RVW = 360
+const RVH = 640
+const rcam = C.create(0, 0, 1, 90)
+// create 透传 rotation
+check(rcam.rotation === 90, 'create 透传 rotation=90')
+check(C.create(0, 0, 1).rotation === 0, 'create 默认 rotation=0')
+check(C.create(0, 0, 1, 45).rotation === 0, 'create 非法 rotation → 0')
+
+// transform：旋转后世界 (0,0)（未旋转时屏幕左上角）绕中心顺时针 90°
+//   → 屏幕 (vh/2 + vw/2, vh/2 - vw/2) = (500, 140)（camera 在原点 zoom=1）
+const rt = C.transform(rcam, RVW, RVH)
+check(approx(rt.tx, 500) && approx(rt.ty, 140), 'transform rotation=90 绕中心补偿 (500,140)')
+check(rt.rotation === 90, 'transform 透传 rotation')
+
+// 旋转后世界 (0,0) → 屏幕 (500,140)：视口右上角方向（绕中心顺时针转 90° 左上角→右上）
+const ws90 = C.worldToScreen(0, 0, rcam, RVW, RVH)
+check(approx(ws90.x, 500) && approx(ws90.y, 140), 'worldToScreen rotation=90 世界原点 → (500,140)')
+
+// screenToWorld / worldToScreen 互逆（rotation=90）
+const rcam2 = C.create(100, 50, 2, 90)
+let invOk = true
+for (let i = 0; i < 50; i++) {
+  const sx = 20 + Math.random() * (RVW - 40)
+  const sy = 20 + Math.random() * (RVH - 40)
+  const w = C.screenToWorld(sx, sy, rcam2, RVW, RVH)
+  const s = C.worldToScreen(w.x, w.y, rcam2, RVW, RVH)
+  if (Math.abs(s.x - sx) > 1e-6 || Math.abs(s.y - sy) > 1e-6) invOk = false
+}
+check(invOk, 'rotation=90 screenToWorld/worldToScreen 互逆（随机采样 50 点）')
+
+// 视口中心不随旋转移动：屏幕中心 = 世界中心
+const cw = C.screenToWorld(RVW / 2, RVH / 2, rcam2, RVW, RVH)
+const cs = C.worldToScreen(cw.x, cw.y, rcam2, RVW, RVH)
+check(approx(cs.x, RVW / 2) && approx(cs.y, RVH / 2), 'rotation=90 视口中心不动点')
+
+// panBy rotation=90：屏幕右拖 dx=10 → 相机 y 增（世界 +y 指向屏幕 +x 的逆方向？验证跟手）
+// 屏幕右拖 10px，手指下世界点应保持不动
+const pStart = C.screenToWorld(100, 100, rcam2, RVW, RVH)
+const rpan = C.panBy(rcam2, 10, 0)
+const pAfter = C.screenToWorld(110, 100, rpan, RVW, RVH)
+check(approx(pAfter.x, pStart.x) && approx(pAfter.y, pStart.y), 'panBy rotation=90 屏幕右拖 → 手指下世界点不动')
+check(rpan.rotation === 90, 'panBy 透传 rotation')
+
+// pinchBy rotation=90：锚点世界坐标不动
+const apBefore = C.screenToWorld(150, 200, rcam2, RVW, RVH)
+const rpinch = C.pinchBy(rcam2, 100, 200, 150, 200, RVW, RVH)
+const apAfter = C.screenToWorld(150, 200, rpinch, RVW, RVH)
+check(approx(apBefore.x, apAfter.x) && approx(apBefore.y, apAfter.y), 'pinchBy rotation=90 锚点世界坐标不动')
+check(rpinch.rotation === 90, 'pinchBy 透传 rotation')
+
+// clampToBounds 透传 rotation
+const rcb = C.clampToBounds(rcam2, 1000, 1000, RVW, RVH)
+check(rcb.rotation === 90, 'clampToBounds 透传 rotation')
+
+// lerp 透传 rotation（动画期间保持旋转态）
+const rl = C.lerp(rcam2, C.create(0, 0, 1), 0.5)
+check(rl.rotation === 90, 'lerp 透传起点 rotation')
+const rlc = C.lerpCentered(rcam2, C.create(0, 0, 1), 0.5, RVW, RVH)
+check(rlc.rotation === 90, 'lerpCentered 透传起点 rotation')
+
+// applyTo 生成旋转 transform 字符串
+const fakeEl = { style: {} }
+C.applyTo(rcam, fakeEl, RVW, RVH)
+check(fakeEl.style.transform.indexOf('rotate(90deg)') >= 0, 'applyTo rotation=90 含 rotate(90deg)')
+C.applyTo(C.create(0, 0, 1), fakeEl, RVW, RVH)
+check(fakeEl.style.transform.indexOf('rotate') < 0, 'applyTo rotation=0 无 rotate')
+
 if (failures > 0) {
   console.error('  [FAIL] desktop-camera 纯函数测试 ' + failures + ' 项失败')
   process.exit(1)

@@ -13,7 +13,7 @@
   font-size: 13px;
   line-height: 1.4;
   padding: 8px 14px;
-  border-radius: 6px;
+  border-radius: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -24,4 +24,38 @@
 .toast.toast-visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* 带操作按钮的吐司：flex 布局，按钮右对齐 */
+.toast.toast-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 14px;
+  pointer-events: auto;
+}
+
+.toast-action .toast-msg {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast-action-btn {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--color-accent, #3b82f6);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toast-action-btn:active {
+  background: rgba(59, 130, 246, 0.16);
 }

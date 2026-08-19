@@ -1,4 +1,4 @@
-// 冒烟测试：验证 dist/desktop.bundle.html 存在且结构正确
+// 冒烟测试：验证 dist/adesktop.bundle.html 存在且结构正确
 // 用法: node test-smoke.js [项目路径]   （由 run-tests.sh 调用）
 'use strict'
 
@@ -6,7 +6,7 @@ const fs = require('fs')
 const path = require('path')
 
 const PROJECT = process.argv[2] || path.join(__dirname, '..')
-const BUNDLE = path.join(PROJECT, 'dist', 'desktop.bundle.html')
+const BUNDLE = path.join(PROJECT, 'dist', 'adesktop.bundle.html')
 
 let failures = 0
 function check(cond, msg) {

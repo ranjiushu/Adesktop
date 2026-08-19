@@ -36,7 +36,8 @@ const bridgeCalls = []
 let navFallback = 0
 sandbox.window.FileBridge = {
   vibrate: function (ms) { bridgeCalls.push(['vibrate', ms]) },
-  requestRootAccess: function () { bridgeCalls.push(['requestRootAccess']) }
+  requestRootAccess: function () { bridgeCalls.push(['requestRootAccess']) },
+  requestDesktopDir: function () { bridgeCalls.push(['requestDesktopDir']) }
 }
 sandbox.navigator.vibrate = function () { navFallback++ }
 
@@ -57,6 +58,12 @@ check(ok === true, 'requestRootAccess 返回 true')
 check(bridgeCalls.length === 2 && bridgeCalls[1][0] === 'requestRootAccess',
   'requestRootAccess 调用 window.FileBridge.requestRootAccess')
 
+// 3. requestDesktopDir 走 FileBridge 且返回 true
+const dirOk = bridge.requestDesktopDir()
+check(dirOk === true, 'requestDesktopDir 返回 true')
+check(bridgeCalls.length === 3 && bridgeCalls[2][0] === 'requestDesktopDir',
+  'requestDesktopDir 调用 window.FileBridge.requestDesktopDir')
+
 // ── 无桥环境：浏览器预览降级 ──
 const bare = {
   App: {},
@@ -72,7 +79,10 @@ vm.runInContext(source, bare)
 // 3. 无桥时 requestRootAccess 返回 false（App.Actions 据此提示环境不支持）
 check(bare.window.App.bridge.requestRootAccess() === false, '无桥环境 requestRootAccess 返回 false')
 
-// 4. 无桥时 vibrate 降级 navigator.vibrate 不抛异常
+// 4. 无桥时 requestDesktopDir 返回 false
+check(bare.window.App.bridge.requestDesktopDir() === false, '无桥环境 requestDesktopDir 返回 false')
+
+// 5. 无桥时 vibrate 降级 navigator.vibrate 不抛异常
 let navCalled = false
 bare.navigator.vibrate = function () { navCalled = true }
 bare.window.App.bridge.vibrate(15)

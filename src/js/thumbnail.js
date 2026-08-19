@@ -14,34 +14,41 @@
  * 依赖: namespace.js, file-api.js, shortcut.js
  * 导出: App.Thumbnail
  */
+// @ts-check
 'use strict'
 
 App.Thumbnail = (function () {
   // path -> { state: 'pending'|'ready'|'failed', uri, waiters: [{ok,fail}] }
+  /** @type {Record<string, ThumbnailEntry>} */
   let entries = {}
   // path -> 同上（快捷方式图标缓存，与缩略图分池）
+  /** @type {Record<string, ThumbnailEntry>} */
   let shortcutEntries = {}
 
   // 可缩略图类型：图片（采样解码，含 SVG 渲染预览 / GIF 首帧）+ 视频（首帧提取）。
   // 桥层 FileBridge.thumb 统一处理采样 / 帧提取 / 磁盘缓存（内存可控）。
+  /** @param {string} kind @returns {boolean} */
   function canThumbnail(kind) {
     return kind === 'image' || kind === 'video'
   }
 
+  /** @param {string} path @param {string} name @param {string} kind @param {(uri: string) => void} onReady @param {() => void} onFallback */
   function request(path, name, kind, onReady, onFallback) {
     const e = entries[path]
     if (e) {
-      if (e.state === 'ready') { onReady(e.uri); return }
+      if (e.state === 'ready') { onReady(/** @type {string} */ (e.uri)); return }
       if (e.state === 'failed') { onFallback(); return }
       // pending：合并 waiter（同一文件并发请求共享一次生成）
       e.waiters.push({ ok: onReady, fail: onFallback })
       return
     }
+    /** @type {ThumbnailEntry} */
     const entry = { state: 'pending', uri: null, waiters: [{ ok: onReady, fail: onFallback }] }
     entries[path] = entry
     generate(path, entry)
   }
 
+  /** @param {string} path @param {ThumbnailEntry} entry */
   function generate(path, entry) {
     App.FileAPI.thumb(path).then(function (uri) {
       // 解码验证：Image onload = 稳定可解码；onerror = 无法作为缩略图
@@ -70,23 +77,26 @@ App.Thumbnail = (function () {
 
   // 快捷方式图标：读 .desktop JSON → 提取内嵌 base64 icon → 解码验证 → onReady。
   // 与缩略图同一「渐进式 + pending 去重」模型；失败回退类型图标。
+  /** @param {string} path @param {(uri: string) => void} onReady @param {() => void} onFallback */
   function requestShortcutIcon(path, onReady, onFallback) {
     const e = shortcutEntries[path]
     if (e) {
-      if (e.state === 'ready') { onReady(e.uri); return }
+      if (e.state === 'ready') { onReady(/** @type {string} */ (e.uri)); return }
       if (e.state === 'failed') { onFallback(); return }
       e.waiters.push({ ok: onReady, fail: onFallback })
       return
     }
+    /** @type {ThumbnailEntry} */
     const entry = { state: 'pending', uri: null, waiters: [{ ok: onReady, fail: onFallback }] }
     shortcutEntries[path] = entry
     generateShortcutIcon(path, entry)
   }
 
+  /** @param {string} path @param {ThumbnailEntry} entry */
   function generateShortcutIcon(path, entry) {
     App.FileAPI.read(path).then(function (content) {
       const meta = App.Shortcut.parseShortcut(content)
-      const uri = meta.icon
+      const uri = meta.type === 'application' ? meta.icon : null
       if (!uri || typeof uri !== 'string' || uri.indexOf('data:image/') !== 0) {
         throw new Error('快捷方式无图标')
       }
@@ -106,6 +116,7 @@ App.Thumbnail = (function () {
     })
   }
 
+  /** @type {Thumbnail} */
   return {
     canThumbnail: canThumbnail,
     request: request,

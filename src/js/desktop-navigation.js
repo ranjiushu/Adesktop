@@ -22,6 +22,12 @@ App.DesktopNavigation = (function () {
   // ── 打开：文件夹进入 / 文件打开（FileOpener 分派内部查看器 / 外部应用 / 快捷方式）──
   function openItem(full) {
     if (!full) return
+    // 回收站：全盘根实体或 all-files 桌面空间的虚拟图标（items 不含）——直接进入
+    if (C.isTrashPath(full)) {
+      App.DesktopRender.clearSelection()
+      enterFolder(full)
+      return
+    }
     const item = C.state.items.filter(function (it) {
       return C.fullPath(it.name) === full
     })[0]
@@ -88,9 +94,10 @@ App.DesktopNavigation = (function () {
   }
 
   // 退回到上级目录（父目录，压栈导航——与历史后退区分；Windows「向上」语义）
+  // all-files 模式：桌面（desktopRoot）可上到全盘根（''，folder 容器）；全盘根无上级
   function goUp() {
     App.DesktopBrowseMode.exitTempMode()
-    if (!C.isFolderView()) return false
+    if (!canGoUp()) return false
     const target = App.DesktopNav.parent(C.state.curPath)
     C.nav = App.DesktopNav.enter(C.nav, target)
     C.state.curPath = target
@@ -123,21 +130,51 @@ App.DesktopNavigation = (function () {
 
   function canGoBack() { return App.DesktopNav.canBack(C.nav) }
   function canGoForward() { return App.DesktopNav.canForward(C.nav) }
-  function canGoUp() { return C.isFolderView() }
+  // 上级可用：folder 内（非全盘根）可上；all-files 桌面空间可上到全盘根（资源管理器式）
+  function canGoUp() {
+    if (C.isFolderView()) return C.state.curPath !== ''
+    return C.state.mode === 'all-files'
+  }
   function getCurPath() { return C.state.curPath }
 
   // ── Home：空间锚点（位置快照 + 默认视角）──
   // 长按底栏 Home = 记录当前相机为快照；点按 Home = 回快照（无则默认视角，再无则出厂 (0,0,1)）。
   // 默认视角 = 用户经 Drawer「设为默认视角」设置的兜底视角。仅桌面空间（根目录）有意义。
+  // rotation 透传：竖屏（0）/横屏（90）各存各的槽位，切换画布方向后 Home 回对应槽位。
+  // 长按底栏 Home = 添加快照（Home 与快照彻底分离：快照只是快照，不影响 Home 锚点）。
+  // Home 锚点由顶栏「设为 Home」独立设置（HomeStore）。
   function captureHome() {
     if (C.isFolderView()) return false
+    if (App.SnapshotStore && typeof App.SnapshotStore.create === 'function') {
+      const s = App.SnapshotStore.create(C.camera, C.state.rootId)
+      if (!s) {
+        if (App.toast && typeof App.toast.show === 'function') App.toast.show('快照保存失败')
+        return false
+      }
+      if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+      if (App.toast && typeof App.toast.show === 'function') {
+        App.toast.show('已记录快照：' + s.name)
+      }
+      if (App.SnapshotSheet && typeof App.SnapshotSheet.refresh === 'function') {
+        App.SnapshotSheet.refresh()
+      }
+      return true
+    }
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('快照功能不可用')
+    return false
+  }
+
+  // 设为 Home（顶栏菜单入口）：把当前相机设为 Home 锚点（HomeStore 独立存储，
+  // 与快照列表完全解耦）。
+  function setHome() {
+    if (C.isFolderView()) return false
     const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveHome(cam, C.state.rootId)) {
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('Home 视角保存失败')
+    if (!App.HomeStore || !App.HomeStore.saveHome(cam, C.state.rootId, C.camera.rotation)) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('设为 Home 失败')
       return false
     }
     if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
-    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已记录 Home 视角')
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已设为 Home')
     if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
       App.BottomBar.updateHomeState()
     }
@@ -148,7 +185,7 @@ App.DesktopNavigation = (function () {
   function captureDefaultView() {
     if (C.isFolderView()) return false
     const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
-    if (!App.HomeStore.saveFallback(cam, C.state.rootId)) {
+    if (!App.HomeStore.saveFallback(cam, C.state.rootId, C.camera.rotation)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('默认视角保存失败')
       return false
     }
@@ -157,17 +194,26 @@ App.DesktopNavigation = (function () {
     return true
   }
 
-  // 回到 Home：快照优先，其次默认视角，最后出厂 (0,0,1)。
-  // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera——
-  // 从文件夹返回仍恢复进文件夹前的视角，Home 只负责「现在」的空间锚点。
+  // 回到 Home：优先使用快照列表的 Home 位（由插入位置 top/bottom 决定）；
+  // 无快照时回退到旧版 HomeStore；再无则出厂 (0,0,1)。
+  // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera。
+  // rotation 透传：create 第四参确保目标相机保持当前旋转态。
+  // 回到 Home：Home 锚点独立于快照列表（HomeStore.home > fallback > 出厂）。
+  // 快照列表是纯演示快照，与 Home 无任何关联。
   function goHome() {
     if (C.isFolderView()) return
-    let target = App.DesktopCamera.create()
-    const data = App.HomeStore.load(C.state.rootId)
-    if (data && data.home) {
-      target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom)
-    } else if (data && data.fallback) {
-      target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom)
+    const rot = C.camera.rotation
+    let target = App.DesktopCamera.create(0, 0, 1, rot)
+    let found = false
+    if (App.HomeStore) {
+      const data = App.HomeStore.load(C.state.rootId, rot)
+      if (data && data.home) {
+        target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom, rot)
+        found = true
+      } else if (data && data.fallback) {
+        target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom, rot)
+        found = true
+      }
     }
     animateCameraTo(target)
   }
@@ -190,7 +236,13 @@ App.DesktopNavigation = (function () {
   // （无分段断续）；zoom 不变退化为与 lerp 一致（纯平移动画不受影响）。
   function animateCameraTo(target, durationMs) {
     cancelCameraAnim()
-    const from = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
+    const from = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom, rotation: C.camera.rotation }
+    // 浅拷贝：避免 mutate 调用方传入的 target 对象（goHome 等复用场景安全）
+    const raw = target || App.DesktopCamera.create()
+    const tgt = { x: raw.x, y: raw.y, zoom: raw.zoom, rotation: raw.rotation }
+    // 目标相机透传当前 rotation（Home 复位只动位置/缩放，画布旋转状态保留；
+    // 否则动画中途 rotation 变 0，画布闪回正）
+    if (typeof tgt.rotation !== 'number') tgt.rotation = C.camera.rotation
     const dur = (durationMs && durationMs > 0) ? durationMs : HOME_ANIM_MS
     const vw = C.viewportWidth()
     const vh = C.viewportHeight()
@@ -201,7 +253,7 @@ App.DesktopNavigation = (function () {
       const k = Math.min(1, (C._now() - t0) / dur)
       // lerpCentered 收真实时间比例 k（内部统一缓动 + 按 k 分段）——
       // 不得预缓动传入，否则段边界错位致平移段被压缩（真机「震感」）
-      const c = App.DesktopCamera.lerpCentered(from, target, k, vw, vh)
+      const c = App.DesktopCamera.lerpCentered(from, tgt, k, vw, vh)
       C.camera = c
       if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
         App.DesktopGesture.setCamera(C.camera)
@@ -210,6 +262,34 @@ App.DesktopNavigation = (function () {
       C._animRaf = C._raf(frame)
     }
     C._animRaf = C._raf(frame)
+  }
+
+  // 一览全部文件（双击底栏 Home 触发）：fit-bounds——全部图标包围盒中心 + 当前方向
+  // 最大可见 zoom（zoom 最大化：「尽可能多的文件出现在屏幕里面」）。
+  // 位置来源 = C.positions 中**当前 items 的 key**（render 已补齐自动排布位置）——
+  // 曾统计全表：历史残留 key（已删/拖走过/跨目录）让包围盒虚大 → zoom 被压小、
+  // 大片无意义空白（2026-08-19 真机反馈）。过滤布局隐藏文件；无文件 → toast 提示；
+  // folder 容器 Home 已禁用（此处防御）。临时视野：不写 Home 快照。
+  /** @returns {boolean} */
+  function fitAllFiles() {
+    if (C.isFolderView()) return false
+    if (!App.DesktopFit || typeof App.DesktopFit.fitCamera !== 'function') return false
+    const pts = []
+    C.state.items.forEach(function (it) {
+      if (it.name === C.LAYOUT_FILE) return
+      const key = (C.state.mode === 'all-files' && it.name === C.state.trashName && !C.isFolderView())
+        ? C.state.trashName : C.fullPath(it.name)
+      const p = C.positions[key]
+      if (p && typeof p.x === 'number' && typeof p.y === 'number') pts.push(p)
+    })
+    const target = App.DesktopFit.fitCamera(
+      pts, C.viewportWidth(), C.viewportHeight(), C.camera.rotation)
+    if (!target) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('桌面暂无文件')
+      return false
+    }
+    animateCameraTo(target)
+    return true
   }
 
   return {
@@ -225,7 +305,9 @@ App.DesktopNavigation = (function () {
     getCurPath: getCurPath,
     captureHome: captureHome,
     captureDefaultView: captureDefaultView,
+    setHome: setHome,
     goHome: goHome,
+    fitAllFiles: fitAllFiles,
     cancelCameraAnim: cancelCameraAnim,
     animateCameraTo: animateCameraTo,
     setRefresh: setRefresh

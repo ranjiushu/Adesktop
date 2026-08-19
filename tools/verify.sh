@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 完整验证门禁（治理移植：LexiCull verify 框架因地制宜版）
 # ═══════════════════════════════════════════════════════════════
-#  Desktop - 提交前验证门禁
+#  Adesktop - 提交前验证门禁
 #  按序执行: env-check → build --strict → minify-bundle → lint → 测试套件 → E2E × 5
 #  任何一步失败则 exit 1。输出机器可读 PASS/FAIL 摘要。
 #  用法: bash tools/verify.sh
@@ -38,7 +38,7 @@ run_step() {
 }
 
 echo "═══════════════════════════════════════════════════"
-echo "  Desktop 提交前验证"
+echo "  Adesktop 提交前验证"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
@@ -60,20 +60,29 @@ run_step "build --strict" bash tools/build-web.sh --strict
 # Step 2: 压缩产物（真机实际加载的版本，E2E 针对它验证）
 if [ -f "$SCRIPT_DIR/node_modules/terser/package.json" ] && [ -f "$SCRIPT_DIR/node_modules/clean-css/package.json" ]; then
   run_step "minify-bundle" node "$SCRIPT_DIR/tools/minify-bundle.js"
-  MIN_BUNDLE="$SCRIPT_DIR/dist/desktop.bundle.min.html"
+  MIN_BUNDLE="$SCRIPT_DIR/dist/adesktop.bundle.min.html"
 else
   echo "  minify-bundle ... SKIP（缺 terser/clean-css，先 npm install）"
   RESULTS+=("SKIP|minify-bundle")
-  MIN_BUNDLE="$SCRIPT_DIR/dist/desktop.bundle.html"
+  MIN_BUNDLE="$SCRIPT_DIR/dist/adesktop.bundle.html"
 fi
 
-# Step 3: 代码质量
+# Step 3: 类型检查（渐进式 @ts-check，tsc --noEmit；缺 typescript 时 SKIP，与 minify 同策略）
+if [ -f "$SCRIPT_DIR/node_modules/typescript/package.json" ]; then
+  run_step "typecheck" npm run typecheck
+else
+  echo "  typecheck ... SKIP（缺 typescript，先 npm install）"
+  RESULTS+=("SKIP|typecheck")
+fi
+
+# Step 4: 代码质量
 run_step "lint" bash tools/lint.sh
 
-# Step 4: 测试套件
+# Step 5: 测试套件
 run_step "tests" bash "$SCRIPT_DIR/tests/run-tests.sh"
+run_step "ui-verify" bash "$SCRIPT_DIR/tools/verify-ui.sh"
 
-# Step 5: E2E 门禁（无头 Chromium 实地验证压缩产物，真机实际加载版本）
+# Step 6: E2E 门禁（无头 Chromium 实地验证压缩产物，真机实际加载版本）
 # 无可用 Chromium 时 SKIP（与 LexiCull 同策略：单次环境缺失不判回归）
 export CHROME_PATH="${CHROME_PATH:-/root/.cache/ms-playwright/chromium_headless_shell-1234/chrome-linux/headless_shell}"
 
@@ -101,6 +110,10 @@ e2e_step "drawer-e2e"      scripts/verify-drawer.js
 e2e_step "bottom-bar-e2e"  scripts/verify-bottom-bar.js
 e2e_step "buildinfo-e2e"   scripts/verify-buildinfo.js
 e2e_step "fab-inspector-e2e" scripts/verify-fab-inspector.js
+e2e_step "rotate-e2e"      scripts/verify-rotate.js
+e2e_step "fit-e2e"         scripts/verify-fit.js
+e2e_step "snapshot-sheet-e2e" scripts/verify-snapshot-sheet.js
+e2e_step "viewer-e2e"         scripts/verify-viewer.js
 
 # ── 摘要 ──
 echo ""

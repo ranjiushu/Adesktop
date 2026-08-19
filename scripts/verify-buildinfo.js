@@ -7,13 +7,13 @@
 //    4. 关闭按钮关闭面板
 //    5. 全程零 pageerror
 //
-//  用法: DESKTOP_BUNDLE=dist/desktop.bundle.min.html node scripts/verify-buildinfo.js
+//  用法: DESKTOP_BUNDLE=dist/adesktop.bundle.min.html node scripts/verify-buildinfo.js
 //  退出码: 0 通过 / 1 失败 / 2 无可用 Chromium
 // ═══════════════════════════════════════════════════════════════
 const { launch } = require('./lib/browser')
 const path = require('path')
 
-const BUNDLE = process.env.DESKTOP_BUNDLE || path.join(__dirname, '..', 'dist', 'desktop.bundle.html')
+const BUNDLE = process.env.DESKTOP_BUNDLE || path.join(__dirname, '..', 'dist', 'adesktop.bundle.html')
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const TAP_GAP = 350
 
@@ -177,6 +177,8 @@ async function main() {
   else fail('返回键关闭弹窗异常: ' + JSON.stringify(modalBack))
 
   // ── 3d2. 点击即复制（「点击谁就复制谁」+ 吐司） ──
+  // 注意：33c5d44 重构后文件详情弹窗不再有 .build-detail-value（grid 键值对精简为
+  // 一行 sizeLine）；可复制元素 = 标题/路径/简介/创建修改时间。E2E 断言跟进新结构。
   const tapCopy = await page.evaluate(() => {
     // 拦截复制实现记录调用（headless 无剪贴板权限，验证参数 + 吐司即可）
     window.__copies = []
@@ -189,7 +191,8 @@ async function main() {
     const ov = document.getElementById('detail-modal-overlay')
     ov.querySelector('.dialog-title').click()   // 点击标题 → 复制文件名
     ov.querySelector('.build-detail-path').click()  // 点击路径 → 复制路径
-    ov.querySelector('.build-detail-value').click() // 点击行数值 → 复制值
+    const desc = ov.querySelector('[data-toast="已复制简介"]')
+    if (desc) desc.click()  // 点击简介 → 复制简介（有 desc 才可点）
     const copies = window.__copies.slice()
     const toastMsg = document.querySelector('.toast') ? document.querySelector('.toast').textContent : ''
     window.App.Dialog.close('detail-modal-overlay')
@@ -206,8 +209,8 @@ async function main() {
   else fail('点击标题复制异常: ' + JSON.stringify(tc1))
   if (tc2 && tc2.text === f0.name && tc2.msg === '已复制路径') pass('点击路径复制路径 + 吐司')
   else fail('点击路径复制异常: ' + JSON.stringify(tc2))
-  if (tc3 && tc3.text === String(f0.lines) && tc3.msg === '已复制') pass('点击行数值复制 + 吐司')
-  else fail('点击行数值复制异常: ' + JSON.stringify(tc3))
+  if (f0.desc && tc3 && tc3.text === f0.desc && tc3.msg === '已复制简介') pass('点击简介复制简介 + 吐司')
+  else fail('点击简介复制异常: ' + JSON.stringify(tc3))
   if (tapCopy.toastMsg && tapCopy.toastMsg.indexOf('已复制') >= 0) pass('吐司提示复制成功: ' + tapCopy.toastMsg)
   else fail('吐司未提示: ' + tapCopy.toastMsg)
 

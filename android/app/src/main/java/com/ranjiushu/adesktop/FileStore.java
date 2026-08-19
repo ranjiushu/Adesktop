@@ -1,8 +1,8 @@
-/* 文件基础操作实现：list/read/write/mkdir/delete/rename（SAF + 私有双模式）。
+/* 文件基础操作实现：list/read/write/mkdir/delete/rename（SAF + File 三模式：全盘/私有共用 File 分支）。
  * 由 FileBridge 门面委托调用；执行体运行于 BridgeContext 的同一单线程 executor。
  * 数据真相在文件系统，本类只做忠实读写，不掺业务逻辑。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import androidx.documentfile.provider.DocumentFile;
 
@@ -71,10 +71,10 @@ class FileStore {
 
     boolean write(String path, String content) throws IOException {
         if (!BridgeContext.isSafeRelPath(path)) throw new IOException("非法路径: " + path);
-        if (ctx.rootUri != null) {
+        if (ctx.isSafMode()) {
             writeSaf(path, content);
         } else {
-            writePrivate(path, content);
+            writeFile(path, content);
         }
         return true;
     }
@@ -102,9 +102,10 @@ class FileStore {
         os.close();
     }
 
-    private void writePrivate(String path, String content) throws IOException {
-        File f = new File(ctx.privateRoot, path);
-        if (!ctx.isUnderPrivateRoot(f)) {
+    /** File 模式写入（全盘/私有共用：活动根 = ctx.fileRoot()）：原子写（临时文件 + rename） */
+    private void writeFile(String path, String content) throws IOException {
+        File f = new File(ctx.fileRoot(), path);
+        if (!ctx.isUnderFileRoot(f)) {
             throw new IOException("非法路径: " + path);
         }
         File parent = f.getParentFile();
@@ -126,7 +127,7 @@ class FileStore {
     boolean mkdir(String path) throws IOException {
         if (!BridgeContext.isSafeRelPath(path)) throw new IOException("非法路径: " + path);
         boolean created;
-        if (ctx.rootUri != null) {
+        if (ctx.isSafMode()) {
             DocumentFile dir = DocumentFile.fromTreeUri(ctx.activity, ctx.rootUri);
             if (dir == null) throw new IOException("根目录不可用");
             String[] parts = path.split("/");
@@ -140,7 +141,7 @@ class FileStore {
             }
             created = true;
         } else {
-            File f = new File(ctx.privateRoot, path);
+            File f = new File(ctx.fileRoot(), path);
             created = f.mkdirs() || f.isDirectory();
         }
         return created;
@@ -177,7 +178,7 @@ class FileStore {
             ok = df.renameTo(newName);
         } else {
             File f = (File) resolved;
-            File target = new File(ctx.privateRoot, newPath);
+            File target = new File(ctx.fileRoot(), newPath);
             ok = f.renameTo(target);
         }
         if (!ok) throw new IOException("重命名失败: " + oldPath);

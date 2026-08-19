@@ -12,12 +12,15 @@
   --space-md: 16px;
   --space-lg: 24px;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
 
   --font-size-sm: 13px;
   --font-size-md: 16px;
   --font-size-lg: 20px;
+
+  /* 弹窗宽度（统一占屏幕 80%~90%，取 86.5vw）：dialog / move-target 共用 */
+  --dialog-width: 86.5vw;
 
   --header-height: 56px;
 }

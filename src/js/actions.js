@@ -1,32 +1,37 @@
 /* 文件系统动作（FAB / Drawer / 新建对话框共享）：
- * 新建文件夹/新建文件/刷新/切换根目录 + 阶段 C：重命名/复制/剪切/粘贴。
+ * 新建文件夹/新建文件/刷新/授权手机存储（全盘访问引导） + 阶段 C：重命名/复制/剪切/粘贴。
  * 复制/剪切只写剪贴板（内存态，Windows 模型），粘贴时才真正 copy / move（cut）。
  * 移动 = 真移动优先（FileBridge.move：私有 File.renameTo / SAF moveDocument），失败降级 copy+del。
  * 路径约定：全部使用完整相对路径（含当前目录前缀），FileAPI 桥天然匹配。
  * 依赖: namespace.js, file-api.js, clipboard.js, toast.js, desktop.js
  */
+// @ts-check
 'use strict'
 
 App.Actions = (function () {
   // 命名规划唯一入口（重名自动加序号，文件拆主名/扩展名，文件夹直接加序号）：
   // 收敛自 clipboard.js——create / paste / delete 进回收站共用同一规则（见 operation-contract.md 1.2）。
   // items = 当前目录项 [{name,isDir}]；占用键为 name 单键（真实 FS「一名字一 entry」）。
+  /** @param {Array<FileItem>} items @param {string} base @param {boolean} isDir @returns {string} */
   function _finalName(items, base, isDir) {
     return App.Clipboard.uniqueName(
       (items || []).map(function (it) { return it.name }), base, isDir)
   }
 
   // 当前目录（Desktop 提供；无则根目录）
+  /** @returns {string} */
   function _curPath() {
     return (App.Desktop && typeof App.Desktop.getCurPath === 'function')
       ? App.Desktop.getCurPath() : ''
   }
   // 完整路径拼接（'' 根目录下直接返回短名）
+  /** @param {string} name @returns {string} */
   function _joinPath(name) {
     const base = _curPath()
     return base ? base + '/' + name : name
   }
 
+  /** @param {string} name @returns {void} */
   function createFolder(name) {
     App.FileAPI.list(_curPath()).then(function (items) {
       let finalName = _finalName(items, name || '新建文件夹', true)
@@ -39,6 +44,7 @@ App.Actions = (function () {
     })
   }
 
+  /** @param {string} name @returns {void} */
   function createFile(name) {
     App.FileAPI.list(_curPath()).then(function (items) {
       // 名称原样使用（不自动补后缀）；空输入用默认名「新建文件」
@@ -53,13 +59,114 @@ App.Actions = (function () {
     })
   }
 
+  /** @returns {void} */
   function refresh() {
     App.Desktop.refresh()
     App.toast.show('已刷新')
   }
 
+  // ── 整理桌面（Morph FAB「整理桌面」）：按名称/类型排序到 Home 视角的居中可见网格。
+  //    锚点 = Home 快照相机（无快照 → 出厂 (0,0,1)）——整理结果落在 Home 可见区域中心，
+  //    整理后相机复位到锚点（用户立即看到全部图标，不会「整理完不知道跑哪去了」）。
+  //    zoom 保持当前缩放（2026-08-19：原强制 Home 槽位 zoom，用户缩放后整理视野跳变）。
+  //    竖屏行优先（先左→右再上→下）；横屏列优先视觉（旋转 90° 自然呈现）。
+  //    锚点写入**两方向** Home 槽位（同一 x/y/zoom）——旋转后任何方向点 Home 恒回到
+  //    整理区域中心（原只写当前方向，另一方向槽位是历史残留，旋转跳槽位即「找不到」）。
+  //    虚拟回收站（isDir）参与排序（文件夹组最前）。仅桌面空间可用。
+  /** @returns {void} */
+  function organizeDesktop() {
+    if (App.Desktop && typeof App.Desktop.isFolderView === 'function' && App.Desktop.isFolderView()) {
+      App.toast.show('整理桌面仅桌面空间可用')
+      return
+    }
+    const C = App.DesktopCore
+    if (!C || !C.state || !C.state.items || !App.DesktopOrganize) return
+    // 打断在跑的相机动画（双击 Home 的 fit / goHome 的 400ms RAF 循环）——
+    // 否则动画残留帧会在整理后继续覆盖 C.camera，把相机从锚点拖走，
+    // 网格与相机错位 → 首列出屏「文件找不见」（2026-08-19 真机反馈）
+    if (App.DesktopNavigation && typeof App.DesktopNavigation.cancelCameraAnim === 'function') {
+      App.DesktopNavigation.cancelCameraAnim()
+    }
+    const rot = C.camera && C.camera.rotation === 90 ? 90 : 0
+    // 整理锚点：Home 快照（按当前画布方向取槽位）> 出厂 (0,0,1)；zoom 保持当前缩放
+    const home = App.HomeStore && typeof App.HomeStore.load === 'function'
+      ? App.HomeStore.load(C.state.rootId, rot) : null
+    const anchor = App.DesktopOrganize.anchorFromHome(home, rot)
+    anchor.zoom = (C.camera && C.camera.zoom) || 1
+    // 布局数据文件（.adesktop-layout.json）不参与整理（渲染时同样过滤——否则它被排进
+    // 网格（json 组恰在 html/md 之间）但不可见 → 网格留空位，2026-08-19 真机反馈）
+    // 锁定文件（正在预览）不参与整理：图标与 Viewer 预览窗口双向锚定（窗口在文件上方），
+    // 排走图标 = 与窗口分家/重叠；锁定文件保持原位，其余文件排布跳过其占位格子
+    /** @type {Array<{x: number, y: number}>} */
+    const lockedPoints = []
+    const entries = C.state.items
+      .filter(function (it) {
+        if (it.name === C.LAYOUT_FILE) return false
+        const key = (it.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())
+          ? C.state.trashName : C.fullPath(it.name)
+        if (C._lockedPaths && C._lockedPaths.has(key)) {
+          const p = C.positions[key]
+          if (p) lockedPoints.push({ x: p.x, y: p.y })
+          return false
+        }
+        return true
+      })
+      .map(function (it) {
+        return { name: it.name, isDir: it.isDir }
+      })
+    const placed = App.DesktopOrganize.organize(
+      entries, C.viewportWidth(), C.viewportHeight(), anchor, lockedPoints)
+    placed.forEach(function (p) {
+      // key：虚拟回收站 = trashName（桥层根固定串）；其余 = 完整相对路径
+      const key = (p.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())
+        ? C.state.trashName : C.fullPath(p.name)
+      C.positions[key] = { x: p.x, y: p.y }
+      const node = C.iconEls[key]
+      if (node) {
+        node.style.left = p.x + 'px'
+        node.style.top = p.y + 'px'
+      }
+    })
+    // 相机复位到整理锚点（保存/刷新后用户立即可见整理结果）
+    C.camera = App.DesktopCamera.create(anchor.x, anchor.y, anchor.zoom, anchor.rotation)
+    C.rootCamera = C.camera
+    // **立即**同步相机到 canvas/手势层——不能只依赖 refresh() 的异步文件读：
+    // saveLayout 写 .adesktop-layout.json 是异步的，refresh 读文件存在竞态
+    // （读到旧/无文件 → 不触发 applyCameraForPath → transform 停留旧状态 →
+    // 图标按旧 transform 渲染错位「找不见」，2026-08-19 真机反馈）。
+    // 与 toggleRotate 同款：setCamera（内部 commit 应用 transform）+ Viewer 手柄同步。
+    if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
+      App.DesktopGesture.setCamera(C.camera)
+    }
+    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
+      App.InternalViewer.syncHandles(C.camera)
+    }
+    // 整理锚点写入**两方向** Home 槽位（同一 x/y/zoom，仅 rotation 字段区分）：
+    // 屏幕中心世界点 = (c.x + w/2z, c.y + h/2z) 与 rotation 无关（见 desktop-camera.js），
+    // 因此两方向共用同一 x/y/zoom 时视野中心恒 = 整理区域中心——旋转、Home、整理
+    // 三角色锚定同一世界点，任何操作序列都不丢中心（2026-08-19 真机「找不到」根治）
+    if (App.HomeStore && typeof App.HomeStore.saveHome === 'function') {
+      const cam0 = { x: anchor.x, y: anchor.y, zoom: anchor.zoom }
+      App.HomeStore.saveHome(cam0, C.state.rootId, 0)
+      App.HomeStore.saveHome(cam0, C.state.rootId, 90)
+    }
+    // 布局持久化失败不得阻断整理结果渲染（内存 positions/相机已更新，文件仍可见）：
+    // 曾无保护直调 → 桥方法缺失时同步抛异常 → refresh() 不执行 → canvas transform/DOM
+    // 停留旧状态 → 图标错位「找不见」、双击 Home 全览也跟着失效（2026-08-19 真机反馈）
+    try {
+      if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
+        App.DesktopPersist.saveLayout()
+      }
+    } catch (e) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('布局保存失败，稍后重试')
+    }
+    App.Desktop.refresh()
+    App.toast.show('已整理桌面')
+  }
+
   // 设为默认摄像机视角（Drawer「设为默认视角」）：Home 无快照时的兜底视角。
   // 仅桌面空间有效（子文件夹容器相机是滚动态，Desktop.captureDefaultView 内部拒绝）
+  /** @returns {void} */
   function setDefaultView() {
     if (App.Desktop && typeof App.Desktop.captureDefaultView === 'function') {
       App.Desktop.captureDefaultView()
@@ -68,6 +175,7 @@ App.Actions = (function () {
     }
   }
 
+  /** @returns {void} */
   function switchRoot() {
     if (!App.bridge.requestRootAccess()) {
       App.toast.show('当前环境不支持切换根目录')
@@ -81,6 +189,7 @@ App.Actions = (function () {
   // 存在同名项即拒绝——SAF renameTo 同名失败、私有模式 File.renameTo 同名行为
   // 平台相关（可能静默覆盖），两模式行为必须一致：先查后改。
   // 锁定文件（正在预览）拒绝重命名。
+  /** @param {string} oldPath @param {string} newName @returns {void} */
   function rename(oldPath, newName) {
     if (!oldPath || !newName || oldPath === newName) return
     // 重命名限同目录（领域语义）：newName 必须为纯文件名，不得含路径分隔符。
@@ -118,6 +227,7 @@ App.Actions = (function () {
 
   // ── 阶段 C：复制（只写剪贴板，Windows 模型，文件不动）──
   // entries: [{path, isDir}]（完整路径 + 源类型，供跨目录粘贴）
+  /** @param {Array<ClipboardEntry>} entries @returns {void} */
   function copySelection(entries) {
     if (!entries || !entries.length) return
     if (_lockedEntry(entries)) {
@@ -132,6 +242,7 @@ App.Actions = (function () {
   }
 
   // ── 阶段 C：剪切（只写剪贴板 + 视觉标记，文件不动；粘贴时才真正移动）──
+  /** @param {Array<ClipboardEntry>} entries @returns {void} */
   function cutSelection(entries) {
     if (!entries || !entries.length) return
     if (_lockedEntry(entries)) {
@@ -147,6 +258,7 @@ App.Actions = (function () {
   }
 
   // 锁定检查：entries 中任一完整路径 = 锁定文件（含锁定目录内文件）→ 拒绝
+  /** @param {Array<ClipboardEntry>} entries @returns {boolean} */
   function _lockedEntry(entries) {
     const locked = App.Desktop && typeof App.Desktop.getLockedPaths === 'function'
       ? App.Desktop.getLockedPaths() : []
@@ -160,6 +272,7 @@ App.Actions = (function () {
     }
     return false
   }
+  /** @param {string} path @returns {boolean} */
   function _isLocked(path) {
     const locked = App.Desktop && typeof App.Desktop.getLockedPaths === 'function'
       ? App.Desktop.getLockedPaths() : []
@@ -178,6 +291,7 @@ App.Actions = (function () {
   //   刷新 Loading 当前文件行；cancellable 时显示取消按钮（请求桥层取消 + 清理半成品）。
   // 失败汇总：逐项结果收集，失败不中断，结束后失败项 >0 弹列表（成功 N / 失败 M + 原因）。
   // 移动后布局 key 迁移：positions/bounds 以完整路径为 key，不迁移刷新后丢位置。
+  /** @param {ClipboardState} cb @param {string} targetDir @param {{emptyText?: string, title?: string, doneText?: string, failText?: string, keepClipboard?: boolean}} [opts] @returns {void} */
   function _transfer(cb, targetDir, opts) {
     opts = opts || {}
     App.FileAPI.list(targetDir).then(function (items) {
@@ -190,14 +304,18 @@ App.Actions = (function () {
       const isMove = cb.mode === 'cut'
       const title = opts.title || (isMove ? '正在移动' : '正在粘贴')
       const totalSteps = plan.length
+      /** @type {Array<{name: string, ok: boolean, error: string | null}>} */
       let results = []      // 逐项结果 [{name, ok, error}]（失败汇总）
       let done = 0
-      const moved = []      // 成功移动项 [{src, dst}] → 布局 key 迁移
+      /** @type {Array<{src: string, dst: string}>} */
+      let moved = []      // 成功移动项 [{src, dst}] → 布局 key 迁移
       let cancelSent = false
       let cancelled = false      // 已请求取消：剩余项不再启动（P0 修复）
+      /** @type {Array<string>} */
       let cancelledItems = []    // 被取消项（未启动 + 传输中被中止），取消 ≠ 失败
       // 取消请求（防抖）：置 cancelled → 剩余项不再调度；通知桥层中止当前任务并清理半成品。
       // 桥层单线程 executor 内 cancelTransfer 直接置 volatile 标志，可打断当前传输。
+      /** @returns {void} */
       function requestCancel() {
         if (cancelSent) return
         cancelSent = true
@@ -207,6 +325,7 @@ App.Actions = (function () {
         }
       }
       // 进度回调：桥层字节级进度 → Loading 当前文件行
+      /** @param {{src: string, dst: string}} job @returns {(p: FbProgress) => void} */
       function makeOnProgress(job) {
         return function (p) {
           if (!p || !p.path) return
@@ -320,6 +439,7 @@ App.Actions = (function () {
   // 批量操作失败汇总弹窗：列出失败项（名称 + 原因），「知道了」关闭。
   // 复用 dialog-overlay 结构，仅一次绑定确定按钮。
   let _failSummaryBound = false
+  /** @param {Array<{name: string, ok: boolean, error: string | null}>} failList @returns {void} */
   function _showFailSummary(failList) {
     if (!failList || !failList.length) return
     const overlay = document.getElementById('transfer-fail-overlay')
@@ -358,6 +478,7 @@ App.Actions = (function () {
   // entries: [{path, isDir}]（完整路径）；目标 = 根目录回收站（Desktop.getTrashName）。
   // 复用移动管道（真移动优先，桥层降级 copy+del），重名自动加序号、失败保留源（安全）。
   // 守卫：回收站自身不可删；锁定文件（正在预览）不可删；无回收站名（未授权）拒绝。
+  /** @param {Array<ClipboardEntry>} entries @returns {void} */
   function deleteSelection(entries) {
     if (!entries || !entries.length) return
     const trashName = App.Desktop && typeof App.Desktop.getTrashName === 'function'
@@ -385,6 +506,7 @@ App.Actions = (function () {
     })
   }
 
+  /** @returns {void} */
   function paste() {
     const cb = App.Clipboard.get()
     if (!cb || !cb.entries || !cb.entries.length) {
@@ -396,15 +518,18 @@ App.Actions = (function () {
 
   // 拖入文件夹（桌面空间拖动命中文件夹松手）：移动语义（真移动，桥层降级 copy+del 源），
   // 目标目录 = 文件夹完整路径，不清用户剪贴板（非剪贴板操作）。
+  /** @param {Array<ClipboardEntry>} entries @param {string} dirPath @returns {void} */
   function moveIntoFolder(entries, dirPath) {
     if (!entries || !entries.length || !dirPath) return
     _transfer({ mode: 'cut', entries: entries }, dirPath, { keepClipboard: true })
   }
 
+  /** @type {Actions} */
   return {
     createFolder: createFolder,
     createFile: createFile,
     refresh: refresh,
+    organizeDesktop: organizeDesktop,
     setDefaultView: setDefaultView,
     switchRoot: switchRoot,
     rename: rename,

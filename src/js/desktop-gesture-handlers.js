@@ -91,8 +91,10 @@ App.DesktopGestureHandlers = (function () {
   function showMarquee(startWorld, currentWorld) {
     const mq = document.getElementById('desktop-marquee')
     if (!mq) return
-    const a = App.DesktopCamera.worldToScreen(startWorld.x, startWorld.y, C.camera)
-    const b = App.DesktopCamera.worldToScreen(currentWorld.x, currentWorld.y, C.camera)
+    const vw = C.viewportWidth()
+    const vh = C.viewportHeight()
+    const a = App.DesktopCamera.worldToScreen(startWorld.x, startWorld.y, C.camera, vw, vh)
+    const b = App.DesktopCamera.worldToScreen(currentWorld.x, currentWorld.y, C.camera, vw, vh)
     mq.style.left = Math.min(a.x, b.x) + 'px'
     mq.style.top = Math.min(a.y, b.y) + 'px'
     mq.style.width = Math.abs(b.x - a.x) + 'px'
@@ -284,6 +286,10 @@ App.DesktopGestureHandlers = (function () {
         node.style.left = x + 'px'
         node.style.top = y + 'px'
       }
+      // 锁定文件图标拖动 → Viewer 预览窗口实时跟随（双向锚定防分家：图标与窗口始终对齐）
+      if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+        App.InternalViewer.syncRectForPath(n, x, y)
+      }
     })
     if (App.Loading && typeof App.Loading.showTag === 'function') {
       const hitWebsite = websiteHitAt(world)
@@ -304,17 +310,22 @@ App.DesktopGestureHandlers = (function () {
 
   // 已选中组上直接拿起（拖动即拿取，不必长按）；folder 容器不拿起（防御，hitTest 已挡）。
   // hitType 由手势层 down 时确定：viewer-selected=已选中 Viewer 拿起移动实体；selected=已选中文件组拿起
-  function handleDragStart(world, hitType) {
+  // startWorld = 按下起点世界点（drag-start 携带，命中基准；拖动基准仍是 world）
+  function handleDragStart(world, hitType, startWorld) {
     if (hitType === 'viewer-selected') {
       const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
         ? App.InternalViewer.selectedInstance() : null
       if (inst) inst.beginDrag(world)
       return
     }
-    // 拖动手柄：按住 = 自动选中 + 直接拿起（不受选中态限制的辅助拖动入口）
+    // 拖动手柄：按住 = 自动选中 + 直接拿起（不受选中态限制的辅助拖动入口）。
+    // 命中基准 = 按下起点 startWorld（down 时 hitTest 已确认命中手柄；拖动起点 world
+    // 已位移超阈值，手柄命中区仅 6px 高，移动后点必然出界——用移动点重新命中会
+    // 拿不起，表现为「手柄点不动/拖不动」。长按拿起（handleLongPress）同样以起点命中）
     if (hitType === 'viewer-handle') {
+      const p = startWorld || world
       const inst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-        ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
+        ? App.InternalViewer.handleAt(p.x, p.y, C.camera) : null
       if (inst) {
         App.InternalViewer.selectOnly(inst.id)
         App.DesktopRender.syncFab()
@@ -347,6 +358,10 @@ App.DesktopGestureHandlers = (function () {
         if (node) {
           node.style.left = back.x + 'px'
           node.style.top = back.y + 'px'
+        }
+        // 锁定文件：Viewer 预览窗口同步还原（拖动中已实时跟随，取消须一同退回）
+        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+          App.InternalViewer.syncRectForPath(n, back.x, back.y)
         }
       }
     })
@@ -405,6 +420,10 @@ App.DesktopGestureHandlers = (function () {
               if (node) {
                 node.style.left = back.x + 'px'
                 node.style.top = back.y + 'px'
+              }
+              // 锁定文件：Viewer 预览窗口同步还原
+              if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+                App.InternalViewer.syncRectForPath(n, back.x, back.y)
               }
             }
           })
@@ -495,8 +514,13 @@ App.DesktopGestureHandlers = (function () {
       }).map(function (n) {
         return { name: n, x: C.positions[n].x, y: C.positions[n].y }
       })
-      // 3. 避让解析：移动组放期望位，冲突的静止图标让位到最近空位
-      const resolved = App.DesktopGrid.resolvePlacement(moving, statics)
+      // 3. 避让解析：移动组放期望位，冲突的静止图标让位到最近空位。
+      //    锁定文件（正在预览）为钉子户：不可让位——其它文件拖动不能顶开它，
+      //    冲突时移动组让位（否则图标与 Viewer 预览窗口分家/重叠）
+      const lockedStatics = statics.filter(function (s) {
+        return C._lockedPaths.has(s.name)
+      }).map(function (s) { return s.name })
+      const resolved = App.DesktopGrid.resolvePlacement(moving, statics, lockedStatics)
       Object.keys(resolved).forEach(function (n) {
         C.positions[n] = resolved[n]
         C.bounds[n] = { x: resolved[n].x, y: resolved[n].y, w: C.bounds[n].w, h: C.bounds[n].h }
@@ -504,6 +528,11 @@ App.DesktopGestureHandlers = (function () {
         if (node) {
           node.style.left = resolved[n].x + 'px'
           node.style.top = resolved[n].y + 'px'
+        }
+        // 锁定文件：最终落位（网格吸附后）同步 Viewer——拖动中跟随的是未吸附位置，
+        // 吸附变化若不回传则图标与 Viewer 窗口错位（分家）
+        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+          App.InternalViewer.syncRectForPath(n, resolved[n].x, resolved[n].y)
         }
       })
       // Windows 原则：选中态是临时/脆弱状态——移动完成即失效（清空选中 + 收起 FAB 操作栏）
@@ -539,6 +568,10 @@ App.DesktopGestureHandlers = (function () {
         if (node) {
           node.style.left = back.x + 'px'
           node.style.top = back.y + 'px'
+        }
+        // 锁定文件：Viewer 预览窗口同步还原（拖动中已实时跟随，取消须一同退回）
+        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
+          App.InternalViewer.syncRectForPath(n, back.x, back.y)
         }
       }
       setPickedUp(n, false)

@@ -4,7 +4,7 @@
 .heatmap-card {
   background: var(--bg-page);
   border: 1px solid var(--border-outer);
-  border-radius: 14px;
+  border-radius: 0;
   padding: 12px 14px 10px;
   margin-bottom: 4px;
 }
@@ -69,7 +69,7 @@
 .heatmap-cell {
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--bg-card);
 }
 .heatmap-cell[data-level="1"] { background: var(--color-heat-1, #9be9a8); }
@@ -95,7 +95,7 @@
 .heatmap-legend-cell {
   width: 8px;
   height: 8px;
-  border-radius: 1.5px;
+  border-radius: 0;
   background: var(--bg-card);
 }
 .heatmap-legend-cell[data-level="0"] { background: var(--bg-card); }
@@ -125,7 +125,7 @@
   margin: 0 0 2px 0;
   background: var(--bg-page);
   border: 1px solid var(--border-outer);
-  border-radius: 10px;
+  border-radius: 0;
   font-size: 12px;
   line-height: 1.45;
   transition: background 0.1s;
@@ -166,7 +166,7 @@
 /* 点击即复制：「点击谁就复制谁」——[data-copy] 文本块可点，:active 反馈 + 吐司 */
 .build-detail-modal [data-copy]:not(button) {
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 0;
   padding: 2px 4px;
   margin: -2px -4px;
   transition: background 0.1s;

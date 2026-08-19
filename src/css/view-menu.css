@@ -1,4 +1,6 @@
-/* 顶栏排列/视图菜单：header 右上弹出，子文件夹（容器）可用，根目录（空间）置灰 */
+/* 顶栏排列/视图菜单：header 右上弹出，子文件夹（容器）可用，根目录（空间）置灰。
+   z-index 700/699：高于快照面板（650）——面板打开时顶栏菜单仍浮于其上可用可点；
+   低于 Morph FAB（1500）。 */
 
 /* 遮罩：点击外部关闭 */
 .view-menu-overlay {
@@ -7,7 +9,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 20;
+  z-index: 699;
   background: transparent;
   display: none;
 }
@@ -21,11 +23,11 @@
   position: fixed;
   top: calc(var(--header-height) + var(--safe-top, 0px) + 4px);
   right: var(--space-md);
-  z-index: 21;
+  z-index: 700;
   min-width: 168px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   padding: var(--space-xs) 0;
   display: none;
@@ -74,16 +76,25 @@
   font-weight: 600;
 }
 
-.view-menu-dir,
-.view-menu-check {
+.view-menu-dir {
   display: none;
   font-style: normal;
   font-weight: 600;
 }
 
+.view-menu-check {
+  display: none;
+}
+
+/* 勾选标记（MD 图标）：active 时显示，flex 布局对齐 */
+.view-menu-item .view-menu-check {
+  flex: none;
+  margin-left: var(--space-sm);
+}
+
 .view-menu-item.active .view-menu-dir,
 .view-menu-item.active .view-menu-check {
-  display: inline;
+  display: inline-block;
 }
 
 .view-menu-sep {
@@ -96,6 +107,14 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   padding: var(--space-xs) var(--space-md);
+}
+
+/* 排列/视图只在子文件夹（view-menu-folder 态）显示：
+   Desktop 无限画布无排序/视图语义，隐藏对应 section 与分隔线 */
+.view-menu:not(.view-menu-folder) .view-menu-section-sort,
+.view-menu:not(.view-menu-folder) .view-menu-section-view,
+.view-menu:not(.view-menu-folder) .view-menu-sep-folder {
+  display: none;
 }
 
 /* 高级浏览模式切换：始终可用（不受 setEnabled 置灰控制） */

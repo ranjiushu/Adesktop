@@ -3,12 +3,15 @@
  * 依赖: namespace.js
  * 导出: App.Clipboard
  */
+// @ts-check
 'use strict'
 
 App.Clipboard = (function () {
+  /** @type {ClipboardState | null} */
   let state = null   // { mode, entries: [{path, isDir}] }
 
   // entries: [{path, isDir}]（path = 完整相对路径）
+  /** @param {'copy' | 'cut'} mode @param {Array<{path: string, isDir?: boolean}>} entries @returns {boolean} */
   function set(mode, entries) {
     if (mode !== 'copy' && mode !== 'cut') return false
     const arr = (entries || []).map(function (e) {
@@ -18,11 +21,15 @@ App.Clipboard = (function () {
     return true
   }
 
+  /** @returns {ClipboardState | null} */
   function get() { return state }
+  /** @returns {boolean} */
   function has() { return !!(state && state.entries && state.entries.length) }
+  /** @returns {void} */
   function clear() { state = null }
 
   // 剪切源标记查询：mode=cut 且路径在剪贴板内（render 时给图标加半透明）
+  /** @param {string} path @returns {boolean} */
   function isCut(path) {
     if (!state || state.mode !== 'cut') return false
     return state.entries.some(function (e) { return e.path === path })
@@ -33,6 +40,7 @@ App.Clipboard = (function () {
   // 返回 [{src, dst}]（dst = 完整相对路径）。纯函数，可单测。
   // [P1] 占用键 = name 单键（真实文件系统「一名字一 entry」，不分文件/文件夹）：
   // 同目录「文件夹报告.txt + 文件报告.txt」不共存，粘贴时后者加序号。
+  /** @param {ClipboardState | null} cb @param {Array<FileItem> | null} items @param {string} curPath @returns {Array<{src: string, dst: string}>} */
   function planPaste(cb, items, curPath) {
     if (!cb || !cb.entries || !cb.entries.length) return []
     const taken = (items || []).map(function (it) { return it.name })
@@ -45,6 +53,7 @@ App.Clipboard = (function () {
   }
 
   // 取路径末段名：'docs/a.txt' → 'a.txt'
+  /** @param {string} [p] @returns {string} */
   function basename(p) {
     if (!p) return ''
     const i = p.lastIndexOf('/')
@@ -52,6 +61,7 @@ App.Clipboard = (function () {
   }
 
   // 路径拼接：joinPath('', 'a.txt') = 'a.txt'; joinPath('docs', 'a.txt') = 'docs/a.txt'
+  /** @param {string} base @param {string} name @returns {string} */
   function joinPath(base, name) {
     return base ? base + '/' + name : name
   }
@@ -60,6 +70,7 @@ App.Clipboard = (function () {
   // 给定已占用名数组与期望名，返回不冲突的最终名（重名自动加序号）。
   // 文件拆主名/扩展名（「报告.txt」重名 → 「报告 2.txt」），文件夹直接加序号（「新建文件夹 2」）。
   // takenNames 为名称数组（不分类型）——调用方负责传入目标目录全部 entry 的 name。
+  /** @param {Array<string> | null} takenNames @param {string} base @param {boolean} isDir @returns {string} */
   function uniqueName(takenNames, base, isDir) {
     let stem = base
     let ext = ''
@@ -70,6 +81,7 @@ App.Clipboard = (function () {
     }
     let name = base
     let seq = 2
+    /** @param {string} n @returns {boolean} */
     function exists(n) { return (takenNames || []).indexOf(n) >= 0 }
     while (exists(name)) {
       name = stem + ' ' + seq + ext
@@ -78,6 +90,7 @@ App.Clipboard = (function () {
     return name
   }
 
+  /** @type {Clipboard} */
   return {
     set: set,
     get: get,

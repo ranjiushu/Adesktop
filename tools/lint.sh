@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Desktop 全面代码检查脚本（治理移植：LexiCull lint 因地制宜版）
+# Adesktop 全面代码检查脚本（治理移植：LexiCull lint 因地制宜版）
 # ═══════════════════════════════════════════════════════════════
 #  检查项: 构建一致性 + 文档链接 + CHANGELOG 结构 + 头部注释 + var 纪律
 #  已剔除 LexiCull 特有项（squircle/djLint/j2lint/ASI 边界/data.js 健康）
@@ -18,14 +18,14 @@ warn() { echo -e "  ${YELLOW}[WARN]${NC} $1"; }
 TOTAL_FAIL=0
 
 echo "═══════════════════════════════════════════════════"
-echo "  Desktop 全面代码检查"
+echo "  Adesktop 全面代码检查"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
 # ── 检查 0: 构建一致性 ──
 echo "── [0/5] 构建一致性 ──"
 if bash "$SCRIPT_DIR/tools/build-web.sh" --check > /dev/null 2>&1; then
-  ok "src/ 与 dist/desktop.bundle.html 一致"
+  ok "src/ 与 dist/adesktop.bundle.html 一致"
 else
   fail "源文件与产物不一致——请运行 bash tools/build-web.sh"
   ((TOTAL_FAIL++))

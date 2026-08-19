@@ -125,6 +125,10 @@ check(r.sg.phase === 'pending', '自定义 tapThreshold=30，20px 仍 pending')
 sg = G.singleDown(100, 100, 0, 'selected')
 r = G.singleMove(sg, 110, 100)
 check(r.sg.phase === 'dragmove' && r.effect.type === 'drag-start', 'selected 拖动 → drag-start（直接拿起）')
+// drag-start 携带按下起点（sx/sy）：拿起判定（如 6px 高的 Viewer 拖动手柄）以起点重新命中，
+// 移动后点已移出命中区，不能用于重新命中
+check(r.effect.sx === 100 && r.effect.sy === 100, 'drag-start 携带按下起点 sx/sy = (100,100)')
+check(r.effect.x === 110 && r.effect.y === 100, 'drag-start 携带移动后点 x/y（拖动基准）')
 sg = G.singleDown(100, 100, 0, 'icon')
 r = G.singleMove(sg, 110, 100)
 check(r.sg.phase === 'marquee' && r.effect.type === 'marquee-start', 'icon 拖动 → marquee-start（框选）')

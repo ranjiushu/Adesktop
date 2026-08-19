@@ -3,7 +3,7 @@
  * 取消标志（ctx.cancelRequested）与 copy 循环检查保持原有串行语义。
  * 取消/失败时清理本次创建的半成品（目标原本不存在才删）。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.net.Uri;
 import android.provider.DocumentsContract;
@@ -26,7 +26,7 @@ class TransferEngine {
     /** 移动（剪切粘贴 / 拖入文件夹 / 移入回收站共用）：真移动优先，降级 copy+delete。
      * srcPath/dstPath 均为相对根目录路径；目标名由前端规划（重名加序号，不覆盖）。
      * 真移动路径：
-     *   - 私有模式: File.renameTo（同文件系统内原子移动，目录整体 O(1)，不搬数据）
+     *   - File 模式（全盘/私有）: File.renameTo（同文件系统内原子移动，目录整体 O(1)，不搬数据）
      *   - SAF 模式: DocumentsContract.moveDocument（API 24+ = minSdk，provider 级移动，
      *               内部存储等多数 provider 原生支持 O(1) 移动）
      * 降级路径（跨文件系统 EXDEV / provider 不支持移动）: copy + delete 源，
@@ -40,10 +40,10 @@ class TransferEngine {
             ctx.cancelRequested = false;
             dstExisted = exists(dstPath);
             ProgressReporter pr = new ProgressReporter(cbId);
-            if (ctx.rootUri != null) {
+            if (ctx.isSafMode()) {
                 moveSaf(srcPath, dstPath, pr);
             } else {
-                movePrivate(srcPath, dstPath, pr);
+                moveFile(srcPath, dstPath, pr);
             }
             ctx.resolveOk(cbId, true);
         } catch (Exception e) {
@@ -65,10 +65,10 @@ class TransferEngine {
             dstExisted = exists(dstPath);
             Object resolved = ctx.resolve(srcPath);
             ProgressReporter pr = new ProgressReporter(cbId);
-            if (ctx.rootUri != null) {
+            if (ctx.isSafMode()) {
                 copySaf((DocumentFile) resolved, dstPath, pr);
             } else {
-                copyPrivate((File) resolved, dstPath, pr);
+                copyFile((File) resolved, dstPath, pr);
             }
             ctx.resolveOk(cbId, true);
         } catch (Exception e) {
@@ -123,7 +123,7 @@ class TransferEngine {
 
     /** 清理本次创建的目标（递归删除）+ 向上清理 resolveOrCreateParent 创建的空父目录 */
     private void cleanupDst(String dstPath) {
-        if (ctx.rootUri != null) {
+        if (ctx.isSafMode()) {
             try {
                 DocumentFile df = (DocumentFile) ctx.resolve(dstPath);
                 if (df != null) df.delete();
@@ -148,10 +148,11 @@ class TransferEngine {
                 }
             }
         } else {
-            deleteRecursive(new File(ctx.privateRoot, dstPath));
+            File root = ctx.fileRoot();
+            deleteRecursive(new File(root, dstPath));
             // 向上清理空目录
-            File f = new File(ctx.privateRoot, dstPath).getParentFile();
-            while (f != null && !f.equals(ctx.privateRoot)) {
+            File f = new File(root, dstPath).getParentFile();
+            while (f != null && !f.equals(root)) {
                 String[] children = f.list();
                 if (children != null && children.length == 0) {
                     f.delete();
@@ -254,17 +255,17 @@ class TransferEngine {
         }
     }
 
-    /* 私有模式递归拷贝；pr 上报进度 + 响应取消 */
-    private void copyPrivate(File src, String dstPath, ProgressReporter pr) throws IOException {
-        File dst = new File(ctx.privateRoot, dstPath);
-        if (!ctx.isUnderPrivateRoot(dst)) throw new IOException("非法路径: " + dstPath);
+    /* File 模式递归拷贝（全盘/私有共用：活动根 = ctx.fileRoot()）；pr 上报进度 + 响应取消 */
+    private void copyFile(File src, String dstPath, ProgressReporter pr) throws IOException {
+        File dst = new File(ctx.fileRoot(), dstPath);
+        if (!ctx.isUnderFileRoot(dst)) throw new IOException("非法路径: " + dstPath);
         if (src.isDirectory()) {
             if (!dst.mkdirs() && !dst.isDirectory()) throw new IOException("无法创建目录: " + dstPath);
             File[] children = src.listFiles();
             if (children != null) {
                 for (File c : children) {
                     pr.tick();   // 目录条目间也响应取消
-                    copyPrivate(c, dstPath + "/" + c.getName(), pr);
+                    copyFile(c, dstPath + "/" + c.getName(), pr);
                 }
             }
         } else {
@@ -324,11 +325,11 @@ class TransferEngine {
         return i < 0 ? path : path.substring(i + 1);
     }
 
-    /* 私有模式移动：File.renameTo 原子移动（同文件系统 O(1)），失败（跨文件系统 EXDEV 等）降级 copy+delete */
-    private void movePrivate(String srcPath, String dstPath, ProgressReporter pr) throws IOException {
+    /* File 模式移动：File.renameTo 原子移动（同文件系统 O(1)），失败（跨文件系统 EXDEV 等）降级 copy+delete */
+    private void moveFile(String srcPath, String dstPath, ProgressReporter pr) throws IOException {
         File src = (File) ctx.resolve(srcPath);
-        File dst = new File(ctx.privateRoot, dstPath);
-        if (!ctx.isUnderPrivateRoot(dst)) throw new IOException("非法路径: " + dstPath);
+        File dst = new File(ctx.fileRoot(), dstPath);
+        if (!ctx.isUnderFileRoot(dst)) throw new IOException("非法路径: " + dstPath);
         File parent = dst.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IOException("无法创建目录: " + parent);
@@ -336,7 +337,7 @@ class TransferEngine {
         // 1) 真移动：rename(2) 原子操作，目录整体移动（POSIX 语义，无需递归搬移）
         if (src.renameTo(dst)) return;
         // 2) 降级：copy + delete（跨文件系统；失败安全同上）
-        copyPrivate(src, dstPath, pr);
+        copyFile(src, dstPath, pr);
         if (!src.delete()) throw new IOException("移动失败（复制成功但源删除失败）: " + srcPath);
     }
 }

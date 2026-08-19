@@ -1,6 +1,6 @@
 # 文件操作契约（Operation Contract）
 
-本文件是 Desktop **文件操作语义**的权威清单：每个操作的前置条件、成功/失败/取消后的
+本文件是 Adesktop **文件操作语义**的权威清单：每个操作的前置条件、成功/失败/取消后的
 文件系统状态与 UI 状态，以及 SAF / 私有两种后端的行为一致性。
 
 与 `docs/bridge-and-data-contract.md`（桥**方法面**签名锁）互补：那份管「桥能调什么」，
@@ -64,8 +64,18 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 
 - 布局（图标位置/相机）与 Home 快照是**相对当前根目录**的状态：key 为相对 root 的
   fullPath，切根 A→B 不得继承 A 的布局/相机/Home。
+- **布局真相在目录文件（2026-08-19 落实）**：桌面空间布局（图标位置 + 相机）写入
+  桌面空间目录下的 `.adesktop-layout.json`（`saveLayout` 双写：文件 + localStorage 缓存）；
+  refresh 时读文件覆盖缓存（文件为真相，缓存仅启动/迁移兼容）。切换桌面根 =
+  读新目录的数据文件——布局随目录存在，不因 rootId 变化丢失。
 - 存储 key 带 rootId（2026-08-17 修复）：`desktop.layout.<rootId>.v1` / `desktop.home.<rootId>.v1`；
-  `rootId` 由 rootInfo 返回（SAF = tree uri / 私有 = `'private'`）。
+  `rootId` 由 rootInfo 返回（SAF = tree uri / 全盘 = `'all-files:<桌面根>'`（桌面根可配置，
+  切桌面根即切换布局域）/ 私有 = `'private'`）。布局文件的缓存 key 带 rootId；
+  文件不存在时用缓存兜底（旧 localStorage 布局自动兼容，无需手动迁移）。
+- 启动时序契约：`initLayout` 在 rootInfo 就绪前同步执行（rootId='' → 读旧 key），
+  **refresh 拿到 rootId 后必须用 rootId key 重载布局/相机**（`_reloadLayoutForRoot`）——
+  否则旧 key 被迁移删除后，第二次启动起布局丢失回自动排布（回归测试：
+  `tests/test-desktop-layout-reload.js`）。切 root 场景同样触发重载。
 - 旧版单根 key（`desktop.layout.v1` / `desktop.home.v1`）经 `migrateLegacy(rootId)`
   一次性迁移：首见 root 吸收旧数据后删除旧 key（幂等，测试：test-layout-store.js / test-home-store.js）。
 

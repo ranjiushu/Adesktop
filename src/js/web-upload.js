@@ -7,16 +7,20 @@
  * 依赖: namespace.js, dialog.js, file-api.js, toast.js, utils.js
  * 导出: App.WebUpload
  */
+// @ts-check
 'use strict'
 
 App.WebUpload = (function () {
   const CONFIRM_OVERLAY_ID = 'web-upload-confirm-overlay'
   const CONFIRM_DESC_ID = 'web-upload-confirm-desc'
+  /** @type {{ paths: Array<string>, at: number } | null} */
   let _pending = null   // { paths: [], at: number }
 
+  /** @param {string} id @returns {HTMLElement | null} */
   function _getEl(id) { return document.getElementById(id) }
 
   // 设定待上传文件（拖拽 drop 到 website iframe 时调用）
+  /** @param {Array<string> | null} paths */
   function setPending(paths) {
     if (!paths || !paths.length) { _pending = null; return }
     _pending = { paths: paths.slice(), at: Date.now() }
@@ -83,6 +87,7 @@ App.WebUpload = (function () {
     })
   }
 
+  /** @type {WebUpload} */
   return {
     setPending: setPending,
     hasPending: hasPending,

@@ -5,9 +5,11 @@
  * 依赖: namespace.js
  * 导出: App.Markdown
  */
+// @ts-check
 'use strict'
 
 App.Markdown = (function () {
+  /** @param {any} s @returns {string} */
   function escapeHtml(s) {
     return String(s)
       .replace(/&/g, '&amp;')
@@ -20,6 +22,7 @@ App.Markdown = (function () {
   // 行内标记（先整体转义 HTML 防注入，再做标记；顺序：code → bold → italic → link）
   // 顺序依赖：先占住 `code`，再处理 ** 粗体，剩余单 * 才是斜体；
   // 链接最后处理，url 协议白名单（防 javascript: 注入）。
+  /** @param {string} text @returns {string} */
   function inline(text) {
     let t = escapeHtml(text)
     t = t.replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -35,6 +38,7 @@ App.Markdown = (function () {
   }
 
   // 链接协议白名单：http/https/mailto/相对路径（含锚点）；其余（javascript: 等）仅显示文本
+  /** @param {any} url @returns {string} */
   function safeUrl(url) {
     const u = String(url).trim()
     if (!u) return ''
@@ -45,6 +49,7 @@ App.Markdown = (function () {
   }
 
   // 行内链接专用：输入已整体转义，只做协议校验（不重复转义，避免 & 双转义）
+  /** @param {any} url @returns {string} */
   function safeUrlRaw(url) {
     const u = String(url).trim()
     if (!u) return ''
@@ -56,6 +61,7 @@ App.Markdown = (function () {
 
   // 块级解析：输入 md 原文 → HTML 片段
   // 逐行扫描；围栏代码块 / 列表 / 引用做连续行聚合，其余按空行分段。
+  /** @param {any} [md] @returns {string} */
   function render(md) {
     const lines = String(md == null ? '' : md).replace(/\r\n?/g, '\n').split('\n')
     const out = []
@@ -116,6 +122,7 @@ App.Markdown = (function () {
 
       // 无序列表：连续 - / * / + 行聚合；缩进续行并入当前项（多行列表项）
       if (/^\s*[-*+]\s+/.test(line)) {
+        /** @type {Array<string>} */
         const buf = []
         while (i < lines.length) {
           const l = lines[i]
@@ -136,6 +143,7 @@ App.Markdown = (function () {
 
       // 有序列表：连续数字. 行聚合；缩进续行并入当前项
       if (/^\s*\d+\.\s+/.test(line)) {
+        /** @type {Array<string>} */
         const buf = []
         while (i < lines.length) {
           const l = lines[i]
@@ -175,6 +183,7 @@ App.Markdown = (function () {
     return out.join('\n')
   }
 
+  /** @type {Markdown} */
   return {
     render: render,
     inline: inline,

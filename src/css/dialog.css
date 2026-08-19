@@ -1,5 +1,7 @@
-/* 新建对话框：加号弹出，输入名称 + 文件/文件夹单选。
-   层级 1300：高于 Drawer(1101) 与 buildinfo(1200)，低于 toast(2000)。 */
+/* 通用弹窗基座：overlay 遮罩 + 卡片 + 标题 + 输入框 + 文字式操作按钮。
+   层级 1300：高于 Drawer(1101) 与 buildinfo(1200)，低于 toast(2000)。
+   按钮样式统一为简约文字式（源自移动目标弹窗）：无边框无底色，主操作强调色加粗、
+   次操作次要色；双按钮布局 = 取消靠左 + 主操作靠右（dialog-actions-pair 两端对齐）。 */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -19,9 +21,9 @@
 }
 
 .dialog {
-  /* 统一弹窗宽：占屏幕 70%~80%（取 76vw），矩形（直角，模块约定） */
-  width: 76vw;
-  max-width: 420px;
+  /* 统一弹窗宽：占屏幕 80%~90%（取 var(--dialog-width)），矩形（直角，模块约定） */
+  width: var(--dialog-width);
+  max-width: 480px;
   background: var(--color-surface);
   border-radius: 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
@@ -55,7 +57,7 @@
   height: 44px;
   padding: 0 var(--space-sm);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   font-size: var(--font-size-md);
   color: var(--color-text);
   background: var(--color-bg);
@@ -89,20 +91,31 @@
   gap: var(--space-sm);
   margin-top: var(--space-md);
 }
-/* 双按钮布局：文件（主）+ 文件夹（次强调）；取消已移除（返回键/点空白关闭） */
+/* 双按钮布局：取消靠左 + 主操作靠右（两端对齐，全弹窗统一）。 */
 .dialog-actions-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: var(--space-sm);
 }
+/* 右组：多个主操作并排靠右（如新建弹窗的文件/文件夹） */
+.dialog-actions-group {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+/* 简约文字式按钮（全弹窗统一，源自移动目标弹窗）：无边框无底色，只显示文字。
+   主操作 = 强调色加粗；次操作 = 次要色；禁用 = 置灰（[aria-disabled]，仍派发点击）。 */
 .dialog-btn {
-  min-width: 72px;
-  height: 40px;
-  padding: 0 var(--space-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--color-accent);
   font-size: var(--font-size-md);
   cursor: pointer;
   touch-action: manipulation;
@@ -110,22 +123,39 @@
   outline: none;
 }
 .dialog-btn:active {
-  background: var(--color-bg);
+  background: none;
 }
 .dialog-btn-primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #fff;
+  background: none;
+  color: var(--color-accent);
+  font-weight: 600;
 }
 .dialog-btn-primary:active {
-  background: #2f6fe0;
+  background: none;
+  color: #2f6fe0;
 }
-/* 文件夹：次强调（描边 + 浅底） */
 .dialog-btn-secondary {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  background: none;
+  color: var(--color-text-secondary);
 }
 .dialog-btn-secondary:active {
-  background: rgba(59, 130, 246, 0.16);
+  background: none;
+  color: var(--color-text);
 }
+/* 禁用态：目标不可操作时置灰（aria-disabled 仍派发点击，由业务侧拦截并吐司原因） */
+.dialog-btn[aria-disabled="true"] {
+  color: var(--color-text-tertiary, #b0b6c0);
+  font-weight: 400;
+}
+.dialog-btn[aria-disabled="true"]:active {
+  color: var(--color-text-tertiary, #b0b6c0);
+}
+
+/* 对话框说明文字（授权引导 / 桌面目录）：次要色，多行可换行 */
+.dialog-desc {
+  margin: 0 0 var(--space-md);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+

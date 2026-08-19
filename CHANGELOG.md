@@ -1,6 +1,386 @@
-# Desktop 更新日志
+# Adesktop 更新日志
 
 ## Unreleased
+
+### 桌面目录改用系统 SAF 授权选择器（2026-08-19）
+
+- **移除固定路径 + 手动输入**：Drawer「桌面目录」不再弹出常见目录 chips + 自定义输入框，
+  改为直接调用系统 `ACTION_OPEN_DOCUMENT_TREE` 目录选择器
+- **支持应用私有目录**：通过 SAF 授权任意 DocumentsProvider 暴露的目录
+  （如经 MT 管理器注入文件提供器后暴露的应用 data 目录），选择后该目录成为新的桌面根
+- **forceSafMode 机制**：用户主动选择 SAF 目录后，即使仍持有全盘权限也强制走 SAF 分支
+  （保证所选目录生效）；主动点击「授权手机存储」并成功授权全盘后重置，恢复全盘 File 模式
+- **桥层变更**：`FileBridge.requestDesktopDir()` + `App.bridge.requestDesktopDir()` 新增；
+  `MainActivity` 处理 `REQ_DESKTOP_DIR` 并持久化 `rootUri`/`forceSafMode`；
+  `BridgeContext.isSafMode()` 支持 `forceSafMode` 遮蔽全盘；`rootInfo` 优先返回 SAF 模式
+- **前端清理**：移除 `desktop-dir-dialog` HTML/CSS/JS；更新 `docs/fs-scope.md`、
+  `docs/bridge-and-data-contract.md`、测试 `test-bridge.js`
+- **构建**：verify.sh 16 项门禁全绿，APK 归档 `/workspace/AAA 安装包`
+
+### Viewer 状态持久化 + 矩形设计语言（2026-08-19）
+
+- **Viewer 持久化（只能手动关闭）**：画布态 Viewer 的打开状态 + 世界坐标位置经
+  新增 `ViewerStore`（viewer-store.js）持久化——localStorage 缓存 + 桌面空间隐藏
+  文件 `.adesktop-viewers.json`（文件即真相，随目录迁移）；打开/关闭/拖动结束/
+  媒体自适应落盘（InternalViewer.setPersistListener 注入，desktop-viewer-link
+  负责）；app 重启后恢复上次会话的 Viewer（原位置 + 文件重新锁定），已删文件记录
+  跳过；folder 全屏预览不持久化；「一键关闭所有 Viewer」为规划中扩展
+- **矩形设计语言**：全应用圆角归零（tokens --radius-sm/md → 0 + 全部 CSS 直写
+  半径清零）——快照列表/顶栏菜单/Viewer 卡片/对话框/抽屉/Toast 等统一直角矩形；
+  FAB 圆形按钮除外（矩形语言针对圆角矩形，非圆形元素）
+- **单测**：test-viewer-store.js 17 项（往返/过滤/隔离/文件写入）；**E2E**：
+  verify-viewer.js 11 项（启动恢复位置/拖动落盘/手动关闭清空/reload 不复活/
+  陈旧记录跳过/直角断言）；verify.sh 15 → 16 项门禁
+
+### 循环演示 + 字母/页码编号 + 列表滚动防误触（2026-08-19）
+
+- **循环演示（去掉「演示模式」概念）**：桌面空间存在快照时，底栏前进/后退直接按
+  全部分组扁平顺序循环翻页——无第一页/最后一页概念、无边界禁用；从「当前页」进入
+  （已访问快照 / 相机匹配到的最近快照，从未进入时前进 = 第 1 页、后退 = 最后一页）；
+  无快照或文件夹视图时前进/后退仍走目录历史导航
+- **当前页高亮**：呼出快照列表时「当前页」高亮（相机匹配锚定）；点击任意快照
+  快速跳转并成为当前页
+- **字母编号 + 页码**：添加快照时分配字母编号（页代码 A..Z → AA..，最小未使用，
+  随快照稳定——拖动排序/移动分组不改变，删除后复用）；页码 = 全分组扁平顺序
+  （排序后自动更新）；列表行左侧字母徽标（当前页强调色）+ 右侧「第 N 页」
+- **列表滚动防误触**：参考 LexiCull——位移 > 10px 或手指滑出行外视为滚动/滑动，
+  不再触发点击飞行/选中（原滑动也会被当作点击）
+- **E2E**：verify-snapshot-sheet.js 25 → 33 项（循环环绕前进/后退、当前页高亮、
+  滑动不算点击、字母编号随快照不变 + 页码随排序更新）；单测 +10 项（code 分配/
+  回填/复用/排序不变）；verify.sh 15/15 全绿
+
+### Home 与演示快照彻底分离（2026-08-19）
+
+- **Home 独立锚点**：Home = 独立的空间锚点（HomeStore，含竖/横屏槽位），与快照列表完全解耦——
+  长按底栏 Home = 添加快照（进快照列表，纯演示快照）；点按 Home = 回 Home 锚点
+  （home > fallback > 出厂）；顶栏右上角菜单「设为 Home」= 设置 Home 锚点
+- **快照列表去 Home 位概念**：列表首项不再等于 Home，无 snapshot-home 高亮，打开面板
+  默认第一个分组；插入位置（顶部/底部）仅决定新快照插入顺序；演示模式独立
+- **顶栏菜单精简**：排列方式/视图 section 只在子文件夹显示（Desktop 无限画布无排序/
+  视图语义直接隐藏）；设为 Home / 高级浏览 / 切换画布方向始终在 Desktop 可用
+- **启动相机**：reload 启动 = fallback > 上次布局 > 出厂，快照不再影响启动位置
+- **存储**：移除 SnapshotStore.setHome（Home 位快照语义废弃）；HomeStore 恢复为
+  Home 锚点的唯一真相
+- **E2E**：verify-home.js 22 项（长按 Home 记录快照不触发锚点类 / 点按回出厂 /
+  reload 落默认视角 / 清快照无影响）；verify-snapshot-sheet.js 25 项（无 Home 高亮 /
+  设为 Home 写 HomeStore）；verify.sh 15 项全绿（含 8 套 E2E）
+
+### 修复拖拽手势冲突 + Morph FAB 层级（2026-08-19）
+
+- **拖拽不跟手/面板跟随关闭（根因）**：面板下滑关闭手势在列表 scrollTop=0 时无条件接管
+  touchmove——drag-sort 拖拽时它也位移面板 + preventDefault，两者打架（阻力感 + 面板被拖走）。
+  修复：touchstart/touchmove 检测 `dragSort.isDragSortActive()`，拖拽中面板让权（不位移、
+  不拦截），drag-sort 全权接管
+- **边缘智能滚动修正**：`edgeInsetBottom` 由「10vh 底栏估算」改为实际 footer 关闭条高度
+  + 安全区（列表可视底缘即滚动生效边缘，手指搭关闭条也吃到越界加速）
+- **Morph FAB 始终最高层级**：移除「快照面板打开时 FAB 隐藏」规则——FAB（z-index 1500）
+  始终浮于面板（650）之上可见可点（LexiCull 同款）；操作模式 morph 为 关闭(close) + 操作按钮不变
+- **E2E**：`verify-snapshot-sheet.js` 扩展至 23 项——新增「长按拖拽排序生效 + 拖拽中
+  面板 transform 不变（不跟随关闭）+ 拖拽后操作模式保持」、FAB 始终可见断言；
+  verify.sh 15 项全绿（含 8 套 E2E）
+
+### 快照面板操作模式：长按拖拽排序 + FAB 多选批量操作（2026-08-19）
+
+- **面板高度 70%**：参考 MT 管理器，固定 50vh → 70vh（更多快照可见）
+- **操作模式（参考 LexiCull）**：长按快照行（500ms，10px 容差）进入——FAB 从右下角
+  morph 展开（删除 / 移动 / 关闭(close) 退出）；长按行不松手直接拖拽排序（整行可拖，去掉原拖动把手）
+- **多选**：操作模式下单击行切换选中（蓝色高亮），再次长按行可拖动排序（拖动时清空选中）
+- **删除**：FAB「删除」确认后批量删除选中快照，删除后自动退出操作模式
+- **批量移动**：FAB「移动」→ 面板内浮层列出目标分组 → 点击迁移并自动切到目标分组 tab
+- **FAB 语义收敛**：快照面板打开时 FAB 隐藏；操作模式浮现为 关闭图标（点击 = 退出操作模式 +
+  收起）；退出/删除/移动后自动还原
+- **拖动排序**：drag-sort 引擎 isActive 绑定操作模式；边缘智能滚动（edgeZone/edgeInset
+  内缩到底栏上方，手指搭底栏也吃到越界加速）与 LexiCull 同源
+- **存储**：SnapshotStore 新增 `move(data, fromGroupId, toGroupId, ids)` 批量移动
+- **E2E**：`verify-snapshot-sheet.js` 扩展至 20 项（70vh/长按进入/FAB morph/多选/
+  批量删除/移动浮层/FAB 关闭(close) 退出）；verify.sh 15 项全绿（含 8 套 E2E）
+
+### 快照面板分组改为 Tab 切换（2026-08-19）
+
+- **分组标签栏**：不同分组不再混排在同一列表——分组标签横排在列表顶部
+  （`#snapshot-tabs`，可横向滚动），列表只渲染当前分组快照
+- **切换方式**：点击标签切换；列表内左右滑动切换（|dx| > 60px 且水平分量占优，
+  与列表垂直滚动、拖动排序互不干扰，到边界停留保护）
+- **分组管理**：标签栏末尾 + 新建分组；长按标签重命名/删除分组（删除连同组内快照）；
+  新建分组后自动切到新分组 tab
+- **E2E**：`verify-snapshot-sheet.js` 扩展至 17 项（标签渲染/默认选中 Home 分组/
+  点击切换/左右滑动/边界保护）；verify.sh 15 项全绿（含 8 套 E2E）
+
+### 快照面板 MVP 改造：分组 + 固定高度（2026-08-19）
+
+- **面板交互参考 MT 管理器**：快照面板固定高度 = 视口 50%（不再跟手展开全屏），
+  呼出时屏幕上半部分有半透明遮罩（点遮罩关闭）；面板底部新增「关闭」按钮条；
+  全面板区域支持手势下滑关闭（header/footer/列表顶部起始，与列表滚动协调）
+- **快照分组（v3 存储）**：`snapshot-store.js` 升级 version 3——分组列表全局共用
+  （不随横竖屏拆分），每个方向（竖屏/横屏）的每个分组下各自保存快照；
+  支持新建/重命名/删除分组（删除分组连同组内快照）；快照在分组内拖动排序；
+  新快照默认插入 Home 分组（插入位置 top/bottom 仍全局生效）
+- **兼容迁移**：v2 双槽位 / v1 扁平数据自动迁入「默认分组」；旧版 `HomeStore` 兜底迁移
+  仅在整份数据无任何快照时触发，避免横竖屏切换覆盖已有另一方向快照
+- **测试**：`test-snapshot-store.js` 重写覆盖分组 CRUD/方向隔离/v2/v1 迁移（47 项）；
+  新增 `scripts/verify-snapshot-sheet.js` E2E（面板 50vh/遮罩/关闭按钮/分组渲染/Home 高亮）；
+  verify.sh 14 项全绿（含 8 套 E2E）
+
+### 演示快照 + 演示模式（2026-08-19）
+
+- **演示快照面板**：底栏区域垂直上滑跟手呼出快照列表；列表显示快照名称与缩放层级；
+  点击切换快照（相机平滑飞行）；长按拖动把手重排顺序
+- **Home 语义迁移到快照列表**：长按底栏 Home 在当前方向（竖屏/横屏）快照列表的 Home
+  位插入新快照；点按 Home 飞回当前方向 Home 位；新快照插入位置可在快照菜单切换
+  （顶部/底部，默认顶部）
+- **快照存储**：`snapshot-store.js` 独立模块，version 2 结构 `{portrait, landscape}` 双槽位
+  按画布方向隔离；持久化走 localStorage + 桌面空间目录 `.adesktop-snapshots.json`（文件为真相）；
+  兼容旧版 `HomeStore.home/fallback` 自动生成初始快照
+- **演示模式**：快照面板三点菜单开启；开启后底栏前进/后退切换为「下一个/上一个快照」，
+  到边界禁用并吐司提示，吐司内提供「回到第一页/最后一页」快速跳转
+- **拖动排序引擎**：移植 LexiCull `drag-sort.js`（FLIP 智能避让 + 边缘自动滚动）到 Adesktop，
+  用于快照列表排序
+- **吐司增强**：`toast.js` 新增 `showAction(msg, actionText, onAction)`，支持带操作按钮的
+  Snackbar 样式吐司；普通吐司超时保持 1800ms，操作吐司 3500ms
+- **测试**：新增 `test-snapshot-store.js`（竖横屏隔离/CRUD/插入位置/Home 位/兼容迁移）、
+  `test-toast-action.js`；更新 `verify-home.js`/`verify-rotate.js` 适配 SnapshotStore 存储结构
+
+### 修复布局持久化 + 布局落目录文件 + 整理桌面（2026-08-19）
+
+- **修复布局持久化被破坏（根因）**：refresh 的 positions 清理按「key 无 '/'」判定根级——
+  桌面根改 `Desktop/` 后 fullPath 全含 '/'，每次刷新清空全部已保存位置。
+  修复：按「当前目录前缀 + 无更深段」判定直接子项；虚拟回收站（key=`.trash` 桥层根固定串）特判保留
+- **布局真相落目录文件**：桌面空间布局（图标位置 + 相机）双写——`.adesktop-layout.json`
+  （位于桌面空间目录内，**文件为真相**）+ localStorage（降级为缓存，启动/迁移兼容）；
+  refresh 串行读文件覆盖缓存，切换桌面根 = 读新目录数据文件——布局随目录存在，
+  不因 rootId/切换桌面根丢失；`migrateLegacy` 兼容旧 localStorage 数据（文件未生成前兜底）
+- **布局文件不渲染**：`.adesktop-layout.json` 为隐藏元数据，渲染时过滤
+- **整理桌面（Morph FAB 新增）**：`desktop-organize.js` 纯函数（可单测）——
+  文件夹在前（名称升序）、文件按扩展名字母序分组（组内名称升序）；
+  锚定相机可见区域左上角铺满网格：竖屏列优先（从上到下）、横屏行优先（从左到右）；
+  仅桌面空间可用（folder 自动排布无整理语义）；整理后双写持久化
+- **测试**：test-desktop-organize.js（19 项）；test-desktop-root.js 扩展布局文件
+  读写/过滤断言（36 项）；verify.sh 13/13 全绿（含 6 套 E2E）
+- 文档同步：data-integrity.md / operation-contract.md 布局存储说明更新
+
+### 桌面根可配置 + 应用内授权对话框（2026-08-19）
+
+- **桌面根（Desktop Root）**：all-files 模式桌面空间渲染的目录默认 `Desktop`，
+  Drawer「桌面目录」可配置（常见目录：手机存储根/Desktop/下载/文档/图片/相机/音乐/电影
+  + 自定义相对路径，校验拒绝绝对路径/`..`/空段）
+- **rootId 隔离升级**：`all-files:<桌面根>`——切桌面根即切换布局/Home 域（不继承摆放）；
+  启动 curPath 初始化为桌面根，导航栈同步重建
+- **视图模式调整**：all-files 模式下手机存储根（`''`）也是 Folder 容器（资源管理器式），
+  桌面空间「上级」= 手机存储根（goUp 可达），手机存储根无上级
+- **虚拟回收站**：`.trash` 在桥层根（手机存储根），桌面空间附加虚拟图标
+  （key 固定 `.trash`，打开/删除守卫/位置持久化天然匹配）；全盘根 folder 内为实体条目
+- **应用内授权对话框**：不再裸跳系统设置页——首次启动未授权弹「授权手机存储」引导
+  （说明 + 去授权按钮 → 系统设置页），localStorage 标记防重复弹；Drawer 入口同款；
+  已授权时点击提示「已授权手机存储」；E2E 内存桩（mode=mock）不弹（非合法枚举守卫）
+- **原生简化**：MainActivity 移除 onCreate 自动跳设置页与 prefs 标记（前端驱动）
+- **测试**：新增 test-desktop-root.js（29 项：isFolderView 判定/启动初始化/rootId 拼装/
+  saveDesktopRoot 校验/虚拟回收站）
+- 文档同步：fs-scope.md 桌面根与授权流程、operation-contract.md rootId 取值
+
+### 修复：全盘授权不生效 + 升级用户不弹引导（2026-08-19）
+
+- **模式优先级 Bug（根因）**：`isSafMode()` 原为 `rootUri != null`——升级用户保留旧 SAF
+  授权时，全盘授权后 `allFilesRoot` 被旧 rootUri 遮蔽，桥层永远走 SAF 分支，全盘永不生效。
+  修复：`isSafMode() = allFilesRoot == null && rootUri != null`（全盘 > SAF > 私有），
+  resolve/ensureTrash/rootInfo 同步统一（rootInfo 判断顺序 all-files 优先）
+- **升级引导 Bug**：启动引导条件原为 `!allFilesGranted && rootUri == null`——已有旧 SAF
+  授权的用户永远不弹引导。修复：条件改为「无全盘权限 && 未提示过」（prefs 标记
+  `all_files_prompted`，拒绝后不重复弹；Drawer「授权手机存储」可再进）
+- **设置页跳转加固**：`ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION` 优先 package 定位，
+  部分 ROM 不支持时退回列表页（双保险）
+
+### 全盘访问转正：授权手机存储（2026-08-19）
+
+- **主方案切换**：文件系统来源从「SAF 授权目录」改为「全盘访问（MANAGE_EXTERNAL_STORAGE）」——
+  首次启动引导授权（Android 11+ 跳系统设置页 / Android 10 及以下运行时权限），
+  授权状态动态检测不持久化，被撤销自动降级（SAF → 私有目录），App 永远可用
+- **桥层三模式**：`BridgeContext` 引入 SAF / all-files / private 三态，
+  File 分支根参数化为 `fileRoot()`（全盘优先，私有兜底）——`FileStore`/`TransferEngine`
+  的私有模式代码零重写复用；越界校验泛化为 `isUnderFileRoot`
+- **rootInfo 扩展**：`mode='all-files'`、`rootId='all-files'`（固定串）、`rootName='手机存储'`；
+  前端 drawer.js 来源显示适配（手机存储/外部存储/应用私有目录）
+- **权限变化热切换**：`onResume` 检测全盘授权授予/撤销 → 桥层切模式 + `App.onRootChanged`
+  通知前端刷新（首次授权从设置页返回即生效，无需重启）
+- **Drawer 入口语义**：「切换根目录」→「授权手机存储」（桥 `requestRootAccess` 改引导全盘）；
+  SAF 选择器保留为降级路径代码（`REQ_OPEN_DOC_TREE` 处理仍在）
+- **已知限制记录**：全盘权限仍无法访问 `Android/data`、`Android/obb`（Android 11+ 硬限制）；
+  全盘 rootId 固定串 → 从旧 SAF 目录切到全盘后布局不继承（rootId 隔离语义）
+- **文档同步**：fs-scope.md 决策记录重写、bridge-and-data-contract.md / operation-contract.md /
+  architecture.md 的 mode/rootId 契约更新
+
+### Morph FAB「取消」语义收敛：FAB 展开 ⇔ 选中态一致（2026-08-19）
+
+- **关闭 Morph FAB = 取消选中**：selection 态下收起 FAB（原位点击 × / 动作完成后收起）
+  即清空选中（Viewer 实体 deselectAll + 文件 clearSelection）——「展开 ⇔ 选中」状态一致，
+  消除「FAB 已收起但选中仍在」的幽灵操作栏
+- **移除「取消选择」独立按钮**（index.html clear-selection）：取消由 FAB 原位承担
+  （图标 + → ×），不再新增取消按钮；同步删除 fab-speed-dial.js `clear-selection` 动作分支
+- **清理死代码**：删除 `close-speed-dial` action（LexiCull 移植遗留的独立取消按钮入口，
+  HTML 中无对应按钮，纯残留）
+- **联动适配**：fab-context-probe 场景 D/E 断言（回收站选中 → 仅「打开」；回收站内 →
+  打开/复制）；viewer-verify / interaction.md / viewer.md / move-target.js 注释与操作表同步
+- **E2E 补断言**：verify-fab-inspector 新增「FAB 原位点击 = 收起 + 取消选中」
+
+### 工程：仓库目录改名 Desktop → Adesktop（2026-08-19）
+
+- 项目目录 `/workspace/Desktop` → `/workspace/Adesktop`（与包名/产物名/APK 命名对齐）
+- 硬编码路径清理：AGENTS.md 探针路径更新；tools/ui ×4 探针由写死 `/workspace/Desktop`
+  改为相对路径 `path.join(__dirname, '..', '..', 'dist', ...)`（目录再移动不失效）
+- **注意**：`.git/objects` 内 lazy-object 符号链接为绝对路径，目录改名会断链
+  （`fatal: bad object HEAD`）——已全部重建为**同目录相对链接**，今后 mv 不再受影响
+
+### 弹窗宽度收敛为设计 token：--dialog-width（2026-08-19）
+
+- **tokens.css 新增 `--dialog-width: 86.5vw`**（占屏幕 80%~90%），dialog.css /
+  move-target.css 由字面值改为 `var(--dialog-width)`——弹窗宽度从此单一来源，
+  调宽度只改一处全局生效（根治此前 76vw / 84vw 双魔数不一致的历史问题）
+- **注释不再携带魔法值**：loading.css ×2 / index.html 注释由「86.5vw」改为引用
+  `var(--dialog-width)`，改值后注释不会过期
+
+### 弹窗宽度加宽：76vw → 86.5vw（2026-08-19）
+
+- **通用弹窗基座**（`dialog.css` `.dialog`）：宽 76vw → 86.5vw（占屏幕 80%~90%），
+  max-width 420px → 480px 同步按比例放宽；覆盖新建/重命名/网站/AppList 确认/上传确认/
+  转移失败/加载进度等全部 `.dialog` 系弹窗（loading.css 复用）
+- **移动目标弹窗**（`move-target.css` `.move-target-dialog`）：84vw → 86.5vw，与通用弹窗统一
+- **注释/文案同步**：loading.css ×2、index.html 弹窗注释的「76vw」引用同步更新
+
+### 治理补课：类型检查进门禁 + 改名残留清理 + 术语统一（2026-08-19）
+
+- **类型检查进门禁**：`tools/verify.sh` 新增 typecheck 步骤（tsc --noEmit，缺 typescript 时
+  SKIP 与 minify 同策略）；AGENTS.md 铁律/常用命令/决策表同步（E2E 数修正为 ×6，原 ×5 过期）；
+  docs/build-pipeline.md 新增「类型检查（渐进式 @ts-check）」章节
+- **改名残留清理**（2026-08-17 改名轮遗漏项）：AGENTS.md 包名占位 `com.example.desktop`、
+  常用命令 dist/desktop.bundle.html ×2、README 产物名 ×2 + 包名占位、android/settings.gradle
+  `rootProject.name = "Desktop"`、.githooks/pre-commit 报错消息、docs/build-pipeline.md 包名占位句
+- **术语统一**：「零依赖」→「零第三方依赖」（项目理念层：AGENTS.md / README / build-pipeline.md
+  依赖策略 / loading.js 注释）；模块级语义保留（markdown.js「纯函数零依赖」、测试「零依赖运行」）
+- **保留**：功能语义命名不动（`App.Desktop*` 命名空间、`desktop-*.js` 模块、「Desktop 空间
+  vs Folder 容器」等桌面隐喻）——是产品概念，非项目名
+
+### 项目改名：Desktop → Adesktop（Android Desktop，2026-08-17）
+
+- **包名**：`com.example.desktop` → `com.ranjiushu.adesktop`（9 个 Java 类目录迁移 + build.gradle namespace/applicationId + AndroidManifest + proguard keep 规则同步）
+- **应用显示名**：strings.xml app_name / index.html `<title>` / `App.NAME` 统一为 Adesktop；主题 `Theme.Desktop` → `Theme.Adesktop`
+- **构建产物**：`dist/desktop.bundle.html` → `dist/adesktop.bundle.html`（build-web.sh / minify-bundle.js / verify.sh / lint.sh / build-local.sh / E2E scripts / tools/ui 探针 / test-smoke 同步）
+- **APK 命名**：归档 `Adesktop_v<版本>_<时间戳>.apk`（collect-apk.sh + test-collect-apk.sh）；COS bundle slug `desktop` → `adesktop`
+- **文档/工具**：README / AGENTS / docs 标题、build-stats repo-map 标题、bundle-source 打包名、探针 probe-repo.sh Desktop 分支识别同步
+- **保留**：功能语义命名（`App.Desktop*` 命名空间、`desktop-*.js` 模块、`desktop-grid` 等 CSS 类、「Desktop 空间 vs Folder 容器」）不动——是产品概念（桌面隐喻），非项目名
+
+### E2E 修复：buildinfo 断言脱节 + home 双击窗口边界（2026-08-17）
+
+- **fix(buildinfo-e2e)**：33c5d44 重构文件详情弹窗（grid 键值对精简为一行 sizeLine）
+  后移除 `.build-detail-value` 元素，但 E2E 3d2 段仍点击该元素 → null.click 稳定失败。
+  断言跟进新结构：标题/路径/简介（data-toast=已复制简介）三连击复制验证
+- **fix(home-e2e)**：doubleTap 两击间隔 sleep(150) + CDP 触摸派发延迟 = 实际 274~320ms，
+  恰卡在 300ms 双击窗口边界，偶发判为普通 tap（未进子文件夹 → Home 未禁用）。
+  间隔缩短至 80ms（实测两击 206~227ms），稳定落在窗口内
+
+### 弹窗按钮样式全局统一：文字式 + 取消靠左/主操作靠右（2026-08-17）
+
+- **按钮样式泛化**：移动目标弹窗的简约文字式按钮（无边框无底色、主操作强调色加粗、
+  次操作次要色）从 `move-target.css` 局部覆盖提升为 `dialog.css` 通用默认样式，全部
+  弹窗（新建/重命名/网站/AppList 确认/上传确认/转移失败/移动目标）统一采用
+- **布局统一**：双按钮弹窗改为「取消靠左 + 主操作靠右」两端对齐（`dialog-actions-pair`
+  由等分双列改为 space-between）；新建弹窗新增左侧「取消」按钮，文件/文件夹并排靠右
+- **禁用态泛化**：移动弹窗 `move-confirm-invalid` 专用类改为通用
+  `.dialog-btn[aria-disabled="true"]` 置灰样式（点击仍派发，由业务侧拦截吐司）
+- **触控目标**：文字式按钮保持 min-height 44px 触控区
+
+### Morph FAB 增强：槽位布局 / 移动文件 / 悬浮球拖拽（2026-08-17）
+
+- **P0 修复：展开菜单空洞 + 按钮叠 FAB**：位移规则原用 `:nth-child(n)` 固定编号，
+  `display:none` 元素仍占序号 → 按上下文隐藏按钮后菜单出现空洞（剪贴板空隐藏粘贴、
+  Viewer 选中、回收站守卫等场景）；selection 集第 8 个按钮缺位移规则叠在 FAB 上。
+  改为槽位类（slot-1..8）由 JS 按可见顺序重排（`_applySlots`，用 offsetParent 判可见，
+  规避 computed display 对隐藏祖先后代返回自身值的 Chrome 行为）；FAB 状态机收敛为
+  单一 `_state` + `_syncContext` 集中按钮显隐；返回键消费展开的菜单
+- **feat：移动文件**：FAB selection 菜单新增「移动」→ 目标文件夹选择器（级联浏览 +
+  面包屑，移植 LexiCull 移动交互）→ 复用真移动管道（进度/取消/失败汇总/清选中/刷新）。
+  守卫：源所在目录 / 自身与子文件夹（循环移动）/ 锁定文件；底部按钮固定「取消/确认」，
+  目标不可移动时确认变灰、点击吐司原因（不用 disabled，保证吐司可触发）
+- **feat：FAB 悬浮球拖拽定位**：按住左右滑动切换左/右档位（甩动判定优先、就近吸附 +
+  spring 动画 + 原位/对侧幽灵占位），位置持久化 localStorage 刷新保持；菜单展开 /
+  取景器激活 / 弹窗打开时禁拖，与短按展开、长按取景器三手势协调（touchcancel 作废
+  点击 + 取消长按 timer）
+- **回归探针 ×4**：tools/ui/fab-gap-probe / fab-context-probe / move-target-probe /
+  fab-drag-probe（无头 Chromium + CDP 触摸序列，mock 文件系统跑守卫与流程断言）
+
+### 旋转画布 review 修复（2026-08-17）
+
+- **P0 修复：goHome 横屏闪回竖屏**：`goHome()` 创建目标相机时未传 rotation
+  （`DesktopCamera.create()` 第四参缺省 → rotation=0），横屏点 Home 动画落点
+  rotation=0 导致画布闪回竖屏。修复：传 `C.camera.rotation`；`animateCameraTo`
+  改为浅拷贝 target 防 mutate 调用方对象
+- **P1 修复：saveLayout 不持久化 rotation**：`saveLayout` 写入相机缺 rotation 字段，
+  崩溃恢复后按 rotation=0 重建相机——横屏状态下 app 被杀重启，相机 x/y 是横屏视角
+  但 rotation=0，视口显示完全不同的区域。修复：写入 `rotation` + `_loadLayoutAndCamera`
+  恢复时透传 `saved.camera.rotation`
+- **P1 修复：handleWorldRect 旋转命中矩形错乱**：rotation=90 时返回的矩形
+  宽=HANDLE_W/z 高=HANDLE_H/z（轴对齐横条），但实际手柄在世界空间是竖条
+  （屏幕逆旋转后宽高互换）。修复：`handleWorldRect` 增加 `vw/vh` 参数，旋转态
+  先算屏幕矩形再逆变换回世界坐标（精确互逆）；`handleHitTest` 级联传视口尺寸；
+  无 vw/vh 时退化旧逻辑（防御路径）
+- **P2 修复**：folder clamp 构造的对象缺 `rotation` 字段（补 `rotation: 0`）；
+  CSS `.view-menu-check` 残留 `font-style`/`font-weight`（SVG 图标无需）
+- **E2E 新增场景 4.6**：横屏下点 Home 按钮 → 断言 rotation 保持 90 + 落在横屏槽位
+  （P0-1 回归守卫，此前 E2E 仅用菜单切换方向未覆盖 goHome 路径）
+
+### 切换画布方向：落在目标方向槽位（2026-08-17）
+
+- **修正落位语义**：此前切换方向读的是**当前方向**槽位再旋转（旋转后落在「当前
+  方向 Home 位置 + 新方向」），未真正回到目标方向的 Home 位置。
+  现改为读**目标方向**（next）槽位——竖屏切横屏读 `landscapeHome`/`landscapeFallback`，
+  横屏切回竖屏读 `home`/`fallback`；相机直接落在目标方向槽位的 x/y/zoom + 目标方向
+  rotation；目标方向无槽位时保持当前位置只转方向
+- **E2E 增强**：verify-rotate.js 场景 4.5 区分两槽位位置（横屏再平移后记录 P2 ≠ 竖屏
+  槽位 P1），断言「切回竖屏落在 P1」「再切横屏落在 P2（rotation=90）」——真实验证
+  「切到哪个方向就落在哪个方向的槽位」
+- **文档**：interaction.md 7.7 切换语义改为「落在目标方向槽位」+ CHANGELOG
+
+### 切换画布方向：MD 勾选图标 + 先回 Home 再转方向（2026-08-17）
+
+- **菜单勾选标记改 MD 图标**：view-menu 各勾选项（网格/列表/高级浏览模式/切换画布方向）
+  从文字对勾（`<i class="view-menu-check">`）改为 MD 风格 SVG check 图标
+  （`icon-check` symbol，`<svg class="view-menu-check"><use href="#icon-check"/></svg>`）
+- **切换方向先回 Home**：每次切换画布方向，先自动回到**当前方向**的 Home 槽位
+  （快照优先 > 默认视角 > 出厂 (0,0,1)）再旋转——旋转是绕视口中心的，停在任意位置
+  旋转后看到的区域完全不同；先回 Home 保证旋转后落在当前方向的 Home 视角（位置可预期）。
+  无 Home 槽位时保持当前位置只转方向
+- **验证**：verify-rotate.js E2E 新增「勾选标记为 #icon-check」+「切换后相机位置保持/回 Home」断言
+
+### 切换画布方向 + 横屏/竖屏 Home 槽位（2026-08-17）
+
+- **菜单项改名**：「旋转画布 90°」→「切换画布方向」（语义更清晰，仍是 0↔90 toggle）
+- **Home 槽位按画布方向分**：竖屏（rotation=0）与横屏（rotation=90）各有独立的
+  Home 快照/默认视角槽位（`home-store.js` version 2）：
+  - 顶层 `home`/`fallback` = 竖屏槽位（version 1 旧数据天然就是竖屏，零迁移）
+  - `landscapeHome`/`landscapeFallback` = 横屏槽位（rotation=90 时读写）
+  - 切换画布方向后：长按 Home 记录到当前方向槽位、点按 Home 恢复到当前方向槽位、
+    底栏 Home 高亮按当前方向槽位有无快照显示；两套槽位互不覆盖
+- **调用点**：`captureHome`/`captureDefaultView`/`goHome`（desktop-navigation）、
+  启动相机恢复（desktop-persist）、Home 高亮（bottom-bar）均透传 `C.camera.rotation`
+- **验证**：`test-home-store` 新增双槽位读写/独立/兼容用例；`verify-rotate.js` E2E
+  新增竖屏/横屏快照独立场景（长按记录 → 切换方向高亮跟随 → 互不覆盖）
+
+### 旋转画布 90°（2026-08-17）
+
+- **新增「旋转画布 90°」菜单项**（顶栏「排列与视图」菜单底部，`.view-menu-rotate`）：
+  点一下画布绕视口中心顺时针旋转 90°（含图标/文字/背景点阵一起转，像转一张纸），
+  再点一下逆时针转回 0°；只旋转画布视觉与坐标映射，相机位置/缩放、图标世界坐标、布局数据不变
+- **旋转数学核心**（`desktop-camera.js`）：camera 增加 `rotation` 字段（0/90），
+  `transform/applyTo` 生成 `translate3d(...) rotate(90deg) scale(zoom)` 绕视口中心旋转；
+  `screenToWorld/worldToScreen/panBy/pinchBy` 全链路旋转适配（屏幕↔世界坐标互逆，
+  拖拽跟手、捏合锚点不动），`lerp/lerpCentered/clampToBounds` 透传 rotation
+  （Home 动画/目录切换保持旋转态不闪回正）
+- **坐标换算签名扩展**：`screenToWorld/worldToScreen/applyTo/transform` 增加可选 `vw/vh`
+  （旋转中心 = 视口中心），未传时行为与旧版一致（向后兼容）；手势层/viewer 手柄/框选同步传入
+- **viewer 拖动手柄适配旋转**：`handleScreenRect/handleWorldRect` 按旋转后卡片视觉底部
+  （原右边缘中心）定位/命中
+- **可用性**：根目录（桌面空间）可用，子文件夹（folder 容器）禁用；旋转状态不持久化
+  （临时 toggle，刷新回正）
+- **验证**：`test-desktop-camera`/`test-desktop-gesture`/`test-viewer` 新增旋转用例；
+  新增 `scripts/verify-rotate.js` E2E（旋转 toggle + 勾选态 + folder 禁用）接入 verify.sh
 
 ### FileBridge 拆分 7 模块（门面 + 委托）（2026-08-17）
 

@@ -5,6 +5,7 @@
  * 依赖: namespace.js, desktop-core.js, desktop-gesture.js, view-store.js
  * 导出: App.DesktopBrowseMode
  */
+// @ts-check
 'use strict'
 
 App.DesktopBrowseMode = (function () {
@@ -28,6 +29,7 @@ App.DesktopBrowseMode = (function () {
   }
 
   // 设置高级浏览模式（ViewMenu 切换驱动）
+  /** @param {boolean} on */
   function setAdvancedBrowse(on) {
     C._advancedBrowse = !!on
     C._tempNormalMode = false   // 切换模式时清空临时态
@@ -42,6 +44,7 @@ App.DesktopBrowseMode = (function () {
 
   function isAdvancedBrowse() { return C._advancedBrowse }
 
+  /** @type {DesktopBrowseMode} */
   return {
     syncBrowseMode: syncBrowseMode,
     exitTempMode: exitTempMode,

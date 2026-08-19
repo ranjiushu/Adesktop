@@ -35,7 +35,7 @@
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   outline: none;
-  border-radius: 50%;
+  border-radius: 0;
   padding: 0;
 }
 

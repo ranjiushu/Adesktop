@@ -1,4 +1,5 @@
 /* 应用入口：初始化渲染与状态输出 */
+// @ts-check
 'use strict'
 
 App.boot = function boot() {
@@ -16,7 +17,15 @@ App.boot = function boot() {
         if (App.fabSpeedDial.isExpanded()) {
           App.fabSpeedDial.collapse()
         } else {
-          App.fabSpeedDial.expand('desktop')
+          // 无选中 → desktop 菜单（新建/刷新/粘贴）。
+          // 语义收敛：FAB 展开 ⇔ 选中态一致——selection 态收起（collapse）即取消选中，
+          // 故移动选择器取消后 FAB 已收起、选中已清空，短按回到 desktop 菜单。
+          const hasSel = (App.Desktop && typeof App.Desktop.hasSelection === 'function' &&
+            App.Desktop.hasSelection()) ||
+            (App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
+            App.InternalViewer.anySelected())
+          if (hasSel) App.fabSpeedDial.setSelection(true)
+          else App.fabSpeedDial.expand('desktop')
         }
       })
     }
@@ -49,9 +58,25 @@ App.boot = function boot() {
   if (App.RenameDialog && typeof App.RenameDialog.init === 'function') {
     App.RenameDialog.init()
   }
+  // 移动目标选择器（Morph FAB「移动」弹出：级联浏览文件夹选目标）
+  if (App.MoveTarget && typeof App.MoveTarget.init === 'function') {
+    App.MoveTarget.init()
+  }
+  // FAB 悬浮球拖拽定位（按住左右滑动切换左/右档位，位置持久化）
+  if (App.fabDrag && typeof App.fabDrag.init === 'function') {
+    App.fabDrag.init()
+  }
   // IME 键盘适配（desktop:ime 事件 → 对话框上移）
   if (App.ImeAdapter && typeof App.ImeAdapter.init === 'function') {
     App.ImeAdapter.init()
+  }
+  // 演示快照面板（底栏上滑呼出，依赖 BottomBar 按钮但 init 早于绑定点击）
+  if (App.SnapshotSheet && typeof App.SnapshotSheet.init === 'function') {
+    App.SnapshotSheet.init()
+  }
+  // Viewer 持久化监听注入（画布态变化 → ViewerStore 落盘；恢复在 Desktop.refresh 内）
+  if (App.DesktopViewerLink && typeof App.DesktopViewerLink.init === 'function') {
+    App.DesktopViewerLink.init()
   }
   // 底部工具栏（加号 → 新建对话框，其余占位）
   if (App.BottomBar && typeof App.BottomBar.init === 'function') {
@@ -85,6 +110,13 @@ App.onRootChanged = function onRootChanged() {
 // 均未消费返回 false（壳退出 App）。不依赖 pushState 是否被 WebView 计入 canGoBack。
 // 返回键「不关闭」Viewer：Viewer 是画布实体，关闭走 Morph FAB「关闭」（删除语义）。
 App.handleSystemBack = function handleSystemBack() {
+// 0. 展开的 Speed Dial 优先：desktop 态（模态遮罩）返回键 = 收起菜单。
+//    selection 态由下方「取消选中」分支收敛（clearSelection → setSelection(false)），无需重复处理。
+if (App.fabSpeedDial && typeof App.fabSpeedDial.isExpanded === 'function' &&
+    App.fabSpeedDial.isExpanded() && App.fabSpeedDial.getMode() === 'desktop') {
+  App.fabSpeedDial.collapse()
+  return true
+}
 // 0. 弹窗优先（dialog-overlay 最顶层：新建/重命名/确认框/详情弹窗）——系统返回键关闭栈顶弹窗，
 //    弹窗不设「取消/关闭」按钮，关闭途径 = 返回键 / 点空白（见 dialog.js 模块约定）
 if (App.Dialog && typeof App.Dialog.handleBack === 'function' && App.Dialog.handleBack()) {
@@ -114,6 +146,10 @@ if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()
   }
   if (App.ViewMenu && typeof App.ViewMenu.isOpen === 'function' && App.ViewMenu.isOpen()) {
     App.ViewMenu.close()
+    return true
+  }
+  if (App.SnapshotSheet && typeof App.SnapshotSheet.isOpen === 'function' && App.SnapshotSheet.isOpen()) {
+    App.SnapshotSheet.close()
     return true
   }
   if (App.BuildInfo && typeof App.BuildInfo.isOpen === 'function' && App.BuildInfo.isOpen()) {

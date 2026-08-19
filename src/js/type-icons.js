@@ -3,10 +3,12 @@
  * 本模块只负责「类型图标」（缩略图 fallback 基线）；缩略图判定与获取在 thumbnail.js（ThumbnailService）。
  * 导出: App.TypeIcons
  */
+// @ts-check
 'use strict'
 
 App.TypeIcons = (function () {
   // 扩展名（小写）→ 类型 key
+  /** @type {Record<string, Array<string>>} */
   const EXT_KINDS = {
     text: ['txt', 'log', 'ini', 'conf', 'cfg', 'bat', 'sh', 'yml', 'yaml', 'toml', 'csv', 'tsv', 'text', 'nfo', 'readme'],
     markdown: ['md', 'markdown', 'mdown', 'mkd'],
@@ -27,6 +29,7 @@ App.TypeIcons = (function () {
   }
 
   // 类型 → 形态（同一形态 + 不同颜色可区分相近类型，如 text/md/json/pdf 共用 fileText）
+  /** @type {Record<string, string>} */
   const KIND_SHAPE = {
     folder: 'folder',
     trash: 'trash',
@@ -50,6 +53,7 @@ App.TypeIcons = (function () {
   }
 
   // Feather 风格 SVG 内部内容（24x24 stroke），统一 stroke=currentColor
+  /** @type {Record<string, string>} */
   const SHAPES = {
     folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
     trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
@@ -65,6 +69,7 @@ App.TypeIcons = (function () {
     appGrid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'
   }
 
+  /** @param {any} name @returns {string} */
   function extOf(name) {
     if (typeof name !== 'string') return ''
     const i = name.lastIndexOf('.')
@@ -73,6 +78,7 @@ App.TypeIcons = (function () {
   }
 
   // 文件名/目录 → 类型 key（folder / 各文件类型 / unknown）
+  /** @param {string} name @param {boolean} isDir @returns {string} */
   function kindFor(name, isDir) {
     if (isDir) return 'folder'
     const ext = extOf(name)
@@ -85,12 +91,14 @@ App.TypeIcons = (function () {
   }
 
   // 类型 → 内联 SVG 字符串（含 type-{kind} class，颜色由 CSS 控制）
+  /** @param {string} kind @returns {string} */
   function svgFor(kind) {
     const shape = KIND_SHAPE[kind] || 'file'
     const inner = SHAPES[shape] || SHAPES.file
     return '<svg class="type-icon type-' + (kind || 'unknown') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>'
   }
 
+  /** @type {TypeIcons} */
   return {
     kindFor: kindFor,
     svgFor: svgFor,

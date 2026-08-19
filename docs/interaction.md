@@ -89,7 +89,7 @@ down ─────────────────────────
 | 单击 | 选中 / 反选 |
 | 双击 | 打开（文件 / 进入文件夹） |
 | 长按图标 → 拿起 → 拖动 | 移动图标（已选中则整组拖动；拖动无极，放置时吸附+避让） |
-| 按住 Viewer 拖动手柄 → 拖动 | **自动选中该 Viewer + 直接移动实体**（辅助拖动区，不必先点击/长按；轻点手柄 = 仅选中） |
+| 按住 Viewer 拖动手柄 → 拖动 | **自动选中该 Viewer + 直接移动实体**（辅助拖动区，不必先点击/长按；轻点手柄 = 仅选中）。拿起判定以**按下起点**为命中基准（手柄命中区仅 6px 高，位移超阈值后移动点必出界，不能以移动点重新命中） |
 | 拖动中 1→2 指 / touchcancel | **取消拖动**：图标还原起始位、拿起态回收，不落盘（取消 = 什么都没发生） |
 | 选中非空 | Morph FAB **自动展开**为操作栏 |
 
@@ -102,6 +102,9 @@ down ─────────────────────────
 - **移动完成（drop moved=true）→ 清空选中** + 收起 FAB 操作栏（本次补齐）。
 - **剪切/复制粘贴完成后 → 清空选中**（源路径已失效：cut 源已删、copy 目标已生成，
   避免「幽灵选中」残留操作栏）。
+- **关闭 Morph FAB（原位点击 / 返回键 / 动作完成后收起）→ 清空选中**——「FAB 展开 ⇔ 选中态」
+  语义收敛：selection 态下收起 FAB 即取消选中，不再设独立「取消/取消选择」按钮
+  （取消 = FAB 原位 morph 为 × 后点击，见 fab-speed-dial.js collapse）。
 - 原地拿起放下（moved=false）→ 选中保留（什么都没发生）。
 - 拖动取消（single-cancel）→ 选中保留（取消 = 什么都没发生）。
 - 后退/前进/上级目录 → 保留选中（Windows 按文件夹记忆选中态）。
@@ -110,6 +113,8 @@ down ─────────────────────────
 
 - 选中集合为空 → FAB 展开 `fab-set-preview`（新建/刷新/切换根目录，现状不变）。
 - 选中集合非空 → FAB **自动展开** `fab-set-selection`（选中对象操作）。
+- **FAB 展开 ⇔ 选中态一致**：关闭 Morph FAB（原位点击 × / 返回键 / 动作完成后收起）=
+  取消选中；「取消」不设独立按钮，由 FAB 原位承担（图标 + → ×）。
 - 选中态操作项与多选语义：
 
 | 操作 | 单选 | 多选（框选） |
@@ -118,7 +123,6 @@ down ─────────────────────────
 | 重命名 | 可用 | 禁用（置灰） |
 | 删除 | 可用 | 批量删除（需确认） |
 | 属性 | 可用 | 可用（汇总） |
-| 取消选择 | 清空 | 清空 |
 
 ## 6. LOD（缩放降级）
 
@@ -141,7 +145,10 @@ down ─────────────────────────
 
 ## 7.1 网格系统与放置避让
 
-- 网格：origin (16,16) + step (100,92)，一格一图标，图标左上角对齐网格交点。
+- 网格：origin (16,16) + step (100,116)，一格一图标，图标左上角对齐网格交点。
+  （图标占位固定 106px，对齐 Windows/macOS 桌面模式：cell 与内容解耦——缩略图 48 /
+  类型图标 36 / 名字两行 38px 都在占位内渲染，内容差异不改变占位尺寸；
+  116px 步进留 10px 余量。选中高亮跟随固定占位，任何内容下都不重叠）
 - 拖动**无极**（自由跟手），放置（`drop`）时 `snapToGrid` 吸附到最近交点。
 - 避让（参考 iOS/Android 主屏「重叠者让位」）：移动组放期望位，与之重叠的静止图标按「右、下、左、上」顺序挤到最近空 cell（`desktop-grid.js` 纯函数）。
 
@@ -217,6 +224,44 @@ down ─────────────────────────
 - **双击空白 → 临时操作模式**：高级浏览 ON 时，双击空白（300ms 双击窗口内二击无图标位置）→ 切换 `_tempNormalMode` 进入/退出「临时操作模式」（toast + 震动反馈）。进入临时模式时 `effective = false`，单指拖动恢复框选/拿起语义，方便临时做选择；再次双击空白退出，回到纯浏览 pan。打断条件（`exitTempMode`）：返回 / 打开 Drawer / 目录导航 / 再次双击空白。
 - **偏好持久化**：`view-store.js` 的 `advancedBrowse`（默认 `false`，缺失/非法回退 false）。`setAdvancedBrowse(on)` 切换时合并写入 `ViewStore.save`，写入失败 toast「浏览模式保存失败」；启动时 `initLayout` 读回 `_advancedBrowse = !!prefs.advancedBrowse` 并同步到手势层。
 - **与阶段 D 的关系**：浏览模式只改手势语义，不触碰位置持久化；进入/退出浏览模式不改变相机与图标世界坐标。
+
+## 7.7 旋转画布（阶段 F 定稿）
+
+**定位**：画布整体顺时针旋转 90° 的视图变换——「像转一张纸」，图标/文字/背景点阵随画布一起转（文字侧躺），
+再次点击转回 0°。只旋转画布视觉与坐标映射，**不改变**相机位置/缩放、图标世界坐标、布局持久化数据。
+
+- **开关**：顶栏「排列与视图」菜单底部「切换画布方向」勾选项（`.view-menu-rotate`，`data-rotate="toggle"`）。
+  勾选标记为 MD 风格 check 图标（`icon-check` symbol，非文字 ✓）。
+  **与其余项相反的可用性**——根目录（Desktop 空间）可用，子文件夹（Folder 容器）禁用
+  （`setEnabled(true)` 时 `disabled`；旋转对有限画布滚动容器无意义）。仿高级浏览模式走独立处理器 `_onRotateToggle`。
+- **状态存储**：`camera.rotation`（0 或 90）。旋转是瞬时两态切换（无过渡动画），
+  `App.Desktop.toggleRotate()` 以当前 x/y/zoom 重建相机对象（带 rotation）→ `DesktopGesture.setCamera` 重放
+  transform → `InternalViewer.syncHandles` 重算手柄。`App.Desktop.isRotated()` 供菜单勾选态。
+- **切换落在目标方向槽位**：每次切换画布方向，相机自动落到**目标方向**的 Home 槽位
+  （竖屏切横屏读 `landscapeHome`/`landscapeFallback`，横屏切回竖屏读 `home`/`fallback`；
+  快照优先 > 默认视角）——「切到哪个方向就用哪个方向的槽位」。旋转是绕视口中心的，
+  落在目标方向槽位保证旋转后视角可预期；目标方向无槽位时保持当前位置只转方向。
+- **数学核心（`desktop-camera.js` 纯函数，rotation 透传）**：
+  - `transform/applyTo(camera, el, vw, vh)`：rotation=90 时生成
+    `translate3d(c.y*zoom + (vw+vh)/2, -c.x*zoom + (vh-vw)/2, 0) rotate(90deg) scale(zoom)`——
+    绕视口中心顺时针旋转（推导：世界 p → scale → rotate → translate 矩阵链，视口中心不动点）。
+  - `screenToWorld/worldToScreen(sx, sy, camera, vw, vh)`：旋转时先绕视口中心逆旋转屏幕坐标
+    （`(x,y) → (y,-x)`）再走原公式 / 反之（`(x,y) → (-y,x)`）。保证旋转后点击/框选/拖拽命中准确。
+  - `panBy`：rotation=90 时屏幕位移先逆旋转（`Δc = (dy, -dx)/zoom` 修正），拖拽方向跟手。
+  - `pinchBy`：rotation=90 时锚点屏幕坐标先逆旋转再代入，锚点世界坐标不动。
+  - `lerp/lerpCentered/flightPath/clampToBounds`：透传起点 rotation（Home 动画/目录切换期间保持旋转态，
+    不会中途闪回正）。
+- **viewer 手柄**：`handleScreenRect/handleWorldRect` 适配 rotation——旋转后卡片视觉底部 = 原右边缘中心，
+  手柄贴新视觉底部；命中测试基准同步（世界坐标，与手势层 toWorld 一致）。
+- **坐标换算签名变化**：`screenToWorld/worldToScreen/applyTo/transform` 增加可选 `vw/vh` 参数
+  （旋转中心 = 视口中心），未传时 behavior 与旧版一致（rotation=0 或视口缺失时退化）。
+  调用方：手势层 `toWorld/commit`（用 `_viewportW/H` 缓存）、框选 `showMarquee`（`C.viewportWidth/Height`）、
+  viewer `syncHandle`（`_layer.clientWidth/Height`）。
+- **不持久化**：旋转是临时视图状态（toggle 语义），不入 `view-store`/`layout-store`；刷新/重载回正。
+- **Home 槽位按方向分**：竖屏（rotation=0）与横屏（rotation=90）各有独立的 Home 快照/默认视角槽位
+  （`home-store.js` version 2：顶层 `home`/`fallback` = 竖屏，`landscapeHome`/`landscapeFallback` = 横屏；
+  version 1 旧数据顶层字段天然就是竖屏槽位，零迁移）。切换画布方向后：长按 Home 记录到当前方向槽位、
+  点按 Home 恢复到当前方向槽位、底栏 Home 高亮按当前方向槽位有无快照显示。两套槽位互不覆盖。
 
 ## 8. 位置持久化（当前：localStorage 临时方案）
 

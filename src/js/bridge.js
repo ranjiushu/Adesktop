@@ -3,10 +3,12 @@
  * 这里统一走 window.FileBridge（曾误用 Android.* 导致真机全部失效）；
  * 浏览器环境自动降级 navigator.vibrate / 空操作。
  */
+// @ts-check
 'use strict'
 
 App.bridge = (function () {
   // 震动：FileBridge.vibrate 优先（需 VIBRATE 权限），浏览器预览兜底 navigator.vibrate
+  /** @param {number} [ms] @param {number} [amplitude] */
   function vibrate(ms, amplitude) {
     let duration = typeof ms === 'number' ? ms : 15
     try {
@@ -14,7 +16,7 @@ App.bridge = (function () {
         window.FileBridge.vibrate(duration)
         return
       }
-    } catch (e) { console.warn('[bridge] vibrate 调用异常:', e && e.message) }
+    } catch (e) { console.warn('[bridge] vibrate 调用异常:', e instanceof Error ? e.message : String(e)) }
     try {
       if (navigator.vibrate) navigator.vibrate(duration)
     } catch (e) { /* 忽略 */ }
@@ -27,12 +29,26 @@ App.bridge = (function () {
         window.FileBridge.requestRootAccess()
         return true
       }
-    } catch (e) { console.warn('[bridge] requestRootAccess 异常:', e && e.message) }
+    } catch (e) { console.warn('[bridge] requestRootAccess 异常:', e instanceof Error ? e.message : String(e)) }
     return false
   }
 
+  // 请求系统目录选择器（SAF ACTION_OPEN_DOCUMENT_TREE）更换桌面目录。
+  // all-files 模式下解析为相对路径并切换 desktopRoot；SAF/private 模式下直接作为新的根授权。
+  function requestDesktopDir() {
+    try {
+      if (window.FileBridge && typeof window.FileBridge.requestDesktopDir === 'function') {
+        window.FileBridge.requestDesktopDir()
+        return true
+      }
+    } catch (e) { console.warn('[bridge] requestDesktopDir 异常:', e instanceof Error ? e.message : String(e)) }
+    return false
+  }
+
+  /** @type {AppBridge} */
   return {
     vibrate: vibrate,
-    requestRootAccess: requestRootAccess
+    requestRootAccess: requestRootAccess,
+    requestDesktopDir: requestDesktopDir
   }
 })()

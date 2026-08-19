@@ -39,7 +39,11 @@
   left: 0;
 }
 
-/* 图标：绝对定位（left/top = 世界坐标，由 JS 设置），固定宽度 */
+/* 图标：绝对定位（left/top = 世界坐标，由 JS 设置），固定宽度 + 固定占位高度。
+ * 占位模式对齐 Windows/macOS 桌面：cell 尺寸固定统一、与内容解耦——
+ * 缩略图（48px）或类型图标（36px）都在占位内渲染（缩略图 cover 裁剪），
+ * 文件名两行区固定 38px；内容差异只影响 cell 内部，不影响 cell 尺寸，
+ * 因此排布间距与选中高亮永不重叠（106 = padding 16 + 缩略图 48 + gap 4 + 名字 38） */
 .desktop-icon {
   position: absolute;
   display: flex;
@@ -47,17 +51,26 @@
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-sm);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
   width: 84px;
+  height: 106px;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  isolation: isolate;   /* 高亮 ::before 的 z-index:-1 层局限在本图标内 */
+  /* 无卡片背景（真实桌面隐喻）：默认透明，选中/按压时显示淡色圆角底 */
 }
 
-.desktop-icon:active {
-  background: #eef2f7;
+/* 选中/按压高亮：跟随固定占位的圆角块（inset 8px，四周留白）。
+ * 占位 106px → 高亮 90px；旧版 92px 网格位置下互不干涉（余量 2px），
+ * 新 116px 步进下余量 26px。高度全为 CSS 硬值，不随字体渲染差异变化 */
+.desktop-icon.selected::before,
+.desktop-icon:active::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 0;
+  background: rgba(59, 130, 246, 0.12);
+  z-index: -1;
 }
 
 .desktop-icon-glyph {
@@ -76,11 +89,18 @@
 
 .desktop-icon-name {
   width: 100%;
+  height: 38px;             /* 固定两行空间：一行/两行名图标等高，排布可预测 */
+  line-height: 19px;
   font-size: var(--font-size-sm);
   color: var(--color-text);
   text-align: center;
   overflow: hidden;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  -webkit-box-pack: center;  /* 单行名时垂直居中于两行空间 */
+  justify-content: center;
+  word-break: break-all;
   text-overflow: ellipsis;
 }
 
@@ -90,17 +110,9 @@
   color: var(--color-text-secondary);
 }
 
-/* 选中态：高亮边框 + 浅色底 */
-.desktop-icon.selected {
-  border-color: var(--color-accent);
-  background: rgba(59, 130, 246, 0.08);
-  box-shadow: inset 0 0 0 1px var(--color-accent);
-}
-
 /* 剪切源标记：半透明（Windows 式视觉反馈，文件仍真实存在，刷新不穿帮） */
 .desktop-icon.clip-cut {
   opacity: 0.45;
-  border-style: dashed;
 }
 .desktop-icon.clip-cut .desktop-icon-name {
   text-decoration: line-through;
@@ -121,7 +133,7 @@
   display: none;
   border: 1px solid var(--color-accent);
   background: rgba(59, 130, 246, 0.08);
-  border-radius: 2px;
+  border-radius: 0;
   pointer-events: none;
   z-index: 4;
 }
@@ -168,4 +180,12 @@
 .desktop-icon.desktop-list-row.selected {
   border-bottom-color: var(--color-accent);
   background: rgba(59, 130, 246, 0.08);
+}
+/* 列表视图行：整行高亮（行高 56px 固定，无重叠问题），不显示 inset 小块 */
+.desktop-icon.desktop-list-row.selected::before,
+.desktop-icon.desktop-list-row:active::before {
+  content: none;
+}
+.desktop-icon.desktop-list-row:active {
+  background: rgba(59, 130, 246, 0.12);
 }

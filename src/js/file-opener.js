@@ -5,10 +5,12 @@
  * 依赖: namespace.js, file-api.js, viewer.js, toast.js, shortcut.js
  * 导出: App.FileOpener（kindFor 纯函数可单测）
  */
+// @ts-check
 'use strict'
 
 App.FileOpener = (function () {
   // 扩展名（小写）→ 内部查看器类型
+  /** @type {Record<string, Array<string>>} */
   const KIND_EXTS = {
     text: ['txt', 'log', 'ini', 'conf', 'cfg', 'csv', 'bat', 'sh'],
     markdown: ['md', 'markdown'],
@@ -20,6 +22,7 @@ App.FileOpener = (function () {
     audio: ['mp3', 'm4a', 'wav', 'ogg', 'aac', 'flac', 'opus', 'mid', 'midi']
   }
 
+  /** @param {any} name @returns {string} */
   function extOf(name) {
     if (typeof name !== 'string') return ''
     const i = name.lastIndexOf('.')
@@ -28,6 +31,7 @@ App.FileOpener = (function () {
   }
 
   // 扩展名 → kind（'external' = 交外部应用）
+  /** @param {string} name @returns {string} */
   function kindFor(name) {
     const ext = extOf(name)
     if (ext === 'desktop') return 'shortcut'   // 快捷方式文件（App.Shortcut 契约）
@@ -44,6 +48,7 @@ App.FileOpener = (function () {
   // 返回：内部查看 = 实例 id（数字 → 桌面层锁定文件）；
   //       外部应用 / 应用快捷方式 = true（已分派，桌面层不锁定文件）；
   //       分派失败 = null
+  /** @param {{name: string, path: string}} item @param {WorldPoint | null} anchor @param {DesktopCameraState | null} camera @param {(() => void) | null} onClose @returns {number | boolean | null} */
   function open(item, anchor, camera, onClose) {
     if (!item || !item.path) return null
     const kind = kindFor(item.name || '')
@@ -85,6 +90,7 @@ App.FileOpener = (function () {
   // file（预留）→ 暂不支持。失败 toast 不抛出。
   // 返回 true（同步）：website 的 Viewer 打开是异步的，桌面层据 typeof 判定 true 不锁定文件
   //（MVP 简化：website 快捷方式打开期间允许删除其 .desktop 文件，iframe 已取到 url 不受影响）。
+  /** @param {{name: string, path: string}} item @param {WorldPoint | null} anchor @param {DesktopCameraState | null} camera @param {(() => void) | null} onClose @returns {boolean} */
   function openShortcut(item, anchor, camera, onClose) {
     App.FileAPI.read(item.path).then(function (content) {
       const meta = App.Shortcut.parseShortcut(content)
@@ -127,6 +133,7 @@ App.FileOpener = (function () {
     return true   // 非 Viewer 打开（桌面层据 typeof 判定：true 不锁定文件）
   }
 
+  /** @type {FileOpener} */
   return {
     open: open,
     kindFor: kindFor,

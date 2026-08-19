@@ -4,12 +4,15 @@
  * 依赖: namespace.js
  * 导出: App.ViewStore
  */
+// @ts-check
 'use strict'
 
 App.ViewStore = (function () {
   const KEY = 'desktop.view.v1'
+  /** @type {ViewPrefs} */
   const DEFAULT = { viewStyle: 'grid', sortBy: 'name', sortDir: 1, advancedBrowse: false }
 
+  /** @param {any} data @returns {boolean} */
   function valid(data) {
     if (!data || typeof data !== 'object') return false
     if (data.viewStyle !== 'grid' && data.viewStyle !== 'list') return false
@@ -21,6 +24,7 @@ App.ViewStore = (function () {
   }
 
   // 读偏好：失败/损坏回退默认
+  /** @returns {ViewPrefs} */
   function load() {
     try {
       const raw = localStorage.getItem(KEY)
@@ -33,6 +37,7 @@ App.ViewStore = (function () {
   }
 
   // 写偏好：成功 true，失败 false（调用方告警）
+  /** @param {ViewPrefs} data @returns {boolean} */
   function save(data) {
     try {
       localStorage.setItem(KEY, JSON.stringify(Object.assign({ version: 1 }, data)))
@@ -42,6 +47,7 @@ App.ViewStore = (function () {
     }
   }
 
+  /** @type {ViewStore} */
   return {
     load: load,
     save: save,

@@ -5,15 +5,15 @@
 ## 顺序（P0 铁律，不可调换不可跳过）
 
 ```
-1. bash tools/build-web.sh        src/ → dist/desktop.bundle.html
-2. node tools/minify-bundle.js    → dist/desktop.bundle.min.html
+1. bash tools/build-web.sh        src/ → dist/adesktop.bundle.html
+2. node tools/minify-bundle.js    → dist/adesktop.bundle.min.html
 3. bash android/build-local.sh    复制 min 产物 → assets/index.html → gradlew assembleRelease（R8 混淆）→ 归档 APK
 ```
 
 ## 安装包归档（滚动保留）
 
 - `android/build-local.sh` 步骤 5 调用 `tools/collect-apk.sh`
-- 归档到 `/workspace/AAA 安装包/`，命名 `Desktop_v<版本>_<时间戳>.apk`（时间戳精确到秒）
+- 归档到 `/workspace/AAA 安装包/`，命名 `Adesktop_v<版本>_<时间戳>.apk`（时间戳精确到秒）
 - **滚动保留最新 10 个**（按 mtime，仅清理本脚本命名模式，手动放入的文件不受影响）
 - release 构建同步归档 R8 `mapping.txt` 到 `<归档目录>/mapping/`（同样保留 10 个）
 
@@ -26,7 +26,7 @@
   COS 上保留最近 50 个
 - 幂等：状态文件保证同一周期只上传一次；coscli 缺失/上传失败时仅告警不阻断构建，
   且不更新状态（下个周期自动重试，不丢备份窗口）
-- 与 LexiCull 同款方案（`tools/cos-bundle-check.sh`），Desktop 独立 bucket 路径
+- 与 LexiCull 同款方案（`tools/cos-bundle-check.sh`），Adesktop 独立 bucket 路径
 
 ## 拼接清单（JS_ORDER / CSS_ORDER）
 
@@ -71,8 +71,21 @@ build-web.sh 每次构建注入到 JS 尾部（`var` 声明，避免被 minify m
 ## Android 壳
 
 - 最小壳：`android.app.Activity` + WebView
-- 依赖策略：最小化（理念，非绝对零依赖）——androidx.documentfile（SAF 文件访问）、
-  androidx.core（edge-to-edge WindowInsets 安全区注入，与 LexiCull 同款）；
+- 依赖策略：零第三方依赖（理念，非绝对禁止）——androidx.documentfile（SAF 文件访问）、
+  androidx.core（edge-to-edge WindowInsets 安全区注入，与 LexiCull 同款）属可接受常规依赖；
   避免引入重框架/UI 库，前端保持零第三方依赖
-- 包名占位 `com.example.desktop`，发布前确认后全局替换
+- 包名 `com.ranjiushu.adesktop`
 - APK 构建在 ARM64 环境需 QEMU 转发（aapt2/aapt/zipalign 包装器），见 android/build-local.sh
+
+## 类型检查（渐进式 @ts-check）
+
+- **路线**：不写 `.ts` 源文件，JS 文件头部加 `// @ts-check` 注释，由 `tsc --noEmit` 检查
+  （tsconfig `allowJs: true`），仅类型检查、零构建侵入（build-web.sh 只拼接 JS_ORDER 登记文件）
+- **命令**：`npm run typecheck`（= `tsc --noEmit`）；verify.sh 门禁内置该步骤
+  （缺 typescript 时 SKIP，与 minify 同策略）
+- **类型声明**：`types/global.d.ts` 定义全局类型（AppCamera / Position2D / FbResult / 桥签名 /
+  HTMLElement 扩展等），仅供类型检查，不参与构建
+- **覆盖现状**：41/52 个 src/js 模块已收编（数据/状态/逻辑/桥/编排层）；手势/渲染/UI 表现层
+  模块等下次改动时顺手补——类型检查对手感/时序类 bug 收益低，真机手感测试才是防线
+- **新增模块约定**：给模块加 `// @ts-check` 后，先在 `types/global.d.ts` 补全局类型，
+  再跑 `npm run typecheck` 清零报错

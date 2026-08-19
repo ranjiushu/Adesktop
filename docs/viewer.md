@@ -66,6 +66,15 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 
 ## Desktop 空间（根目录）中的 Viewer（画布实体）
 
+- **持久化（Viewer 只能通过手动关闭）**：画布态 Viewer 的打开状态 + 世界坐标位置
+  经 `App.ViewerStore`（viewer-store.js）持久化——localStorage 缓存 +
+  桌面空间目录隐藏文件 `.adesktop-viewers.json`（文件即真相，随目录迁移）。
+  打开/关闭/拖动结束/媒体自适应都会触发落盘（`InternalViewer.setPersistListener`
+  注入，见 desktop-viewer-link.js `init`）；app 重启后 `restoreViewers`（refresh
+  列表加载后调用）恢复上次会话的画布态 Viewer：原世界坐标 + 文件重新锁定；
+  文件已删除/不在当前目录的记录跳过（下次保存自然清理）。folder 容器内的
+  全屏预览不持久化（随退出关闭）。关闭 Viewer 的唯一途径 = 手动（Morph FAB
+  「关闭预览」）；「一键关闭所有 Viewer」为规划中的扩展方向，暂未实现。
 - Viewer **不属于网格**：不参与布局、排序、框选、碰撞；DOM 上位于
   `#desktop-canvas` 内 grid 之后（z-index 5），天然遮挡其背后的文件。
 - **画布实体，具备实体基本性质**（与文件图标手势统一）：
@@ -90,6 +99,10 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 - **文件锁定（Windows 式）**：被 Viewer 打开的文件进入锁定状态（图标 🔒 标记）——
   禁止复制/剪切/重命名/移动（拖入文件夹），**拖动摆放（改布局位置）仍可**；
   关闭对应 Viewer 即解除。多实例：多个文件可同时锁定（`Set` 集合）。
+  **图标与预览窗口双向锚定**（防分家/重叠）：拖动锁定文件图标 → Viewer 窗口实时跟随
+  （含 drop 网格吸附后的最终落位）；拖动 Viewer 窗口 → 图标跟随；媒体自适应 → 图标
+  贴新窗口左上。**整理桌面跳过锁定文件**（其余排布让开其占位格）；其它文件拖动不能
+  顶开锁定文件（网格避让中为「钉子户」，冲突时移动组让位）。
 - **框选遮挡**：被 Viewer 覆盖的文件图标不参与框选（Viewer 遮挡语义）。
 - **桌面手指依旧有效**：不拦截触摸——单指拖动/框选/双击/双指缩放照常作用于画布，
   不在 Viewer 内部创作独立交互模型；Viewer 只是遮挡其背后的文件。
@@ -138,7 +151,8 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 ## 关闭链路（Morph FAB / 返回键）
 
 - **Morph FAB（Viewer 实体选中时）**：显示「全屏预览」「关闭预览」两项
-  （文件操作隐藏，预览焦点模式）；文件选中时恢复 打开/复制/剪切/重命名/取消选择。
+  （文件操作隐藏，预览焦点模式）；文件选中时恢复 打开/复制/剪切/重命名（取消选择已移除——
+  FAB 展开 ⇔ 选中一致：关闭 Morph FAB 即取消选中）。
 - **关闭预览** = 关闭「选中的」Viewer + 解除其文件锁定（`Desktop.closeViewer` 出口）。
 - **取消选中 ≠ 关闭**：点 Viewer 外部取消 Viewer 选中（脆弱/临时），Viewer 与锁定保持。
 - **返回键**：`App.handleSystemBack` 优先级——全屏态 Viewer → 退出全屏；有选中

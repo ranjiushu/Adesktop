@@ -44,6 +44,7 @@
 | `FileAPI.appIcon(pkg)` | `appIcon` | `pkg` | `data:image/png;base64,...` | 应用图标 base64 |
 | `App.bridge.vibrate(ms)` | `vibrate` | `ms` | 无回调 | 震动，时长钳制 1–500 ms |
 | `App.bridge.requestRootAccess()` | `requestRootAccess` | 无 | 无回调 | 触发原生弹授权选择器 |
+| `App.bridge.requestDesktopDir()` | `requestDesktopDir` | 无 | 无回调 | 触发原生 SAF 目录选择器（`ACTION_OPEN_DOCUMENT_TREE`），选择后切换桌面根/根授权 |
 
 关键映射（隐藏契约，最易改坏）：**前端 `del` 对应桥方法 `delete`**（不是 `remove`）。
 
@@ -63,7 +64,7 @@
 | 形状 | 字段 | 说明 |
 |------|------|------|
 | `FsEntry` | `name, isDir, size, mtime` | 目录的 `size` 恒为 0 |
-| `RootInfo` | `rootName, mode, displayPath, trashName, rootId` | `mode` 取值 `'saf' \| 'private'`；`trashName` 恒为 `'.trash'`；`rootId` = SAF tree uri / 私有 `'private'`（布局与 Home 快照的 root 隔离键，见 operation-contract.md 1.6） |
+| `RootInfo` | `rootName, mode, displayPath, trashName, rootId` | `mode` 取值 `'saf' \| 'all-files' \| 'private'`；`trashName` 恒为 `'.trash'`；`rootId` = SAF tree uri / 全盘 `'all-files'` / 私有 `'private'`（布局与 Home 快照的 root 隔离键，见 operation-contract.md 1.6） |
 | `AppEntry` | `package, label, isSystem` | `isSystem` 含系统预装与更新过的系统应用 |
 
 ### 1.4 路径与安全约束
@@ -85,7 +86,7 @@
 | store | key | 形状 | 关键语义 |
 |-------|-----|------|---------|
 | `LayoutStore` | `desktop.layout.v1` | `{version:1, icons:{name:{x,y}}, camera:{x,y,zoom}}` | `icons` 的 key 是**文件名**（非 fullPath）；`camera` 为世界坐标 |
-| `HomeStore` | `desktop.home.v1` | `{version:1, home?:{x,y,zoom}, fallback?:{x,y,zoom}}` | `home` 优先于 `fallback`；两者都无回出厂 `(0,0,1)` |
+| `HomeStore` | `desktop.home.v1` | `{version:2, home?:{x,y,zoom}, fallback?:{x,y,zoom}, landscapeHome?:{x,y,zoom}, landscapeFallback?:{x,y,zoom}}` | 竖屏（顶层）与横屏（`landscape*`）各自独立槽位；`home` 优先于 `fallback`；两者都无回出厂 `(0,0,1)`；version 1 旧数据 = 竖屏槽位（零迁移） |
 | `ViewStore` | `desktop.view.v1` | `{version:1, viewStyle, sortBy, sortDir, advancedBrowse}` | `viewStyle` 取 `'grid' \| 'list'`；`sortBy` 取 `name/mtime/type/size`；`sortDir` 取 `1 \| -1` |
 
 ### 2.1 相机不变式（运行时契约，类型系统拦不住）

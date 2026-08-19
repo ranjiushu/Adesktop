@@ -4,7 +4,7 @@
  * Android 11+ 需 manifest 声明 <queries>（MAIN+LAUNCHER），否则列表为空。
  * appIcon：加载 Drawable → 缩放到 48dp → PNG → base64 data URI（自包含，可随文件迁移）。
  */
-package com.example.desktop;
+package com.ranjiushu.adesktop;
 
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;

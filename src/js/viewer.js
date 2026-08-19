@@ -35,27 +35,58 @@ App.InternalViewer = (function () {
 
   // 世界坐标 → 屏幕坐标的纯函数（固定屏幕尺寸手柄用：卡片底部中心下方悬浮）
   // 输入卡片世界 rect 与相机，返回手柄屏幕矩形（x/y = 屏幕 px，w/h = 屏幕 px）
-  function handleScreenRect(cardRect, camera) {
+  // rotation=90（画布顺时针转）时卡片视觉底部 = 原右边缘中心；vw/vh = 视口尺寸（旋转中心）
+  function handleScreenRect(cardRect, camera, vw, vh) {
     if (!cardRect) return null
     const c = camera || create()
-    const cx = cardRect.x + cardRect.w / 2
-    const bottom = cardRect.y + cardRect.h
-    const sx = (cx - c.x) * c.zoom
-    const sy = (bottom - c.y) * c.zoom + HANDLE_GAP
-    return { x: sx - HANDLE_W / 2, y: sy, w: HANDLE_W, h: HANDLE_H }
+    const rot = c.rotation === 90
+    // 旋转后卡片视觉底部中心 = 原右边缘中心（顺时针 90°：右→下）
+    const cx = rot ? cardRect.x + cardRect.w : cardRect.x + cardRect.w / 2
+    const bottom = rot ? cardRect.y + cardRect.h / 2 : cardRect.y + cardRect.h
+    const sx0 = (cx - c.x) * c.zoom
+    const sy0 = (bottom - c.y) * c.zoom
+    let sx = sx0
+    let sy = sy0
+    if (rot && vw > 0 && vh > 0) {
+      // 绕视口中心顺时针 90°：(x,y) → (-y, x)
+      const ccx = vw / 2
+      const ccy = vh / 2
+      sx = -(sy0 - ccy) + ccx
+      sy = (sx0 - ccx) + ccy
+    }
+    return { x: sx - HANDLE_W / 2, y: sy + HANDLE_GAP, w: HANDLE_W, h: HANDLE_H }
   }
 
   // 手柄世界矩形（命中测试用）：固定屏幕尺寸反算世界尺寸（/zoom），
-  // 中心 = 卡片底部中心世界点，间距 = HANDLE_GAP/zoom（屏幕 14px 等距）。
+  // 中心 = 卡片底部中心世界点，间距 = HANDLE_GAP/zoom（屏幕 14px 恒定）。
   // 命中测试走世界坐标（手势层 toWorld 后回调），与 handleScreenRect 是同一矩形
   // 的两种表示（worldToScreen 互逆），纯函数可单测。
-  function handleWorldRect(cardRect, camera) {
+  // rotation=90 时需要 vw/vh 计算旋转中心：先算屏幕矩形，再逆旋转回世界坐标；
+  // 无 vw/vh 时退化为旧逻辑（rotation=0 或调用方未传视口尺寸的防御路径）。
+  function handleWorldRect(cardRect, camera, vw, vh) {
     if (!cardRect) return null
     const c = camera || create()
     const z = c.zoom || 1
+    const rot = c.rotation === 90
+    if (rot && vw > 0 && vh > 0) {
+      // 旋转态：先算屏幕矩形（含旋转），再逆变换回世界坐标
+      const sr = handleScreenRect(cardRect, camera, vw, vh)
+      if (!sr) return null
+      const scx = sr.x + sr.w / 2
+      const scy = sr.y + sr.h / 2
+      const ccx = vw / 2, ccy = vh / 2
+      // screenToWorld 逆旋转：lx = (sy-cy)+cx, ly = -(sx-cx)+cy
+      const lx = (scy - ccy) + ccx
+      const ly = -(scx - ccx) + ccy
+      const wcx = c.x + lx / z
+      const wcy = c.y + ly / z
+      // 屏幕 36×6 → 世界 6/z × 36/z（逆旋转后宽高互换）
+      return { x: wcx - HANDLE_H / (2 * z), y: wcy - HANDLE_W / (2 * z), w: HANDLE_H / z, h: HANDLE_W / z }
+    }
+    // rotation=0：原逻辑（无需视口尺寸）
+    const gap = HANDLE_GAP / z
     const w = HANDLE_W / z
     const h = HANDLE_H / z
-    const gap = HANDLE_GAP / z
     const cx = cardRect.x + cardRect.w / 2
     const top = cardRect.y + cardRect.h + gap
     return { x: cx - w / 2, y: top, w: w, h: h }
@@ -182,6 +213,10 @@ App.InternalViewer = (function () {
   let _nextId = 1
   let _cascade = 0        // 级联错位计数（视觉中心锚点类）
   let _fullscreenId = null  // 当前全屏实例 id（同时最多一个）
+  /** @type {((viewers: Array<ViewerRecord>) => void) | null} 持久化监听（Desktop 层注入，画布态变化时回调） */
+  let _persistListener = null
+  /** @type {((inst: any) => void) | null} 位置变化监听（Desktop 层注入：Viewer 拖动/自适应 → 同步锁定文件图标） */
+  let _moveListener = null
 
   // ── 实例工厂：每个 Viewer 独立 DOM + 状态 + 拖动 ──
   function createInstance(opts) {
@@ -205,6 +240,7 @@ App.InternalViewer = (function () {
     let drag = null
     let reader = { scale: 1, wrap: true }   // 文本完整预览态：字号缩放 + 自动换行
     let handleEl = null    // 拖动手柄（屏幕层固定尺寸，随相机/卡片位置同步）
+    let onMove = null      // 位置变化回调（Desktop 注入：Viewer 拖动/自适应 → 同步锁定文件图标）
     let state = {
       open: false, mode: null, fsFrom: null, selected: false,
       path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null,
@@ -241,6 +277,7 @@ App.InternalViewer = (function () {
       if (i >= 0) _instances.splice(i, 1)
       // 通知调用方：文件已关闭（用于桌面层解除锁定）
       if (typeof savedOnClose === 'function') savedOnClose(savedPath)
+      _notifyPersist()
     }
 
     function detachCard() {
@@ -267,9 +304,10 @@ App.InternalViewer = (function () {
     // 同步手柄屏幕位置：卡片世界 rect 底部中心 → 屏幕坐标 + 固定间距。
     // 手柄固定屏幕尺寸（HANDLE_W/H），不随画布 zoom 缩放；相机变化由
     // 管理器 syncHandles(camera) 统一驱动（gesture onUpdate 每帧调用）。
+    // vw/vh = viewer-layer 视口尺寸（rotation=90 时手柄屏幕位置需绕中心旋转）
     function syncHandle(camera) {
       if (!handleEl || state.mode !== 'canvas' || !state.rect) return
-      const r = handleScreenRect(state.rect, camera)
+      const r = handleScreenRect(state.rect, camera, _layer.clientWidth, _layer.clientHeight)
       if (!r) return
       handleEl.style.left = r.x + 'px'
       handleEl.style.top = r.y + 'px'
@@ -279,9 +317,10 @@ App.InternalViewer = (function () {
     }
 
     // 命中判定：世界点 (wx, wy) 是否落在本实例手柄矩形内（手柄优先于卡片本身命中）
+    // vw/vh 透传：rotation=90 时 handleWorldRect 需要视口尺寸计算旋转中心
     function handleHitTest(wx, wy, camera) {
       if (!handleEl || state.mode !== 'canvas' || !state.rect) return false
-      const r = handleWorldRect(state.rect, camera)
+      const r = handleWorldRect(state.rect, camera, _layer.clientWidth, _layer.clientHeight)
       if (!r) return false
       return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h
     }
@@ -292,6 +331,10 @@ App.InternalViewer = (function () {
     function getPath() { return state.path }
     function getName() { return state.name }
     function getKind() { return state.kind }
+    /** @returns {{x: number, y: number, w: number, h: number} | null} 世界坐标矩形（画布态持久化用） */
+    function getRect() {
+      return state.rect ? { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h } : null
+    }
 
     // 选中态更新：手柄高亮同步（选中时手柄 accent 色提示可拖）
     function setSelected(on) {
@@ -321,15 +364,19 @@ App.InternalViewer = (function () {
       const vh = _layer.clientHeight
       if (state.mode === 'canvas') {
         const size = cardIsPortrait(state.kind) ? cardSize34(vw, vh) : cardSize(vw, vh)
-        let anchor = state.anchor
-        if (anchorIsCenter(state.kind)) {
-          anchor = visualCenter(state.camera, vw, vh) || anchor
-          if (anchor) anchor = { x: anchor.x + _cascade * CASCADE_STEP, y: anchor.y + _cascade * CASCADE_STEP }
-        }
-        let rect = worldRect(anchor, size.w, size.h)
-        if (!anchorIsCenter(state.kind) && visibleRatio(rect, vw, vh) < MIN_VISIBLE && state.camera) {
-          const c = visualCenter(state.camera, vw, vh)
-          if (c) rect = worldRect(c, size.w, size.h)
+        // 恢复场景：state.rect 已在 open() 预置，直接应用持久化矩形
+        let rect = state.rect ? { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h } : null
+        if (!rect) {
+          let anchor = state.anchor
+          if (anchorIsCenter(state.kind)) {
+            anchor = visualCenter(state.camera, vw, vh) || anchor
+            if (anchor) anchor = { x: anchor.x + _cascade * CASCADE_STEP, y: anchor.y + _cascade * CASCADE_STEP }
+          }
+          rect = worldRect(anchor, size.w, size.h)
+          if (!anchorIsCenter(state.kind) && visibleRatio(rect, vw, vh) < MIN_VISIBLE && state.camera) {
+            const c = visualCenter(state.camera, vw, vh)
+            if (c) rect = worldRect(c, size.w, size.h)
+          }
         }
         applyCanvasRect(rect)
         backBtn.style.display = 'none'
@@ -370,7 +417,11 @@ App.InternalViewer = (function () {
         const natH = media.naturalHeight || media.videoHeight || 0
         if (!(natW > 0) || !(natH > 0)) return
         const rect = fitAspectRect(state.rect, natW, natH, _layer.clientWidth, _layer.clientHeight)
-        if (rect) applyCanvasRect(rect)
+        if (rect) {
+          applyCanvasRect(rect)
+          if (onMove) onMove(state.rect)   // 媒体自适应：图标锚定新窗口左上（双向锚定防分家）
+          _notifyPersist()   // 媒体自适应改变尺寸：持久化最终矩形
+        }
       }
       if (media.tagName === 'VIDEO') {
         media.addEventListener('loadedmetadata', onReady)
@@ -461,12 +512,14 @@ App.InternalViewer = (function () {
       const dx = world.x - drag.startWorld.x
       const dy = world.y - drag.startWorld.y
       applyCanvasRect(shiftRect(drag.startRect, dx, dy))
+      if (onMove) onMove(state.rect)
     }
 
     function endDrag() {
       if (!drag) return
       drag = null
       card.classList.remove('viewer-card-dragging')
+      _notifyPersist()   // 拖动结束：位置已变，持久化
     }
 
     function cancelDrag() {
@@ -475,9 +528,25 @@ App.InternalViewer = (function () {
       syncHandleAfterMove()
       drag = null
       card.classList.remove('viewer-card-dragging')
+      if (onMove) onMove(state.rect)
     }
 
     function isDragging() { return !!drag }
+
+    // 图标拖动同步：Viewer 卡片左上角贴图标位置（锁定文件的图标是位置真相锚点）。
+    // 不触发 onMove——图标 → Viewer 方向同步由调用方（手势层图标拖动）驱动，
+    // 避免 图标→Viewer→图标 循环同步。
+    /** @param {number} x @param {number} y @returns {boolean} */
+    function setRectFromIcon(x, y) {
+      if (!state.open || state.mode !== 'canvas' || !state.rect) return false
+      applyCanvasRect({ x: x, y: y, w: state.rect.w, h: state.rect.h })
+      return true
+    }
+
+    /** @param {((rect: {x: number, y: number, w: number, h: number}) => void) | null} fn */
+    function _setOnMove(fn) {
+      onMove = typeof fn === 'function' ? fn : null
+    }
 
     function hitTestWorld(wx, wy) {
       if (!state.open || state.mode !== 'canvas' || !state.rect) return false
@@ -743,7 +812,17 @@ App.InternalViewer = (function () {
         canvasRect: null
       }
       if (!state.path) return false
-      if (state.mode === 'canvas' && anchorIsCenter(state.kind)) _cascade++
+      // 恢复场景：直接使用持久化的世界矩形（跳过锚点推导/级联错位）
+      if (state.mode === 'canvas' && opts.rect &&
+          typeof opts.rect.x === 'number' && isFinite(opts.rect.x) &&
+          typeof opts.rect.y === 'number' && isFinite(opts.rect.y) &&
+          typeof opts.rect.w === 'number' && opts.rect.w > 0 &&
+          typeof opts.rect.h === 'number' && opts.rect.h > 0) {
+        state.rect = { x: opts.rect.x, y: opts.rect.y, w: opts.rect.w, h: opts.rect.h }
+        state.canvasRect = { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h }
+      } else if (state.mode === 'canvas' && anchorIsCenter(state.kind)) {
+        _cascade++
+      }
       title.textContent = state.name
       card.className = canvasCardClass()
       mount()
@@ -779,6 +858,9 @@ App.InternalViewer = (function () {
       endDrag: endDrag,
       cancelDrag: cancelDrag,
       isDragging: isDragging,
+      setRectFromIcon: setRectFromIcon,
+      _setOnMove: _setOnMove,
+      getRect: getRect,
       hitTestWorld: hitTestWorld,
       rectHitWorld: rectHitWorld,
       handleHitTest: handleHitTest,
@@ -796,10 +878,52 @@ App.InternalViewer = (function () {
     if (!opts || !opts.path) return null
     if (!ensureHosts()) return null
     const inst = createInstance(opts)
+    if (_moveListener) inst._setOnMove(_moveListener)
     const ok = inst.open()
     if (!ok) return null
     _instances.push(inst)
+    _notifyPersist()
     return inst.id
+  }
+
+  // 持久化：收集画布态实例（path/name/kind/世界矩形）回调监听器（Desktop 层注入 ViewerStore）
+  /** @returns {void} */
+  function _notifyPersist() {
+    if (typeof _persistListener !== 'function') return
+    /** @type {Array<ViewerRecord>} */
+    const list = []
+    _instances.forEach(function (inst) {
+      if (!inst.isOpen() || inst.getMode() !== 'canvas') return
+      const rect = inst.getRect()
+      if (!rect) return
+      list.push({ path: inst.getPath(), name: inst.getName(), kind: inst.getKind(), rect: rect })
+    })
+    _persistListener(list)
+  }
+
+  /** @param {((viewers: Array<ViewerRecord>) => void) | null} fn */
+  function setPersistListener(fn) {
+    _persistListener = typeof fn === 'function' ? fn : null
+  }
+
+  /** 位置变化监听（Desktop 层注入：Viewer 拖动/媒体自适应 → 同步锁定文件图标到窗口左上）。
+   *  @param {((inst: any) => void) | null} fn */
+  function setMoveListener(fn) {
+    _moveListener = typeof fn === 'function' ? fn : null
+  }
+
+  // 图标拖动同步：把 path 对应 Viewer 卡片左上角贴到 (x, y)（图标位置 → 预览窗口位置）。
+  // 命中 canvas 态实例且移动成功返回 true；无对应实例/非 canvas 态返回 false。
+  /** @param {string} path @param {number} x @param {number} y @returns {boolean} */
+  function syncRectForPath(path, x, y) {
+    if (!path) return false
+    for (let i = 0; i < _instances.length; i++) {
+      const inst = _instances[i]
+      if (inst.getPath && inst.getPath() === path) {
+        if (inst.setRectFromIcon(x, y)) return true
+      }
+    }
+    return false
   }
 
   // 关闭指定实例（实例 close 内部会从集合移除自己）
@@ -944,6 +1068,9 @@ App.InternalViewer = (function () {
 
   return {
     open: open,
+    setPersistListener: setPersistListener,
+    setMoveListener: setMoveListener,
+    syncRectForPath: syncRectForPath,
     closeById: closeById,
     closeAll: closeAll,
     getById: getById,

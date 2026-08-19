@@ -8,6 +8,7 @@
  * 布局 key = 完整相对路径（join(curPath, name)），跨目录不冲突。
  * 根目录 = SAF 授权目录 或 私有目录兜底（由桥决定）。
  */
+// @ts-check
 'use strict'
 
 App.Desktop = (function () {
@@ -21,6 +22,7 @@ App.Desktop = (function () {
   const V = App.DesktopViewerLink
   const H = App.DesktopGestureHandlers
 
+  /** @returns {void} */
   function initGesture() {
     C.nav = App.DesktopNav.create()
     P.initLayout()
@@ -33,12 +35,14 @@ App.Desktop = (function () {
       camera: C.camera,
       // folder 容器：双指 pan 每帧钳制——zoom 锁 1、x 锁 0、y 限画布内
       // （只能上下滚动且有上下边界；钳制在 gesture 层保证 transform 同步）
+      /** @param {DesktopCameraState} c @returns {DesktopCameraState} */
       onClamp: function (c) {
         if (!C.isFolderView()) return c
         return App.DesktopCamera.clampToBounds(
-          { x: 0, y: c.y, zoom: 1 },
+          { x: 0, y: c.y, zoom: 1, rotation: 0 },
           C.viewportWidth(), C.state.canvasH, C.viewportWidth(), C.viewportHeight())
       },
+      /** @param {DesktopCameraState} c @returns {void} */
       onUpdate: function (c) {
         C.camera = c
         // 相机变化 → 同步 Viewer 拖动手柄屏幕位置（平移/缩放/Home 动画每帧）
@@ -72,6 +76,43 @@ App.Desktop = (function () {
   // 导航模块依赖注入：目录切换后刷新渲染（persist 域 refresh）
   N.setRefresh(P.refresh)
 
+  // 旋转画布 toggle（view-menu 驱动）：桌面空间 0↔90 toggle；folder 容器无意义，忽略。
+  // 旋转是瞬时两态（无过渡动画）。**纯保中心旋转**（2026-08-19）：只改 rotation，
+  // x/y/zoom 不动——旋转前后屏幕中心世界点相同（screenToWorld 在 rotation=90 时
+  // 屏幕中心对应世界点与竖屏相同：均为 (c.x + w/2z, c.y + h/2z)），整理/自由摆放的
+  // 图标世界坐标不变，旋转后仍围绕同一中心（曾「跳目标方向 Home 槽位」：目标方向
+  // 槽位是历史残留位置，与整理区域脱节 → 旋转后视野整体漂移，用户找不到文件）。
+  // Home 键（goHome）才按当前方向读槽位——整理锚已写入两方向槽位（同一中心），
+  // 旋转后点 Home 恒回到整理区域。
+  // 旋转后同步手势层/Viewer 手柄/Home 高亮。
+  /** @returns {boolean} */
+  function toggleRotate() {
+    if (C.isFolderView()) return false
+    const cam = C.camera
+    if (!cam) return false
+    // 旋转前打断在跑的相机动画（fit/goHome RAF 循环）——否则残留帧会把
+    // rotation 拉回起点或继续漂移相机位置（旋转被动画覆盖）
+    if (N && typeof N.cancelCameraAnim === 'function') N.cancelCameraAnim()
+    const next = cam.rotation === 90 ? 0 : 90
+    C.camera = App.DesktopCamera.create(cam.x, cam.y, cam.zoom, next)
+    if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
+      App.DesktopGesture.setCamera(C.camera)
+    }
+    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
+      App.InternalViewer.syncHandles(C.camera)
+    }
+    if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
+      App.BottomBar.updateHomeState()
+    }
+    return true
+  }
+
+  /** @returns {boolean} */
+  function isRotated() {
+    return !!(C.camera && C.camera.rotation === 90)
+  }
+
+  /** @type {Desktop} */
   return {
     refresh: P.refresh,
     render: R.render,
@@ -98,15 +139,21 @@ App.Desktop = (function () {
     inTrash: C.inTrash,
     getTrashName: function () { return C.state.trashName },
     getRootId: function () { return C.state.rootId },
+    getDesktopRoot: function () { return C.state.desktopRoot },
+    saveDesktopRoot: P.saveDesktopRoot,
     viewMode: C.viewMode,
     isFolderView: C.isFolderView,
     applyViewPrefs: P.applyViewPrefs,
     getViewPrefs: P.getViewPrefs,
     captureHome: N.captureHome,
     captureDefaultView: N.captureDefaultView,
+    setHome: N.setHome,
     goHome: N.goHome,
+    fitAllFiles: N.fitAllFiles,
     setAdvancedBrowse: B.setAdvancedBrowse,
     isAdvancedBrowse: B.isAdvancedBrowse,
-    exitTempMode: B.exitTempMode
+    exitTempMode: B.exitTempMode,
+    toggleRotate: toggleRotate,
+    isRotated: isRotated
   }
 })()

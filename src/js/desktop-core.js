@@ -8,10 +8,12 @@
  * 依赖: namespace.js, desktop-nav.js（fullPath 用 join）
  * 导出: App.DesktopCore
  */
+// @ts-check
 'use strict'
 
 App.DesktopCore = (function () {
-  const C = {}
+  /** @type {DesktopCore} */
+  const C = /** @type {any} */ ({})
 
   // RAF 驱动（无 RAF 环境兜底 setTimeout ~16ms）
   C._raf = function (cb) {
@@ -31,28 +33,32 @@ App.DesktopCore = (function () {
     rootName: '…',
     mode: 'unknown',
     items: [],
-    curPath: '',          // 当前目录（相对根，'' = 根）
+    curPath: '',          // 当前目录（相对根，'' = 根；all-files 模式桌面空间 = desktopRoot）
     trashName: '',        // 回收站文件夹名（rootInfo 返回，'' = 未知/未初始化）
-    rootId: '',           // 根目录身份（rootInfo 返回：SAF = tree uri / 私有 = 'private'）
+    rootId: '',           // 根目录身份（rootInfo 返回：SAF = tree uri / 全盘 = 'all-files:<桌面根>' / 私有 = 'private'）
+    desktopRoot: 'Desktop', // 桌面根（all-files 模式）：桌面空间渲染的相对目录，Drawer「桌面目录」可配置
     viewStyle: 'grid',    // folder 容器视图：grid（4 列）| list（单列）
     sortBy: 'name',       // folder 容器排序：name | mtime | type | size
     sortDir: 1,           // 1 升序 | -1 降序
     canvasH: 0            // folder 容器画布高（滚动下界钳制用）
   }
 
+  // 布局数据文件名：桌面空间目录下的隐藏文件（文件即真相；渲染时过滤，见 desktop-render）
+  C.LAYOUT_FILE = '.adesktop-layout.json'
+
   C.nav = null             // App.DesktopNav 历史栈
   C.camera = null
   C.rootCamera = null      // 根目录相机快照（进入子文件夹前保存，返回根时恢复）
   C.positions = {}   // fullPath → {x, y}（世界坐标，移动后保留；仅 desktop 空间）
   C.bounds = {}      // fullPath → {x, y, w, h}（世界坐标 AABB，命中测试用）
-  C.selection = new Set()
+  C.selection = /** @type {Set<string>} */ (new Set())
   C.iconEls = {}     // fullPath → DOM 元素
   C.dragTargets = []        // 移动的图标 fullPath 列表（组移动）
   C.dragStartWorld = null   // 手指起始世界坐标
   C.dragStartPositions = {} // fullPath → 起始世界坐标（保持组内相对位置）
   // 文件锁定（Windows 式）：被 Viewer 打开的文件禁止复制/剪切/移动/删除/重命名，
   // 只允许拖动摆放（桌面空间布局）；关闭对应 Viewer 即解除。多实例：Set 存所有锁定路径
-  C._lockedPaths = new Set()
+  C._lockedPaths = /** @type {Set<string>} */ (new Set())
   // Viewer 选中态由 InternalViewer 实例管理（单选：最多一个选中，脆弱/临时）
 
   // 双击窗口状态
@@ -88,8 +94,13 @@ App.DesktopCore = (function () {
     return (vp && vp.clientHeight) || 640
   }
 
-  // 视图模式：根目录 = Desktop（空间，无限画布）；子文件夹 = Folder（容器，有限画布）
-  C.isFolderView = function () { return !!C.state.curPath }
+  // 视图模式：
+  //   all-files 模式：桌面空间 = desktopRoot（Drawer 可配置），其余（含全盘根 ''）都是 Folder 容器
+  //   SAF/私有模式：根目录 '' = 桌面空间（保持原语义）；子文件夹 = Folder 容器
+  C.isFolderView = function () {
+    if (C.state.mode === 'all-files') return C.state.curPath !== C.state.desktopRoot
+    return !!C.state.curPath
+  }
   C.viewMode = function () { return C.isFolderView() ? 'folder' : 'desktop' }
 
   // 文件大小人性化（列表视图 meta）

@@ -1,11 +1,15 @@
 {
-  "name": "desktop",
+  "name": "adesktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Desktop 构建工具依赖（运行时零依赖，仅构建期使用）",
+  "description": "Adesktop 构建工具依赖（运行时零依赖，仅构建期使用）",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "devDependencies": {
     "clean-css": "^5.3.3",
-    "terser": "^5.31.0"
+    "terser": "^5.31.0",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "puppeteer-core": "^25.6.0"

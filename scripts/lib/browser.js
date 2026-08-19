@@ -1,5 +1,15 @@
 // 共享启动逻辑：定位 Chromium，启动无头浏览器
 // 优先级：环境变量 CHROME_PATH > 系统 chromium/chrome
+// ═══════════════════════════════════════════════════════════════
+//  沙盒内委托技能层（单一真相，避免内嵌副本漂移——历史教训：内嵌副本必漂移，
+//  release-check 旧脚本检查 .git-hooks/ 路径静默假绿）。技能层含 aarch64 arm64
+//  chrome 自动发现；外部环境（无技能层）回退下方自身逻辑。
+// ═══════════════════════════════════════════════════════════════
+try {
+  module.exports = require('/skills/ui-verify/scripts/lib/browser.js')
+  return
+} catch (e) { /* 无技能层 → 使用下方兜底逻辑 */ }
+
 const puppeteer = require('puppeteer-core')
 const fs = require('fs')
 const { execSync } = require('child_process')

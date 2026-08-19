@@ -28,9 +28,35 @@ fi
 # 仅当本次改动涉及 src/ 或 dist/ 时检查；无构建脚本则跳过
 if command -v node &>/dev/null && [ -f tools/build-web.sh ] && git diff --cached --name-only | grep -qE '^(src/|dist/)'; then
   if ! bash tools/build-web.sh --check > /dev/null 2>&1; then
-    echo "[pre-commit] src/ 与 dist/desktop.bundle.html 不一致——请先运行 bash tools/build-web.sh" >&2
+    echo "[pre-commit] src/ 与 dist/adesktop.bundle.html 不一致——请先运行 bash tools/build-web.sh" >&2
     exit 1
   fi
 fi
+
+# ── 防线 3: AGENTS.md 信息密度守卫（>2500 token 提醒，>3000 token 拒绝；gzip 后 >5000 字节附加告警） ──
+# token 近似（零依赖）：CJK 1 字≈1 token + ASCII 4 字符≈1 token + 换行 1；gzip 为净信息量探针
+python3 << 'PYHOOK2' || exit 1
+import gzip, re, subprocess, sys
+
+for fn in ('AGENTS.md', 'AGENT.md'):
+    try:
+        shown = subprocess.run(['git', 'show', ':' + fn], capture_output=True, timeout=5)
+        raw = shown.stdout if shown.returncode == 0 else open(fn, 'rb').read()
+    except Exception:
+        continue  # 文件不存在则跳过
+    text = raw.decode('utf-8', errors='replace')
+    cjk = len(re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf]', text))
+    ascii_chars = len(re.sub(r'[\u4e00-\u9fff\u3400-\u4dbf\s]', '', text))
+    tokens = int(cjk + ascii_chars / 4 + text.count('\n'))
+    gz = len(gzip.compress(raw, 9))
+    if tokens > 3000:
+        print('[pre-commit] ❌ %s 已达约 %d token（上限 3000），拒绝提交' % (fn, tokens), file=sys.stderr)
+        print('[pre-commit]    请先精简：指针化下沉到 docs/，或归档历史内容', file=sys.stderr)
+        sys.exit(1)
+    elif tokens > 2500:
+        print('[pre-commit] ⚠️  %s 已达约 %d token（提醒线 2500），建议精简后再提交' % (fn, tokens), file=sys.stderr)
+    if gz > 5000:
+        print('[pre-commit] ⚠️  %s gzip 后 %d 字节（>5000，冗余探针），建议检查是否有重复/灌水内容' % (fn, gz), file=sys.stderr)
+PYHOOK2
 
 exit 0

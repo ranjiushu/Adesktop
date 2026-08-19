@@ -110,6 +110,44 @@ let hw2 = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zo
 check(hw2 && approx(hw2.w, 18) && approx(hw2.h, 3), 'handleWorldRect zoom=2 世界尺寸 = 屏幕尺寸/zoom（命中矩形随画布缩放）')
 check(approx(hw2.y, 307), 'handleWorldRect zoom=2 间距也按 /zoom（屏幕恒定 14px）')
 
+// ── 拖动手柄：rotation=90（画布顺时针旋转）──
+// 卡片世界 rect {x:100,y:200,w:200,h:100}，相机 (0,0,1,90)，视口 360×640：
+// 旋转后卡片视觉底部 = 原右边缘中心 (300, 250) → 未旋转屏幕 (300,250)
+// → 绕中心 (180,320) 顺时针 90°：(x,y) → (-y, x) 相对中心
+//   dx=300-180=120, dy=250-320=-70 → (70, 120) + (180,320) = (250, 440)
+//   手柄 y 再 +GAP → (250-18, 440+14) = (232, 454)
+const hsRot = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1, rotation: 90 }, 360, 640)
+check(hsRot && approx(hsRot.x, 250 - 18) && approx(hsRot.y, 440 + 14),
+  'handleScreenRect rotation=90 手柄贴卡片视觉底部（原右边缘中心绕中心旋转）')
+// handleWorldRect rotation=90：需要 vw/vh 计算旋转中心，
+// 先算屏幕矩形再逆变换回世界坐标，屏幕 36×6 → 世界 6×36（宽高互换）
+const hwRot = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1, rotation: 90 }, 360, 640)
+check(hwRot && approx(hwRot.w, 6) && approx(hwRot.h, 36),
+  'handleWorldRect rotation=90 世界尺寸交换（宽=HANDLE_H, 高=HANDLE_W）')
+// handleWorldRect 与 handleScreenRect 互逆：screenToWorld(handleScreenRect 中心) 落入命中矩形
+const hsRotCenter = { x: hsRot.x + hsRot.w / 2, y: hsRot.y + hsRot.h / 2 }
+const _cam90 = { x: 0, y: 0, zoom: 1, rotation: 90 }
+const _cx = 360 / 2, _cy = 640 / 2
+const _lx = (hsRotCenter.y - _cy) + _cx
+const _ly = -(hsRotCenter.x - _cx) + _cy
+const _wx = _cam90.x + _lx / _cam90.zoom
+const _wy = _cam90.y + _ly / _cam90.zoom
+check(_wx >= hwRot.x && _wx <= hwRot.x + hwRot.w && _wy >= hwRot.y && _wy <= hwRot.y + hwRot.h,
+  'handleWorldRect rotation=90 与 handleScreenRect 互逆（screenToWorld 中心落入命中矩形）')
+// handleWorldRect rotation=90 zoom=2：世界尺寸再除以 zoom
+const hwRot2 = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 2, rotation: 90 }, 360, 640)
+check(hwRot2 && approx(hwRot2.w, 3) && approx(hwRot2.h, 18),
+  'handleWorldRect rotation=90 zoom=2 世界尺寸 = 交换后/z')
+// handleWorldRect rotation=90 无 vw/vh → 退化为旧逻辑（防御路径）
+const hwRotFallback = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1, rotation: 90 })
+check(hwRotFallback && hwRotFallback.w > 0 && hwRotFallback.h > 0,
+  'handleWorldRect rotation=90 无 vw/vh 退化（不崩溃）')
+
+// rotation=0 且传了 vw/vh → 行为不变（旋转分支不触发）
+let hsPlain = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1 }, 360, 640)
+check(approx(hsPlain.x, 100 + 100 - 18) && approx(hsPlain.y, 200 + 100 + 14),
+  'handleScreenRect rotation=0 传 vw/vh 行为不变')
+
 if (failures > 0) {
   console.error('  [FAIL] viewer 测试 ' + failures + ' 项失败')
   process.exit(1)

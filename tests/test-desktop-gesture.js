@@ -71,6 +71,15 @@ const anchorAfter = C.screenToWorld(100, 100, zoomOnly)
 check(approx(anchorBefore.x, anchorAfter.x) && approx(anchorBefore.y, anchorAfter.y),
   'panZoomStep 缩放锚点世界坐标不动')
 
+// panZoomStep rotation=90：双指平移+缩放，锚点世界坐标不动（vw/vh 传旋转中心）
+const camRot = C.create(50, 30, 1, 90)
+const panZoomRot = G.panZoomStep(camRot, { x: 110, y: 105 }, { x: 110, y: 105 }, 100, 200, 360, 640)
+check(panZoomRot.rotation === 90, 'panZoomStep rotation=90 透传 rotation')
+const rotAnchorBefore = C.screenToWorld(110, 105, camRot, 360, 640)
+const rotAnchorAfter = C.screenToWorld(110, 105, panZoomRot, 360, 640)
+check(approx(rotAnchorBefore.x, rotAnchorAfter.x) && approx(rotAnchorBefore.y, rotAnchorAfter.y),
+  'panZoomStep rotation=90 缩放锚点世界坐标不动')
+
 // ── 单指 pending 分派（沿用 Desktop 语义：selected → 拿起 / icon+empty → 框选）──
 const plainOpts = { tapThreshold: 6 }
 let sg = G.singleDown(100, 100, 0, 'selected')

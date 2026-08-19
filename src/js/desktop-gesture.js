@@ -38,9 +38,10 @@ App.DesktopGesture = (function () {
   }
 
   // ── 纯函数：双指一帧的相机更新（先平移质心位移，再按指距缩放，锚点=当前质心）──
-  function panZoomStep(camera, prevCentroid, curCentroid, prevDist, curDist) {
+  // vw/vh = 视口尺寸（rotation=90 时 pinchBy 锚点需绕中心逆旋转）
+  function panZoomStep(camera, prevCentroid, curCentroid, prevDist, curDist, vw, vh) {
     let cam = CAM.panBy(camera, curCentroid.x - prevCentroid.x, curCentroid.y - prevCentroid.y)
-    cam = CAM.pinchBy(cam, prevDist, curDist, curCentroid.x, curCentroid.y)
+    cam = CAM.pinchBy(cam, prevDist, curDist, curCentroid.x, curCentroid.y, vw, vh)
     return cam
   }
 
@@ -78,7 +79,10 @@ App.DesktopGesture = (function () {
         // → 直接拿起移动（不必长按）；其余（未选中图标 icon / 未选中 Viewer viewer / 空白 empty）
         // → 框选（划过触发选中）
         if (sg.hitType === 'selected' || sg.hitType === 'viewer-selected' || sg.hitType === 'viewer-handle') {
-          return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y, hitType: sg.hitType } }
+          // sx/sy = 按下起点（down 时 hitTest 已确认命中）；拖动起点可能已移出命中区
+          // （如 6px 高的 Viewer 拖动手柄：超过 TAP_THRESHOLD 的位移必然出界），
+          // 拿起判定必须以按下起点为基准重新命中，否则「点得动、拿不起」
+          return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y, sx: sg.startX, sy: sg.startY, hitType: sg.hitType } }
         }
         return { sg: Object.assign({}, next, { phase: 'marquee' }), effect: { type: 'marquee-start', x: sg.startX, y: sg.startY } }
       }
@@ -163,7 +167,15 @@ App.DesktopGesture = (function () {
   }
 
   function toWorld(x, y) {
-    return CAM.screenToWorld(x, y, _camera)
+    return CAM.screenToWorld(x, y, _camera, _viewportW(), _viewportH())
+  }
+
+  // 视口尺寸（旋转中心用；gesture 缓存 _rect 优先，退化用 clientWidth/Height）
+  function _viewportW() {
+    return (_rect && _rect.width) || (_viewport ? _viewport.clientWidth : 0)
+  }
+  function _viewportH() {
+    return (_rect && _rect.height) || (_viewport ? _viewport.clientHeight : 0)
   }
 
   function firstTwo() {
@@ -179,7 +191,7 @@ App.DesktopGesture = (function () {
   }
 
   function commit() {
-    CAM.applyTo(_camera, _canvas)
+    CAM.applyTo(_camera, _canvas, _viewportW(), _viewportH())
     if (_onUpdate) _onUpdate(_camera)
   }
 
@@ -218,7 +230,7 @@ App.DesktopGesture = (function () {
         if (_cb.onLongPress) _cb.onLongPress(toWorld(effect.x, effect.y))
         break
       case 'drag-start':
-        if (_cb.onDragStart) _cb.onDragStart(toWorld(effect.x, effect.y), effect.hitType)
+        if (_cb.onDragStart) _cb.onDragStart(toWorld(effect.x, effect.y), effect.hitType, toWorld(effect.sx, effect.sy))
         break
       case 'drag':
         if (_cb.onDrag) _cb.onDrag(toWorld(effect.x, effect.y))
@@ -294,7 +306,7 @@ App.DesktopGesture = (function () {
       if (two.length < 2) return
       const curCentroid = centroid(_contacts)
       const curDist = distance(two[0], two[1])
-      _camera = _applyClamp(panZoomStep(_camera, _prevCentroid, curCentroid, _prevDist, curDist))
+      _camera = _applyClamp(panZoomStep(_camera, _prevCentroid, curCentroid, _prevDist, curDist, _viewportW(), _viewportH()))
       _prevCentroid = curCentroid
       _prevDist = curDist
       commit()

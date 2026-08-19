@@ -82,6 +82,10 @@
 .fab-btn-set { display: none; }
 [data-mode="desktop"] .fab-set-preview { display: contents; }
 [data-mode="selection"] .fab-set-selection { display: contents; }
+[data-mode="snapshot-operation"] .fab-set-operation { display: contents; }
+
+/* Morph FAB 始终位于最高层级（LexiCull 同款）：快照面板（z-index 650）打开时
+   FAB（1500）仍浮于其上，可见可点；操作模式时 morph 为 ✕ + 操作按钮 */
 
 /* ===== Speed Dial 子按钮 ===== */
 .fab-child {
@@ -107,6 +111,52 @@
   transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1.1);
   pointer-events: none;
 }
+
+/* ===== FAB 悬浮球拖动定位（移植自 LexiCull fab-drag.js） =====
+   左档位：body.fab-pos-left 时 FAB/菜单容器/子按钮/标签整体镜像到左侧 */
+body.fab-pos-left .mode-switch-fab { right: auto; left: 28px; }
+body.fab-pos-left .fab-speed-dial { right: auto; left: 28px; }
+body.fab-pos-left .fab-child { right: auto; left: 0; }
+body.fab-pos-left .fab-child-label { right: auto; left: 44px; }
+
+/* 拖动态：轻微放大 + 阴影提示 */
+.mode-switch-fab.fab-dragging {
+  transform: scale(1.08);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.16);
+  transition: box-shadow .15s, transform .15s;
+}
+
+/* 吸附动画：left/top spring 弹性过渡（y 控制点 >1 带轻微过冲，落位有「弹一下」的玩具感；
+   需保留原 transform/opacity/bottom/border-radius 过渡，不破坏菜单展开动画能力） */
+.mode-switch-fab.fab-snapping {
+  transition: left .24s cubic-bezier(.2,1.2,.4,1), top .24s cubic-bezier(.2,1.2,.4,1),
+              transform .5s ease, opacity .5s ease,
+              bottom .25s cubic-bezier(0,0,.2,1), border-radius .4s cubic-bezier(.2,.8,.2,1);
+}
+
+/* 幽灵提示：原位占位 + 对侧候选（虚线描边 + 半透明「+」矢量图），
+   z-index 1498：低于 FAB(1500) 与遮罩(1499)，高于页面其余层 */
+.fab-drag-ghost {
+  position: fixed;
+  z-index: 1498;
+  width: 36px;
+  height: 36px;
+  border: 1.5px dashed var(--accent-blue);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-blue) 8%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  animation: fab-ghost-in .18s ease forwards;
+}
+.fab-drag-ghost-icon { opacity: 0.4; color: var(--accent-blue); }
+@keyframes fab-ghost-in {
+  from { opacity: 0; transform: scale(.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
 .fab-child:active {
   color: var(--color-text);
   background: var(--color-bg);
@@ -119,14 +169,19 @@
   pointer-events: auto;
 }
 
-/* 向上展开：第 1-7 个按钮 */
-.fab-speed-dial-expanded .fab-child-up:nth-child(1) { transform: translateY(-48px) scale(1); }
-.fab-speed-dial-expanded .fab-child-up:nth-child(2) { transform: translateY(-92px) scale(1); }
-.fab-speed-dial-expanded .fab-child-up:nth-child(3) { transform: translateY(-136px) scale(1); }
-.fab-speed-dial-expanded .fab-child-up:nth-child(4) { transform: translateY(-180px) scale(1); }
-.fab-speed-dial-expanded .fab-child-up:nth-child(5) { transform: translateY(-224px) scale(1); }
-.fab-speed-dial-expanded .fab-child-up:nth-child(6) { transform: translateY(-268px) scale(1); }
-.fab-speed-dial-expanded .fab-child-up:nth-child(7) { transform: translateY(-312px) scale(1); }
+/* 向上展开：槽位位移（slot-1..8）。
+   注意：不用 :nth-child(n)——display:none 的元素仍占 nth-child 序号，
+   按条件隐藏单个按钮（粘贴/上下文按钮）会导致可见按钮之间出现空洞。
+   槽位类由 JS 在展开时按「可见顺序」重排（见 fab-speed-dial.js _applySlots），
+   可见按钮自动紧凑顶位，第 8 个也不会因缺少位移规则而叠在 FAB 上。 */
+.fab-speed-dial-expanded .fab-child.slot-1 { transform: translateY(-48px) scale(1); }
+.fab-speed-dial-expanded .fab-child.slot-2 { transform: translateY(-92px) scale(1); }
+.fab-speed-dial-expanded .fab-child.slot-3 { transform: translateY(-136px) scale(1); }
+.fab-speed-dial-expanded .fab-child.slot-4 { transform: translateY(-180px) scale(1); }
+.fab-speed-dial-expanded .fab-child.slot-5 { transform: translateY(-224px) scale(1); }
+.fab-speed-dial-expanded .fab-child.slot-6 { transform: translateY(-268px) scale(1); }
+.fab-speed-dial-expanded .fab-child.slot-7 { transform: translateY(-312px) scale(1); }
+.fab-speed-dial-expanded .fab-child.slot-8 { transform: translateY(-356px) scale(1); }
 
 /* ===== 子按钮标签 ===== */
 .fab-child-label {
@@ -136,7 +191,7 @@
   color: #fff;
   font-size: 12px;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: 0;
   white-space: nowrap;
   opacity: 0;
   transition: opacity 0.15s ease;

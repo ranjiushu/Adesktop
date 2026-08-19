@@ -13,7 +13,7 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   outline: none;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
 }
 .btn-drawer:active {
   background: var(--color-bg);
@@ -69,31 +69,12 @@
 .drawer-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: var(--space-md);
   border-bottom: 1px solid var(--color-border);
 }
 .drawer-title {
   font-size: var(--font-size-lg);
   font-weight: 600;
-}
-.drawer-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  outline: none;
-  border-radius: var(--radius-sm);
-}
-.drawer-close:active {
-  background: var(--color-bg);
 }
 
 .drawer-body {
@@ -140,8 +121,18 @@
   background: var(--color-bg);
 }
 .drawer-item-icon {
-  width: 22px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 0;
+  background: var(--color-bg);
+  flex-shrink: 0;
   font-size: 18px;
+}
+.drawer-item-icon svg {
+  width: 18px;
+  height: 18px;
 }
 

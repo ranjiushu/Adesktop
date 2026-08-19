@@ -8,7 +8,7 @@
 
 ```
 ┌─────────────────────────────────────────────┐
-│ 前端（dist/desktop.bundle.min.html）         │
+│ 前端（dist/adesktop.bundle.min.html）         │
 │  ├─ DesktopUI  桌面渲染：图标网格/自由摆放    │
 │  ├─ layout.js  布局元数据读写（隐藏文件）     │
 │  └─ FileAPI    文件操作 Promise 封装         │
@@ -41,9 +41,9 @@
 | `resolveUri(path)` | 文件 → WebView 可直接加载的 URI（content:// / file://），媒体流式访问用 |
 | `openExternal(path)` | 交外部应用打开（ACTION_VIEW + MIME + 读授权；无可用应用报错） |
 | `meta(path)` | 单文件元数据 |
-| `rootInfo(cb)` | 根目录信息 {rootName, mode: saf\|private} |
-| `requestRootAccess()` | 重新弹 SAF 目录选择器（FAB「切换根目录」） |
+| `rootInfo(cb)` | 根目录信息 {rootName, mode: saf\|all-files\|private} |
+| `requestRootAccess()` | 引导全盘授权（Android 11+ 跳系统设置页 / Android 10 及以下弹运行时权限） |
 
 ## 文件系统范围（决策中）
 
-见 `docs/fs-scope.md`：SAF 授权目录 / 全盘访问 / 私有目录，待用户确认。
+见 `docs/fs-scope.md`：全盘访问（主方案）/ SAF 授权目录 / 私有目录兜底。

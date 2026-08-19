@@ -5,18 +5,18 @@
 //    1. Home 按钮存在且根目录下可用，初始无快照标记，相机 (0,0,1)
 //    2. 双击进入子文件夹 → Home 禁用；点上级目录 → 恢复可用
 //    3. 双指平移 + 捏合偏离 → 长按 Home（650ms）→ 快照写入 localStorage
-//       + home-has-snapshot 类 + toast
-//    4. 再次平移偏离 → 点按 Home → 相机回到快照（transform 数值断言，含 zoom）
+//       + toast（快照与 Home 锚点彻底分离：不触发 Home 锚点类）
+//    4. 再次平移偏离 → 点按 Home → 相机回出厂（无锚点时；快照不影响 Home）
 //    5. 设为默认视角 → fallback 写入，home 保留
 //    6. 全程零 pageerror
 //
-//  用法: DESKTOP_BUNDLE=dist/desktop.bundle.min.html node scripts/verify-home.js
+//  用法: DESKTOP_BUNDLE=dist/adesktop.bundle.min.html node scripts/verify-home.js
 //  退出码: 0 通过 / 1 失败 / 2 无可用 Chromium
 // ═══════════════════════════════════════════════════════════════
 const { launch } = require('./lib/browser')
 const path = require('path')
 
-const BUNDLE = process.env.DESKTOP_BUNDLE || path.join(__dirname, '..', 'dist', 'desktop.bundle.html')
+const BUNDLE = process.env.DESKTOP_BUNDLE || path.join(__dirname, '..', 'dist', 'adesktop.bundle.html')
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const TAP_GAP = 300
 
@@ -35,11 +35,13 @@ async function tap(client, x, y, holdMs = 60) {
 }
 
 // 双击：两次 touchend 间隔 < 300ms（双击窗口）
+// 注意：间隔留足余量（CDP 触摸派发有额外延迟，150ms + 派发延迟可能卡在 300ms 窗口
+// 边界导致偶发判为普通 tap；80ms 实测两击间隔 206~227ms，稳定落在窗口内）
 async function doubleTap(client, x, y) {
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
   await sleep(40)
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-  await sleep(150)
+  await sleep(80)
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
   await sleep(40)
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
@@ -82,7 +84,7 @@ async function pinchIn(client, x, y) {
 
 // 解析 canvas transform：translate3d(TXpx,TYpx,TZpx) scale(S)
 function parseTransform(t) {
-  const m = /translate3d\((-?[\d.]+)px,\s*(-?[\d.]+)px,\s*(-?[\d.]+)px?\)\s*scale\(([\d.]+)\)/.exec(t || '')
+  const m = /translate3d\((-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px?\)\s*scale\(([\d.]+)\)/.exec(t || '')
   if (!m) return null
   return { tx: parseFloat(m[1]), ty: parseFloat(m[2]), s: parseFloat(m[4]) }
 }
@@ -182,22 +184,23 @@ async function main() {
   else fail('捏合后 zoom 断言', JSON.stringify(tPan))
 
   await tap(client, homeRect.x, homeRect.y, 650)  // 长按 650ms > 500ms
-  const snap = await page.evaluate(() => {
-    try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
+  const snapBundle = await page.evaluate(() => {
+    try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
   })
-  if (snap && snap.home && typeof snap.home.zoom === 'number' && snap.home.zoom > 1.3) {
-    pass('长按 Home → 快照写入 localStorage（zoom=' + snap.home.zoom.toFixed(2) + '）')
+  const snap = snapBundle && snapBundle.portrait && snapBundle.portrait.groups[0] && snapBundle.portrait.groups[0].snapshots && snapBundle.portrait.groups[0].snapshots[0]
+  if (snap && snap.camera && typeof snap.camera.zoom === 'number' && snap.camera.zoom > 1.3) {
+    pass('长按 Home → 快照写入 localStorage（zoom=' + snap.camera.zoom.toFixed(2) + '）')
   } else {
-    fail('快照写入断言', JSON.stringify(snap))
+    fail('快照写入断言', JSON.stringify(snapBundle))
   }
   const afterLong = await page.evaluate(() => document.getElementById('bb-btn-home').classList.contains('home-has-snapshot'))
-  if (afterLong) pass('home-has-snapshot 类已应用')
-  else fail('home-has-snapshot 类缺失')
+  if (!afterLong) pass('长按 Home 记录快照 → Home 锚点类不出现（快照与 Home 彻底分离）')
+  else fail('快照不应触发 Home 锚点类')
   const toast1 = await page.evaluate(() => { const t = document.querySelector('.toast'); return t ? t.textContent : '' })
-  if (toast1.indexOf('已记录 Home 视角') >= 0) pass('长按 toast: ' + toast1)
+  if (toast1.indexOf('已记录快照') >= 0) pass('长按 toast: ' + toast1)
   else fail('长按 toast 断言', toast1)
 
-  // ── 4. 再次平移偏离 → 点按 Home → 相机平滑过渡到快照（中间态 + 终态） ──
+  // ── 4. 再次平移偏离 → 点按 Home → 相机回出厂（无 Home 锚点时；快照与 Home 分离） ──
   const tSnap = parseTransform(await canvasTransform(page))
   await pan(client, vp.x, vp.y + 200, 80, 0)
   const tAway = parseTransform(await canvasTransform(page))
@@ -205,22 +208,24 @@ async function main() {
   else fail('再次平移偏离断言', JSON.stringify(tAway))
 
   await sleep(1500)  // 等 toast1 过期，避免干扰后续 toast 断言
-  // 点按 Home（手动序列：tap() 内置 300ms 等待会错过 400ms 动画中段）
+  // 点按 Home（手动序列：tap() 内置 300ms 等待会错过 400ms 动画中段。
+  // 单击立即触发（双击窗口不延迟 onTap，见 utils.bindPressSplit）→ 动画 0ms 启动）
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: homeRect.x, y: homeRect.y }] })
   await sleep(60)
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-  await sleep(100)                                // 动画中段采样（k≈0.25；zoom 变化走 easeOut 弧长推进 ~35%，zoom 不变 easeInOutCubic ~6%；均严格介于两端）
+  await sleep(100)                                // 动画中段采样（k≈0.25；zoom 不变 easeInOutCubic ~6%，严格介于两端）
   const tMid = parseTransform(await canvasTransform(page))
-  // 中间态：位于偏离态与快照态之间（非瞬切），且尚未到达终点
-  const between = tMid && (tMid.tx - tSnap.tx) * (tMid.tx - tAway.tx) < 0 &&
-    Math.abs(tMid.tx - tSnap.tx) > 1 && Math.abs(tMid.tx - tAway.tx) > 1
-  if (between) pass('动画中间态：tx=' + tMid.tx.toFixed(1) + ' 介于偏离 ' + tAway.tx.toFixed(1) + ' 与快照 ' + tSnap.tx.toFixed(1) + ' 之间')
-  else fail('动画中间态断言', 'away=' + JSON.stringify(tAway) + ' mid=' + JSON.stringify(tMid) + ' snap=' + JSON.stringify(tSnap))
+  // 中间态：位于偏离态与出厂态之间（非瞬切），且尚未到达终点
+  const HOME_ORIGIN = { tx: 0, ty: 0, s: 1 }
+  const between = tMid && (tMid.tx - HOME_ORIGIN.tx) * (tMid.tx - tAway.tx) < 0 &&
+    Math.abs(tMid.tx - HOME_ORIGIN.tx) > 1 && Math.abs(tMid.tx - tAway.tx) > 1
+  if (between) pass('动画中间态：tx=' + tMid.tx.toFixed(1) + ' 介于偏离 ' + tAway.tx.toFixed(1) + ' 与出厂 0 之间')
+  else fail('动画中间态断言', 'away=' + JSON.stringify(tAway) + ' mid=' + JSON.stringify(tMid))
   await sleep(500)                                // 等动画（400ms）结束
   const tBack = parseTransform(await canvasTransform(page))
-  const okBack = tBack && Math.abs(tBack.tx - tSnap.tx) < 1 && Math.abs(tBack.ty - tSnap.ty) < 1 && Math.abs(tBack.s - tSnap.s) < 0.01
-  if (okBack) pass('点按 Home → 动画结束后回到快照（tx=' + tBack.tx.toFixed(1) + ', zoom=' + tBack.s.toFixed(2) + '）')
-  else fail('回到快照断言', 'snap=' + JSON.stringify(tSnap) + ' back=' + JSON.stringify(tBack))
+  const okBack = tBack && Math.abs(tBack.tx) < 1 && Math.abs(tBack.ty) < 1 && Math.abs(tBack.s - 1) < 0.01
+  if (okBack) pass('点按 Home → 动画结束后回出厂（无锚点，快照不影响）tx=' + tBack.tx.toFixed(1) + ', zoom=' + tBack.s.toFixed(2))
+  else fail('回出厂断言', 'snap=' + JSON.stringify(tSnap) + ' back=' + JSON.stringify(tBack))
 
   // ── 4b. 动画中手势打断：tap Home 后立即双指平移 → 相机跟随手指，不被动画拉回 ──
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: homeRect.x, y: homeRect.y }] })
@@ -235,11 +240,11 @@ async function main() {
   if (okInterrupt) pass('动画中手势打断：相机停在手势位置（tx=' + tAfter.tx.toFixed(1) + '），无回拉')
   else fail('手势打断断言', 'interrupt=' + JSON.stringify(tInterrupt) + ' after=' + JSON.stringify(tAfter))
 
-  // ── 4c. zoom 变化回 Home：缩小场景动画全程图标不出界（防「甩出屏幕再拉回」）──
+  // ── 4c. zoom 变化回出厂：缩小场景动画全程图标不出界（防「甩出屏幕再拉回」）──
   // 背景：同进度插值（zoom 与屏幕中心点共用同一缓动）时图标屏幕位置 = (P-W)·z 中途
   // 出现极值，边缘图标被推出视口再拉回（单测扫描复现出界 120px）。三段式修复后
-  // 全程不出界。本场景：捏合放大偏离（快照 1.60 × 1.6 = zoom ≈2.56）→ 点按 Home
-  // （快照 zoom 1.60）→ 动画 400ms 内逐帧采样所有图标矩形，断言中心点始终在 viewport 内。
+  // 全程不出界。本场景：捏合放大偏离（zoom ≈1.6）→ 点按 Home（出厂 zoom 1.0）→
+  // 动画 400ms 内逐帧采样所有图标矩形，断言中心点始终在 viewport 内。
   await pan(client, vp.x, vp.y + 200, 160, 0)      // 大幅平移偏离
   await pinchIn(client, vp.x, vp.y + 200)          // 捏合放大（zoom ≈2.56）
   await sleep(400)
@@ -285,14 +290,14 @@ async function main() {
     }
     return worst
   }, basePos)
-  if (tZoomed && tZoomed.s > snap.home.zoom + 0.1) {
+  if (tZoomed && tZoomed.s > 1.1) {
     if (zoomAnim.d === 0) {
-      pass('zoom 变化回 Home 动画中图标不出界（zoom ' + tZoomed.s.toFixed(2) + ' → 快照 ' + snap.home.zoom.toFixed(2) + '）')
+      pass('zoom 变化回出厂动画中图标不出界（zoom ' + tZoomed.s.toFixed(2) + ' → 出厂 1.0）')
     } else {
       fail('zoom 变化图标出界', zoomAnim.name + ' 中心 (' + zoomAnim.x + ',' + zoomAnim.y + ') 越界 ' + zoomAnim.d.toFixed(0) + 'px')
     }
   } else {
-    fail('zoom 变化场景构造断言', 'tZoomed=' + JSON.stringify(tZoomed) + ' snap=' + snap.home.zoom)
+    fail('zoom 变化场景构造断言', 'tZoomed=' + JSON.stringify(tZoomed) + ' snap=' + snap.camera.zoom)
   }
   await sleep(700)                                 // 等动画结束，避免影响后续场景
 
@@ -301,51 +306,54 @@ async function main() {
   await sleep(1500)  // 等上一个 toast 过期
   await page.evaluate(() => { if (App.Actions && App.Actions.setDefaultView) App.Actions.setDefaultView() })
   await sleep(400)
-  const snap2 = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop.home.v1')))
-  if (snap2 && snap2.fallback && snap2.home && snap2.home.zoom === snap.home.zoom) {
-    pass('设为默认视角 → fallback 写入且 home 保留')
+  const homeStore = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop.home.v1')))
+  const snapBundle2 = await page.evaluate(() => {
+    try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
+  })
+  const stillSnap = snapBundle2 && snapBundle2.portrait && snapBundle2.portrait.groups[0] && snapBundle2.portrait.groups[0].snapshots && snapBundle2.portrait.groups[0].snapshots[0]
+  if (homeStore && homeStore.fallback && stillSnap && stillSnap.camera.zoom === snap.camera.zoom) {
+    pass('设为默认视角 → fallback 写入且 SnapshotStore 快照保留')
   } else {
-    fail('fallback 断言', JSON.stringify(snap2))
+    fail('fallback 断言', JSON.stringify({ homeStore, stillSnap }))
   }
   const toast2 = await page.evaluate(() => { const t = document.querySelector('.toast'); return t ? t.textContent : '' })
   if (toast2.indexOf('已设置默认视角') >= 0) pass('默认视角 toast: ' + toast2)
   else fail('默认视角 toast 断言', toast2)
 
-  // ── 5b. 重新进入（reload）：启动相机 = Home 快照（> 默认视角 > 上次布局 > 出厂） ──
+  // ── 5b. 重新进入（reload）：启动相机 = 默认视角（fallback）——快照不再影响启动相机 ──
   // 期望 transform：tx = -x*zoom, ty = -y*zoom, s = zoom
   const expectT = (c) => ({ tx: -c.x * c.zoom, ty: -c.y * c.zoom, s: c.zoom })
-  const homeData = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop.home.v1')))
-  const tHomeExpect = expectT(homeData.home)
+  const fallbackData = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop.home.v1')).fallback)
+  const tFbExpect = expectT(fallbackData)
   await page.reload({ waitUntil: 'networkidle0' })
   await sleep(1200)
   const tAfterReload = parseTransform(await canvasTransform(page))
-  const okReloadHome = tAfterReload &&
-    Math.abs(tAfterReload.tx - tHomeExpect.tx) < 1 &&
-    Math.abs(tAfterReload.ty - tHomeExpect.ty) < 1 &&
-    Math.abs(tAfterReload.s - tHomeExpect.s) < 0.01
-  if (okReloadHome) pass('重新进入 → 启动相机落在 Home 快照（tx=' + tAfterReload.tx.toFixed(1) + ', zoom=' + tAfterReload.s.toFixed(2) + '）')
-  else fail('重新进入落快照断言', 'expect=' + JSON.stringify(tHomeExpect) + ' got=' + JSON.stringify(tAfterReload))
+  const okReloadFb = tAfterReload &&
+    Math.abs(tAfterReload.tx - tFbExpect.tx) < 1 &&
+    Math.abs(tAfterReload.ty - tFbExpect.ty) < 1 &&
+    Math.abs(tAfterReload.s - tFbExpect.s) < 0.01
+  if (okReloadFb) pass('重新进入 → 启动相机落在默认视角（快照不影响启动相机，tx=' + tAfterReload.tx.toFixed(1) + ', zoom=' + tAfterReload.s.toFixed(2) + '）')
+  else fail('重新进入落默认视角断言', 'expect=' + JSON.stringify(tFbExpect) + ' got=' + JSON.stringify(tAfterReload))
 
-  // 清掉快照只留默认视角 → reload → 启动相机落在默认视角
+  // 清掉快照只留默认视角 → reload → 仍落默认视角（证明快照删除无影响）
   await page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem('desktop.home.v1'))
-    delete d.home
-    localStorage.setItem('desktop.home.v1', JSON.stringify(d))
+    localStorage.removeItem('desktop.snapshots.legacy.v3')
   })
   await page.reload({ waitUntil: 'networkidle0' })
   await sleep(1200)
   const tAfterReload2 = parseTransform(await canvasTransform(page))
-  const fallbackData = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop.home.v1')).fallback)
-  const tFbExpect = expectT(fallbackData)
-  const okReloadFb = tAfterReload2 &&
+  const okReloadFb2 = tAfterReload2 &&
     Math.abs(tAfterReload2.tx - tFbExpect.tx) < 1 &&
     Math.abs(tAfterReload2.ty - tFbExpect.ty) < 1 &&
     Math.abs(tAfterReload2.s - tFbExpect.s) < 0.01
-  if (okReloadFb) pass('清快照后重新进入 → 启动相机落在默认视角（tx=' + tAfterReload2.tx.toFixed(1) + ', zoom=' + tAfterReload2.s.toFixed(2) + '）')
-  else fail('重新进入落默认视角断言', 'expect=' + JSON.stringify(tFbExpect) + ' got=' + JSON.stringify(tAfterReload2))
+  if (okReloadFb2) pass('清快照后重新进入 → 仍落默认视角（快照删除无影响）')
+  else fail('重新进入落默认视角断言2', 'expect=' + JSON.stringify(tFbExpect) + ' got=' + JSON.stringify(tAfterReload2))
 
   // 快照与默认视角都清掉 → reload → 启动出厂 (0,0,1)
-  await page.evaluate(() => localStorage.removeItem('desktop.home.v1'))
+  await page.evaluate(() => {
+    localStorage.removeItem('desktop.snapshots.legacy.v3')
+    localStorage.removeItem('desktop.home.v1')
+  })
   await page.reload({ waitUntil: 'networkidle0' })
   await sleep(1200)
   const tAfterReload3 = parseTransform(await canvasTransform(page))

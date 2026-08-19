@@ -1,7 +1,9 @@
 /* UI 工具：剪贴板复制（execCommand 优先，Clipboard API 兜底） */
+// @ts-check
 'use strict'
 
 App.ui = (function () {
+  /** @param {string} text @param {string} [msg] @returns {boolean} */
   function copyText(text, msg) {
     // 优先 execCommand（WebView 兼容性最好，不依赖用户手势令牌）
     let ta = document.createElement('textarea')
@@ -31,6 +33,7 @@ App.ui = (function () {
     return false
   }
 
+  /** @type {AppUi} */
   return {
     copyText: copyText
   }

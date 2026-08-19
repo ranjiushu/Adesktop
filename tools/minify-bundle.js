@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 构建产物压缩：terser(JS) + clean-css(CSS)，产出 dist/desktop.bundle.min.html
+// 构建产物压缩：terser(JS) + clean-css(CSS)，产出 dist/adesktop.bundle.min.html
 // =============================================================================
 // 用法: node tools/minify-bundle.js   （需先运行 bash tools/build-web.sh）
 // 安全边界:
@@ -16,8 +16,8 @@ const path = require('path')
 const terser = require('terser')
 const CleanCSS = require('clean-css')
 
-const SRC = path.join(__dirname, '..', 'dist', 'desktop.bundle.html')
-const OUT = path.join(__dirname, '..', 'dist', 'desktop.bundle.min.html')
+const SRC = path.join(__dirname, '..', 'dist', 'adesktop.bundle.html')
+const OUT = path.join(__dirname, '..', 'dist', 'adesktop.bundle.min.html')
 
 function fail(msg) {
   console.error('[minify] ' + msg)

@@ -4,22 +4,26 @@
  * 导出: App.RenameDialog
  * 触发: fab-speed-dial.js 路由 rename 动作
  */
+// @ts-check
 'use strict'
 
 App.RenameDialog = (function () {
   let OVERLAY_ID = 'rename-dialog-overlay'
   let INPUT_ID = 'rename-name'
   let _open = false
+  /** @type {string | null} */
   let _target = null   // 当前待重命名的完整路径
 
+  /** @param {string} id @returns {HTMLElement | null} */
   function _getEl(id) { return document.getElementById(id) }
 
+  /** @param {string} name @returns {void} */
   function open(name) {
     if (_open || !name) return
     _open = true
     _target = name
     App.Dialog.open(OVERLAY_ID, close)
-    let input = _getEl(INPUT_ID)
+    let input = /** @type {HTMLInputElement | null} */ (_getEl(INPUT_ID))
     if (input) {
       input.value = name
       // 同步聚焦（手势上下文内，Android WebView 才允许拉起软键盘）+ 全选方便直接覆盖
@@ -34,19 +38,22 @@ App.RenameDialog = (function () {
     }
   }
 
+  /** @returns {void} */
   function close() {
     if (!_open) return
     _open = false
     _target = null
     App.Dialog.close(OVERLAY_ID)
-    let input = _getEl(INPUT_ID)
+    let input = /** @type {HTMLInputElement | null} */ (_getEl(INPUT_ID))
     if (input && document.activeElement === input) input.blur()
   }
 
+  /** @returns {boolean} */
   function isOpen() { return _open }
 
+  /** @returns {void} */
   function _submit() {
-    let input = _getEl(INPUT_ID)
+    let input = /** @type {HTMLInputElement | null} */ (_getEl(INPUT_ID))
     let newName = input ? input.value.trim() : ''
     let target = _target
     close()
@@ -60,6 +67,7 @@ App.RenameDialog = (function () {
     App.Actions.rename(target, newName)
   }
 
+  /** @returns {void} */
   function init() {
     let confirmBtn = document.getElementById('rename-confirm')
     if (confirmBtn) App.utils.bindPress(confirmBtn, _submit)
@@ -67,7 +75,7 @@ App.RenameDialog = (function () {
     if (overlay) App.utils.bindPress(overlay, function (e) {
       if (e.target === overlay) close()
     })
-    let input = _getEl(INPUT_ID)
+    let input = /** @type {HTMLInputElement | null} */ (_getEl(INPUT_ID))
     if (input) {
       input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.keyCode === 13) {
@@ -78,6 +86,7 @@ App.RenameDialog = (function () {
     }
   }
 
+  /** @type {RenameDialog} */
   return {
     open: open,
     close: close,

@@ -6,11 +6,13 @@
  *   index.html sprite 的 symbol id（icon-{kebab}）+ 下方 _NAMES 清单，
  *   tests/test-icons.js 会校验两者一一对应。
  */
+// @ts-check
 'use strict'
 
 ;(function (App) {
 
   // camelCase → kebab-case
+  /** @param {string} str @returns {string} */
   function kebab(str) {
     return str.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
   }
@@ -18,19 +20,21 @@
   const SVG_OPEN = '<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 24 24"'
   const SVG_CLOSE = '><use href="#icon-{name}"/></svg>'
 
+  /** @param {any} str @returns {string} */
   function escapeAttr(str) {
-    return String(str || '').replace(/"/g, '&quot;')
+    return String(str || '').replace(/\"/g, '&quot;')
   }
 
   // 通用取图标方法
   // opts: { width, height, className/class, style }
+  /** @param {string} name @param {IconOpts} [opts] @returns {string} */
   function icon(name, opts) {
     opts = opts || {}
     const width = opts.width || 20
     const height = opts.height || 20
     const cls = opts.className || opts.class || ''
     const style = opts.style || ''
-    let html = SVG_OPEN.replace('{w}', width).replace('{h}', height)
+    let html = SVG_OPEN.replace('{w}', String(width)).replace('{h}', String(height))
     if (cls) html += ' class="' + escapeAttr(cls) + '"'
     if (style) html += ' style="' + escapeAttr(style) + '"'
     html += SVG_CLOSE.replace('{name}', kebab(name))
@@ -55,6 +59,7 @@
     'bookOpen', 'skipBack', 'play', 'pause', 'skipForward', 'music', 'backup'
   ]
 
+  /** @type {AppIcons} */
   const icons = { get: icon }
 
   _NAMES.forEach(function (name) {

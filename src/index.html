@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-<title>Desktop</title>
+<title>Adesktop</title>
 <style>
 /* __STYLE_PLACEHOLDER__ */
 </style>
@@ -92,7 +92,7 @@
     <button id="btn-drawer" class="btn-drawer" aria-label="打开菜单">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-menu"/></svg>
     </button>
-    <h1 id="app-title">Desktop</h1>
+    <h1 id="app-title">Adesktop</h1>
     <button id="btn-view-menu" class="btn-view-menu" aria-label="排列与视图" aria-expanded="false">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-more-vertical"/></svg>
     </button>
@@ -140,8 +140,11 @@
     <h2 id="create-dialog-title" class="dialog-title">新建</h2>
     <input id="create-name" class="dialog-input" type="text" placeholder="名称" autocomplete="off" enterkeyhint="done" aria-label="名称">
     <div class="dialog-actions dialog-actions-pair">
-      <button id="create-file" class="dialog-btn dialog-btn-primary">文件</button>
-      <button id="create-folder" class="dialog-btn dialog-btn-secondary">文件夹</button>
+      <button id="create-cancel" class="dialog-btn dialog-btn-secondary" type="button">取消</button>
+      <div class="dialog-actions-group">
+        <button id="create-file" class="dialog-btn dialog-btn-primary">文件</button>
+        <button id="create-folder" class="dialog-btn dialog-btn-primary">文件夹</button>
+      </div>
     </div>
   </div>
 </div>
@@ -163,6 +166,18 @@
   </div>
 </div>
 
+<!-- ===== 授权手机存储引导对话框（首次启动 / Drawer「授权手机存储」弹出） ===== -->
+<div id="all-files-dialog-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="all-files-dialog-title">
+    <h2 id="all-files-dialog-title" class="dialog-title">授权手机存储</h2>
+    <p class="dialog-desc">Adesktop 需要「所有文件访问」权限，才能像电脑桌面一样管理手机存储：图片、下载、文档等目录。权限需在系统设置中手动开启。</p>
+    <div class="dialog-actions dialog-actions-pair">
+      <button id="all-files-later" class="dialog-btn dialog-btn-secondary" type="button">暂不</button>
+      <button id="all-files-grant" class="dialog-btn dialog-btn-primary" type="button">去授权</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 重命名对话框（选中态操作栏「重命名」弹出）：预填原名，确认后执行 ===== -->
 <div id="rename-dialog-overlay" class="dialog-overlay" aria-hidden="true">
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-dialog-title">
@@ -177,22 +192,30 @@
 <!-- ===== 顶栏排列/视图菜单（子文件夹容器模式可用，根目录空间置灰） ===== -->
 <div id="view-menu-overlay" class="view-menu-overlay" aria-hidden="true"></div>
 <nav id="view-menu" class="view-menu" aria-hidden="true">
-  <div class="view-menu-section">
+  <div class="view-menu-section view-menu-section-sort">
     <div class="view-menu-label">排列方式</div>
     <button class="view-menu-item" data-sort="name">按名称<i class="view-menu-dir"></i></button>
     <button class="view-menu-item" data-sort="mtime">按修改日期<i class="view-menu-dir"></i></button>
     <button class="view-menu-item" data-sort="type">按类型<i class="view-menu-dir"></i></button>
     <button class="view-menu-item" data-sort="size">按大小<i class="view-menu-dir"></i></button>
   </div>
-  <div class="view-menu-sep"></div>
-  <div class="view-menu-section">
+  <div class="view-menu-sep view-menu-sep-folder"></div>
+  <div class="view-menu-section view-menu-section-view">
     <div class="view-menu-label">视图</div>
-    <button class="view-menu-item" data-view="grid">网格<i class="view-menu-check">✓</i></button>
-    <button class="view-menu-item" data-view="list">列表<i class="view-menu-check">✓</i></button>
+    <button class="view-menu-item" data-view="grid">网格<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
+    <button class="view-menu-item" data-view="list">列表<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
   </div>
   <div class="view-menu-sep view-menu-sep-browse"></div>
   <div class="view-menu-section view-menu-section-browse">
-    <button class="view-menu-item view-menu-browse" data-browse="advanced">高级浏览模式<i class="view-menu-check">✓</i></button>
+    <button class="view-menu-item view-menu-browse" data-browse="advanced">高级浏览模式<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
+  </div>
+  <div class="view-menu-sep view-menu-sep-rotate"></div>
+  <div class="view-menu-section view-menu-section-rotate">
+    <button class="view-menu-item view-menu-rotate" data-rotate="toggle">切换画布方向<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
+  </div>
+  <div class="view-menu-sep view-menu-sep-home"></div>
+  <div class="view-menu-section view-menu-section-home">
+    <button class="view-menu-item view-menu-sethome" data-action="set-home">设为 Home<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-home"/></svg></button>
   </div>
   <div class="view-menu-hint">打开文件夹后可用</div>
 </nav>
@@ -201,21 +224,21 @@
 <div id="drawer-overlay" class="drawer-overlay"></div>
 <nav id="drawer" class="drawer" aria-hidden="true">
   <div class="drawer-header">
-    <span class="drawer-title">工具栏</span>
-    <button class="drawer-close" aria-label="关闭菜单">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-close"/></svg>
-    </button>
-  </div>
+      <span class="drawer-title">工具栏</span>
+    </div>
   <div class="drawer-body">
     <div class="drawer-section">
       <div class="drawer-label">根目录</div>
       <div class="drawer-root-path" id="drawer-root-path">未知</div>
       <div class="drawer-root-mode" id="drawer-root-mode"></div>
+      <button class="drawer-item" data-action="desktop-dir">
+        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder"/></svg></span><span>桌面目录</span>
+      </button>
     </div>
     <div class="drawer-section">
       <div class="drawer-label">操作</div>
       <button class="drawer-item" data-action="switch-root">
-        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder-move"/></svg></span><span>切换根目录</span>
+        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder-move"/></svg></span><span>授权手机存储</span>
       </button>
       <button class="drawer-item" data-action="installed-apps">
         <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-smartphone"/></svg></span><span>已安装应用</span>
@@ -274,8 +297,8 @@
     <h2 id="web-upload-confirm-title" class="dialog-title">上传文件</h2>
     <p id="web-upload-confirm-desc" class="app-list-confirm-desc"></p>
     <div class="dialog-actions dialog-actions-pair">
-      <button id="web-upload-confirm-use" class="dialog-btn dialog-btn-primary">用待上传文件</button>
       <button id="web-upload-confirm-system" class="dialog-btn dialog-btn-secondary">重新选择</button>
+      <button id="web-upload-confirm-use" class="dialog-btn dialog-btn-primary">用待上传文件</button>
     </div>
   </div>
 </div>
@@ -301,13 +324,27 @@
     <button class="fab-child fab-child-up" data-action="refresh"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-refresh-cw"/></svg>
       <span class="fab-child-label">刷新</span>
     </button>
+    <button class="fab-child fab-child-up" data-action="organize"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-grid"/></svg>
+      <span class="fab-child-label">整理桌面</span>
+    </button>
     <button class="fab-child fab-child-up" data-action="paste"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-copy"/></svg>
       <span class="fab-child-label">粘贴</span>
     </button>
   </div>
   <!-- 选中态操作栏按钮集（selection 非空时自动展开）：
        Viewer 打开时仅显示 全屏预览 / 关闭预览（2、3 位），文件操作隐藏；
-       Viewer 关闭时显示 打开/复制/剪切/重命名/取消选择 -->
+       Viewer 关闭时显示 打开/复制/剪切/重命名（FAB 原位即「取消」——关闭 = 取消选中，
+       见 fab-speed-dial.js collapse 语义收敛） -->
+  <!-- 快照操作模式按钮集（长按快照行进入，FAB morph 展开）：
+       删除选中快照 / 移动到其它分组；FAB 原位 ✕ = 退出操作模式 -->
+  <div class="fab-btn-set fab-set-operation">
+    <button class="fab-child fab-child-up" data-action="snapshot-delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-trash"/></svg>
+      <span class="fab-child-label">删除</span>
+    </button>
+    <button class="fab-child fab-child-up" data-action="snapshot-move"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder-move"/></svg>
+      <span class="fab-child-label">移动</span>
+    </button>
+  </div>
   <div class="fab-btn-set fab-set-selection">
     <button class="fab-child fab-child-up" data-action="open"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder"/></svg>
       <span class="fab-child-label">打开</span>
@@ -324,20 +361,20 @@
     <button class="fab-child fab-child-up" data-action="cut"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-scissors"/></svg>
       <span class="fab-child-label">剪切</span>
     </button>
+    <button class="fab-child fab-child-up" data-action="move"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder-move"/></svg>
+      <span class="fab-child-label">移动</span>
+    </button>
     <button class="fab-child fab-child-up" data-action="rename"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-edit"/></svg>
       <span class="fab-child-label">重命名</span>
     </button>
     <button class="fab-child fab-child-up" data-action="delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-trash"/></svg>
       <span class="fab-child-label">删除</span>
     </button>
-    <button class="fab-child fab-child-up" data-action="clear-selection"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-close"/></svg>
-      <span class="fab-child-label">取消选择</span>
-    </button>
   </div>
 </div>
 
 <!-- ===== Loading Feedback：居中对话框（进度条）+ 实时标签（拖入文件夹提示） ===== -->
-<!-- 复用 dialog-overlay / dialog 结构（矩形 76vw），显隐经 App.Dialog 管理 -->
+<!-- 复用 dialog-overlay / dialog 结构（矩形 var(--dialog-width)），显隐经 App.Dialog 管理 -->
 <div id="loading-dialog" class="dialog-overlay loading-dialog" aria-hidden="true">
   <div class="dialog loading-dialog-card">
     <div id="loading-dialog-title" class="loading-dialog-title"></div>
@@ -378,6 +415,52 @@
 </div>
 
 <div id="drop-tag" class="drop-tag" aria-hidden="true"></div>
+
+<!-- ===== 移动目标选择器（Morph FAB「移动」弹出，移植自 LexiCull 移动功能） =====
+     交互：弹层 = 当前浏览目录；点文件夹项进入子目录；点面包屑返回上级；
+     底部「移动到此处」执行真移动（复用 move 管道：进度/取消/失败汇总/清选中/刷新）；
+     取消 / 返回键 / 点空白 = 清理暂存（选中已随 FAB 收起清空——FAB 展开 ⇔ 选中一致，
+     见 fab-speed-dial.js collapse 语义收敛）。
+     守卫：目标 = 源所在目录（按钮禁用「已在目标位置」）；目标 ∈ 源文件夹自身/后代
+     （循环移动）；源含锁定文件（预览中）不可移动。 -->
+<div id="move-target-overlay" class="dialog-overlay" aria-hidden="true">
+  <div class="dialog move-target-dialog" role="dialog" aria-modal="true" aria-labelledby="move-target-title">
+    <h2 id="move-target-title" class="dialog-title">移动到</h2>
+    <div id="move-target-crumb" class="move-crumb-bar"></div>
+    <div id="move-target-list" class="move-target-list"></div>
+    <div class="dialog-actions dialog-actions-pair">
+      <button id="move-target-cancel" class="dialog-btn dialog-btn-secondary" type="button">取消</button>
+      <button id="move-target-confirm" class="dialog-btn dialog-btn-primary" type="button">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 演示快照面板：底栏上滑呼出，管理快照 + 循环演示 ===== -->
+<div id="snapshot-sheet" class="snapshot-sheet" aria-hidden="true">
+  <div id="snapshot-sheet-overlay" class="snapshot-sheet-overlay" aria-hidden="true"></div>
+  <div id="snapshot-sheet-panel" class="snapshot-sheet-panel">
+    <div class="snapshot-sheet-header">
+      <span class="snapshot-sheet-title">演示快照</span>
+      <button id="snapshot-menu-btn" class="snapshot-sheet-menu-btn" aria-label="快照菜单" aria-haspopup="true" aria-expanded="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <div id="snapshot-menu" class="snapshot-menu snapshot-menu-hidden" aria-hidden="true">
+        <button class="snapshot-menu-item" data-action="new-group">新建分组</button>
+        <button class="snapshot-menu-item" data-action="insert-top">新快照插入顶部</button>
+        <button class="snapshot-menu-item" data-action="insert-bottom">新快照插入底部</button>
+        <button class="snapshot-menu-item" data-action="delete-current">删除当前快照</button>
+      </div>
+    </div>
+      <div id="snapshot-tabs" class="snapshot-tabs" role="tablist" aria-label="快照分组"></div>
+    <div id="snapshot-list" class="snapshot-list"></div>
+    <div class="snapshot-sheet-footer">
+      <button id="snapshot-close-btn" class="snapshot-sheet-close-btn" aria-label="关闭快照面板">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        <span>关闭</span>
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
 // __JS_PLACEHOLDER__

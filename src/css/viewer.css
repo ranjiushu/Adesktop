@@ -20,7 +20,7 @@
 /* ── 拖动手柄：canvas 态 Viewer 底部中心下方的悬浮横条（屏幕层固定尺寸）── */
 .viewer-drag-handle {
   position: absolute;
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(107, 114, 128, 0.55);
   pointer-events: none;   /* 纯视觉；命中走手势层 handleAt 世界坐标判定 */
   transition: background 0.15s ease;
@@ -36,7 +36,7 @@
    （layer 默认 none），不拦截桌面手势。 */
 .viewer-drag-handle {
   position: absolute;
-  border-radius: 3px;
+  border-radius: 0;
   background: rgba(107, 114, 128, 0.5);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   pointer-events: none;
@@ -53,7 +53,7 @@
   flex-direction: column;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
   overflow: hidden;
 }
@@ -177,7 +177,7 @@
   margin: 0.6em 0;
   padding: var(--space-sm) var(--space-md);
   background: #f3f4f6;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   overflow: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--font-size-sm);
@@ -188,7 +188,7 @@
   font-size: 0.9em;
   background: #f3f4f6;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .viewer-md pre code {
@@ -311,7 +311,7 @@
 
 .viewer-fs-page.viewer-fs-media .viewer-audio-cover {
   flex: 1;
-  border-radius: var(--radius-md);
+  border-radius: 0;
 }
 
 /* ── 文本 reader 工具条（完整预览态：字号缩放 + 自动换行）── */
@@ -327,7 +327,7 @@
   height: 30px;
   padding: 0 8px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -381,7 +381,7 @@
 .viewer-fallback-btn {
   padding: 8px 20px;
   border: 1px solid var(--color-accent);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   background: var(--color-surface);
   color: var(--color-accent);
   font-size: var(--font-size-md);
@@ -443,7 +443,7 @@
   width: 36px;
   height: 36px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--color-text-secondary);
   -webkit-tap-highlight-color: transparent;

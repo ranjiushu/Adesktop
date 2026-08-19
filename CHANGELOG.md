@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Viewer 状态持久化 + 矩形设计语言（2026-08-19）
+
+- **Viewer 持久化（只能手动关闭）**：画布态 Viewer 的打开状态 + 世界坐标位置经
+  新增 `ViewerStore`（viewer-store.js）持久化——localStorage 缓存 + 桌面空间隐藏
+  文件 `.adesktop-viewers.json`（文件即真相，随目录迁移）；打开/关闭/拖动结束/
+  媒体自适应落盘（InternalViewer.setPersistListener 注入，desktop-viewer-link
+  负责）；app 重启后恢复上次会话的 Viewer（原位置 + 文件重新锁定），已删文件记录
+  跳过；folder 全屏预览不持久化；「一键关闭所有 Viewer」为规划中扩展
+- **矩形设计语言**：全应用圆角归零（tokens --radius-sm/md → 0 + 全部 CSS 直写
+  半径清零）——快照列表/顶栏菜单/Viewer 卡片/对话框/抽屉/Toast 等统一直角矩形；
+  FAB 圆形按钮除外（矩形语言针对圆角矩形，非圆形元素）
+- **单测**：test-viewer-store.js 17 项（往返/过滤/隔离/文件写入）；**E2E**：
+  verify-viewer.js 11 项（启动恢复位置/拖动落盘/手动关闭清空/reload 不复活/
+  陈旧记录跳过/直角断言）；verify.sh 15 → 16 项门禁
+
 ### 循环演示 + 字母/页码编号 + 列表滚动防误触（2026-08-19）
 
 - **循环演示（去掉「演示模式」概念）**：桌面空间存在快照时，底栏前进/后退直接按

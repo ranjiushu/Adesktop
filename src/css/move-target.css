@@ -24,7 +24,7 @@
   background: none;
   border: none;
   padding: 4px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   color: var(--color-accent);
   font-size: inherit;
   cursor: pointer;
@@ -48,7 +48,7 @@
   padding: 0 var(--space-sm);
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   color: var(--color-text);
   font-size: var(--font-size-md);
   text-align: left;

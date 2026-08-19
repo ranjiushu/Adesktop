@@ -4,13 +4,17 @@
  * 复制/剪切/移动/删除/重命名，只允许拖动摆放）、布局 key 迁移
  * （applyRename/applyMoves：positions/bounds/selection 以完整路径为 key，
  * 旧 key → 新 key，否则刷新后回退自动排布丢位置）。
+ * Viewer 持久化（「Viewer 只能通过手动关闭」）：init() 注入 InternalViewer
+ * 持久化监听（画布态打开/关闭/拖动/媒体自适应 → ViewerStore.save）；
+ * restoreViewers() 在桌面空间 refresh 加载列表后调用，恢复上次会话打开的
+ * Viewer（世界坐标原位置；文件已删除/不在当前目录 → 跳过，下次保存自然清理）。
  * 目录切换时 Viewer 处理：全屏态走 exitFullscreen（close），canvas 态走
  * suspendCanvas/resumeCanvas（跨目录保留状态），均在 desktop-navigation.js
  * 的 applyCameraForPath 中完成，不经本模块。
  * 锁定视觉同步经 App.DesktopRender.updateLockedVisual/syncFab；
  * 迁移落盘经 App.DesktopPersist.saveLayout/refresh。
  * 依赖: namespace.js, desktop-core.js, desktop-render.js, desktop-persist.js,
- *       viewer.js
+ *       viewer.js, viewer-store.js
  * 导出: App.DesktopViewerLink
  */
 // @ts-check
@@ -18,6 +22,60 @@
 
 App.DesktopViewerLink = (function () {
   const C = App.DesktopCore
+
+  // 注入 InternalViewer 持久化监听：画布态变化（打开/关闭/拖动结束/媒体自适应）
+  // → ViewerStore.save（localStorage + 隐藏文件，文件即真相）。rootId 未就绪跳过。
+  /** @returns {void} */
+  function init() {
+    if (App.InternalViewer && typeof App.InternalViewer.setPersistListener === 'function') {
+      App.InternalViewer.setPersistListener(function (/** @type {Array<ViewerRecord>} */ viewers) {
+        if (!C.state.rootId || !App.ViewerStore) return
+        App.ViewerStore.save(viewers, C.state.rootId)
+      })
+    }
+  }
+
+  // 恢复上次会话的画布态 Viewer（仅桌面空间；由 desktop-persist refresh 列表加载后调用）。
+  // 幂等：已在内存的路径跳过（refresh 重复调用/目录往返不重复开）；文件不存在跳过。
+  /** @returns {void} */
+  function restoreViewers() {
+    if (C.isFolderView()) return
+    const rootId = C.state.rootId
+    if (!rootId || !App.ViewerStore || !App.InternalViewer) return
+    const records = App.ViewerStore.load(rootId).viewers || []
+    if (!records.length) return
+    const items = C.state.items || []
+    /** @type {Record<string, boolean>} */
+    const existing = {}
+    items.forEach(function (it) { existing[C.fullPath(it.name)] = true })
+    /** @type {Record<string, boolean>} */
+    const openPaths = {}
+    App.InternalViewer.list().forEach(function (/** @type {any} */ inst) {
+      if (inst.getMode && inst.getMode() === 'canvas' && inst.getPath()) openPaths[inst.getPath()] = true
+    })
+    records.forEach(function (rec) {
+      if (openPaths[rec.path]) return
+      if (!existing[rec.path]) return
+      const rect = rec.rect
+      App.InternalViewer.open({
+        path: rec.path,
+        name: rec.name,
+        kind: rec.kind,
+        anchor: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
+        camera: C.camera,
+        rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+        onFallback: function () {
+          App.FileAPI.openExternal(rec.path).catch(function () {})
+        },
+        onClose: function (/** @type {string} */ path) {
+          if (path) C._lockedPaths.delete(path)
+          App.DesktopRender.updateLockedVisual()
+        }
+      })
+      C._lockedPaths.add(rec.path)
+      App.DesktopRender.updateLockedVisual()
+    })
+  }
 
   // 关闭「选中的」Viewer + 解除其文件锁定（唯一出口：FAB 关闭预览）。
   // 目录切换走 applyCameraForPath → suspendCanvas/resumeCanvas（跨目录保留），不经此处。
@@ -92,6 +150,8 @@ App.DesktopViewerLink = (function () {
 
   /** @type {DesktopViewerLink} */
   return {
+    init: init,
+    restoreViewers: restoreViewers,
     closeViewer: closeViewer,
     isLockedPath: isLockedPath,
     getLockedPaths: getLockedPaths,

@@ -213,6 +213,8 @@ App.InternalViewer = (function () {
   let _nextId = 1
   let _cascade = 0        // 级联错位计数（视觉中心锚点类）
   let _fullscreenId = null  // 当前全屏实例 id（同时最多一个）
+  /** @type {((viewers: Array<ViewerRecord>) => void) | null} 持久化监听（Desktop 层注入，画布态变化时回调） */
+  let _persistListener = null
 
   // ── 实例工厂：每个 Viewer 独立 DOM + 状态 + 拖动 ──
   function createInstance(opts) {
@@ -272,6 +274,7 @@ App.InternalViewer = (function () {
       if (i >= 0) _instances.splice(i, 1)
       // 通知调用方：文件已关闭（用于桌面层解除锁定）
       if (typeof savedOnClose === 'function') savedOnClose(savedPath)
+      _notifyPersist()
     }
 
     function detachCard() {
@@ -325,6 +328,10 @@ App.InternalViewer = (function () {
     function getPath() { return state.path }
     function getName() { return state.name }
     function getKind() { return state.kind }
+    /** @returns {{x: number, y: number, w: number, h: number} | null} 世界坐标矩形（画布态持久化用） */
+    function getRect() {
+      return state.rect ? { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h } : null
+    }
 
     // 选中态更新：手柄高亮同步（选中时手柄 accent 色提示可拖）
     function setSelected(on) {
@@ -354,15 +361,19 @@ App.InternalViewer = (function () {
       const vh = _layer.clientHeight
       if (state.mode === 'canvas') {
         const size = cardIsPortrait(state.kind) ? cardSize34(vw, vh) : cardSize(vw, vh)
-        let anchor = state.anchor
-        if (anchorIsCenter(state.kind)) {
-          anchor = visualCenter(state.camera, vw, vh) || anchor
-          if (anchor) anchor = { x: anchor.x + _cascade * CASCADE_STEP, y: anchor.y + _cascade * CASCADE_STEP }
-        }
-        let rect = worldRect(anchor, size.w, size.h)
-        if (!anchorIsCenter(state.kind) && visibleRatio(rect, vw, vh) < MIN_VISIBLE && state.camera) {
-          const c = visualCenter(state.camera, vw, vh)
-          if (c) rect = worldRect(c, size.w, size.h)
+        // 恢复场景：state.rect 已在 open() 预置，直接应用持久化矩形
+        let rect = state.rect ? { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h } : null
+        if (!rect) {
+          let anchor = state.anchor
+          if (anchorIsCenter(state.kind)) {
+            anchor = visualCenter(state.camera, vw, vh) || anchor
+            if (anchor) anchor = { x: anchor.x + _cascade * CASCADE_STEP, y: anchor.y + _cascade * CASCADE_STEP }
+          }
+          rect = worldRect(anchor, size.w, size.h)
+          if (!anchorIsCenter(state.kind) && visibleRatio(rect, vw, vh) < MIN_VISIBLE && state.camera) {
+            const c = visualCenter(state.camera, vw, vh)
+            if (c) rect = worldRect(c, size.w, size.h)
+          }
         }
         applyCanvasRect(rect)
         backBtn.style.display = 'none'
@@ -403,7 +414,10 @@ App.InternalViewer = (function () {
         const natH = media.naturalHeight || media.videoHeight || 0
         if (!(natW > 0) || !(natH > 0)) return
         const rect = fitAspectRect(state.rect, natW, natH, _layer.clientWidth, _layer.clientHeight)
-        if (rect) applyCanvasRect(rect)
+        if (rect) {
+          applyCanvasRect(rect)
+          _notifyPersist()   // 媒体自适应改变尺寸：持久化最终矩形
+        }
       }
       if (media.tagName === 'VIDEO') {
         media.addEventListener('loadedmetadata', onReady)
@@ -500,6 +514,7 @@ App.InternalViewer = (function () {
       if (!drag) return
       drag = null
       card.classList.remove('viewer-card-dragging')
+      _notifyPersist()   // 拖动结束：位置已变，持久化
     }
 
     function cancelDrag() {
@@ -776,7 +791,17 @@ App.InternalViewer = (function () {
         canvasRect: null
       }
       if (!state.path) return false
-      if (state.mode === 'canvas' && anchorIsCenter(state.kind)) _cascade++
+      // 恢复场景：直接使用持久化的世界矩形（跳过锚点推导/级联错位）
+      if (state.mode === 'canvas' && opts.rect &&
+          typeof opts.rect.x === 'number' && isFinite(opts.rect.x) &&
+          typeof opts.rect.y === 'number' && isFinite(opts.rect.y) &&
+          typeof opts.rect.w === 'number' && opts.rect.w > 0 &&
+          typeof opts.rect.h === 'number' && opts.rect.h > 0) {
+        state.rect = { x: opts.rect.x, y: opts.rect.y, w: opts.rect.w, h: opts.rect.h }
+        state.canvasRect = { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h }
+      } else if (state.mode === 'canvas' && anchorIsCenter(state.kind)) {
+        _cascade++
+      }
       title.textContent = state.name
       card.className = canvasCardClass()
       mount()
@@ -812,6 +837,7 @@ App.InternalViewer = (function () {
       endDrag: endDrag,
       cancelDrag: cancelDrag,
       isDragging: isDragging,
+      getRect: getRect,
       hitTestWorld: hitTestWorld,
       rectHitWorld: rectHitWorld,
       handleHitTest: handleHitTest,
@@ -832,7 +858,28 @@ App.InternalViewer = (function () {
     const ok = inst.open()
     if (!ok) return null
     _instances.push(inst)
+    _notifyPersist()
     return inst.id
+  }
+
+  // 持久化：收集画布态实例（path/name/kind/世界矩形）回调监听器（Desktop 层注入 ViewerStore）
+  /** @returns {void} */
+  function _notifyPersist() {
+    if (typeof _persistListener !== 'function') return
+    /** @type {Array<ViewerRecord>} */
+    const list = []
+    _instances.forEach(function (inst) {
+      if (!inst.isOpen() || inst.getMode() !== 'canvas') return
+      const rect = inst.getRect()
+      if (!rect) return
+      list.push({ path: inst.getPath(), name: inst.getName(), kind: inst.getKind(), rect: rect })
+    })
+    _persistListener(list)
+  }
+
+  /** @param {((viewers: Array<ViewerRecord>) => void) | null} fn */
+  function setPersistListener(fn) {
+    _persistListener = typeof fn === 'function' ? fn : null
   }
 
   // 关闭指定实例（实例 close 内部会从集合移除自己）
@@ -977,6 +1024,7 @@ App.InternalViewer = (function () {
 
   return {
     open: open,
+    setPersistListener: setPersistListener,
     closeById: closeById,
     closeAll: closeAll,
     getById: getById,

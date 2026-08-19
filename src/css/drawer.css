@@ -13,7 +13,7 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   outline: none;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
 }
 .btn-drawer:active {
   background: var(--color-bg);
@@ -126,7 +126,7 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--color-bg);
   flex-shrink: 0;
   font-size: 18px;

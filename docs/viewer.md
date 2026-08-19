@@ -66,6 +66,15 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 
 ## Desktop 空间（根目录）中的 Viewer（画布实体）
 
+- **持久化（Viewer 只能通过手动关闭）**：画布态 Viewer 的打开状态 + 世界坐标位置
+  经 `App.ViewerStore`（viewer-store.js）持久化——localStorage 缓存 +
+  桌面空间目录隐藏文件 `.adesktop-viewers.json`（文件即真相，随目录迁移）。
+  打开/关闭/拖动结束/媒体自适应都会触发落盘（`InternalViewer.setPersistListener`
+  注入，见 desktop-viewer-link.js `init`）；app 重启后 `restoreViewers`（refresh
+  列表加载后调用）恢复上次会话的画布态 Viewer：原世界坐标 + 文件重新锁定；
+  文件已删除/不在当前目录的记录跳过（下次保存自然清理）。folder 容器内的
+  全屏预览不持久化（随退出关闭）。关闭 Viewer 的唯一途径 = 手动（Morph FAB
+  「关闭预览」）；「一键关闭所有 Viewer」为规划中的扩展方向，暂未实现。
 - Viewer **不属于网格**：不参与布局、排序、框选、碰撞；DOM 上位于
   `#desktop-canvas` 内 grid 之后（z-index 5），天然遮挡其背后的文件。
 - **画布实体，具备实体基本性质**（与文件图标手势统一）：

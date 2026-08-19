@@ -74,6 +74,10 @@ App.boot = function boot() {
   if (App.SnapshotSheet && typeof App.SnapshotSheet.init === 'function') {
     App.SnapshotSheet.init()
   }
+  // Viewer 持久化监听注入（画布态变化 → ViewerStore 落盘；恢复在 Desktop.refresh 内）
+  if (App.DesktopViewerLink && typeof App.DesktopViewerLink.init === 'function') {
+    App.DesktopViewerLink.init()
+  }
   // 底部工具栏（加号 → 新建对话框，其余占位）
   if (App.BottomBar && typeof App.BottomBar.init === 'function') {
     App.BottomBar.init()

@@ -73,6 +73,23 @@ interface FileApi {
   hasBridge(): boolean
 }
 
+/** 画布态 Viewer 持久化记录（ViewerStore）：打开状态 + 世界坐标位置 */
+interface ViewerRecord {
+  path: string
+  name: string
+  kind: string
+  rect: { x: number; y: number; w: number; h: number }
+}
+
+/** Viewer 状态存储（App.ViewerStore）：localStorage 缓存 + 隐藏文件（文件即真相） */
+interface ViewerStore {
+  VERSION: number
+  VIEWERS_FILE: string
+  load(rootId: string): { version: number; viewers: Array<ViewerRecord> }
+  save(viewers: Array<ViewerRecord>, rootId: string): boolean
+  keyFor(rootId: string): string
+}
+
 /** 布局存储（App.LayoutStore）：localStorage 图标位置 + 相机视角。
  * camera 含 rotation（saveLayout 持久化画布旋转态，见 desktop-persist.js）。 */
 interface AppLayoutData {
@@ -455,6 +472,8 @@ interface WebUpload {
 
 /** Viewer 联动 + 布局 key 迁移（App.DesktopViewerLink） */
 interface DesktopViewerLink {
+  init(): void
+  restoreViewers(): void
   closeViewer(): void
   isLockedPath(path: string): boolean
   getLockedPaths(): Array<string>
@@ -839,6 +858,7 @@ interface AppNamespace {
   FileAPI: FileApi
   LayoutStore: LayoutStore
   HomeStore: HomeStore
+  ViewerStore: ViewerStore
   SnapshotStore: SnapshotStore
   DesktopCamera: DesktopCamera
   ViewStore: ViewStore

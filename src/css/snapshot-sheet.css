@@ -104,7 +104,7 @@
   right: 10px;
   bottom: 0;
   height: 2.5px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--color-accent);
   opacity: 0;
   transform: scaleX(0.4);
@@ -125,7 +125,7 @@
   font-size: 11px;
   color: var(--color-text-secondary);
   background: var(--color-bg);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 1px 6px;
   line-height: 1.4;
 }
@@ -145,7 +145,7 @@
   align-self: center;
   margin-left: 2px;
   border: none;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--color-bg);
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -166,7 +166,7 @@
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
-  border-radius: 50%;
+  border-radius: 0;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -183,7 +183,7 @@
   min-width: 180px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 0;
   box-shadow: 0 4px 20px rgba(0,0,0,0.14);
   z-index: 10;
   overflow: hidden;
@@ -247,7 +247,7 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--color-border);
   color: var(--color-text);
   font-size: 14px;
@@ -281,7 +281,7 @@
   height: 32px;
   color: var(--color-text-secondary);
   cursor: grab;
-  border-radius: 6px;
+  border-radius: 0;
   flex: none;
 }
 
@@ -342,7 +342,7 @@
   gap: 6px;
   padding: 10px 24px;
   border: none;
-  border-radius: 20px;
+  border-radius: 0;
   background: var(--color-bg);
   color: var(--color-text-secondary);
   font-size: 14px;
@@ -386,7 +386,7 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -475,7 +475,7 @@
   margin: 8px 16px calc(8px + var(--safe-bottom, 0px));
   padding: 11px 0;
   border: none;
-  border-radius: 18px;
+  border-radius: 0;
   background: var(--color-bg);
   color: var(--color-text-secondary);
   font-size: 14px;

@@ -183,6 +183,11 @@ App.DesktopPersist = (function () {
           })
         }
         App.DesktopRender.render()
+        // 恢复上次会话的 Viewer（桌面空间；幂等，文件已删/已打开自动跳过）
+        if (!C.isFolderView() && App.DesktopViewerLink &&
+            typeof App.DesktopViewerLink.restoreViewers === 'function') {
+          App.DesktopViewerLink.restoreViewers()
+        }
         // 后退/前进按钮禁用态随目录切换更新
         if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
           App.BottomBar.updateNavButtons()

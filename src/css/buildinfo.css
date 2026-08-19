@@ -42,7 +42,7 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   outline: none;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
 }
 .buildinfo-back:active {
   background: var(--color-bg);
@@ -76,7 +76,7 @@
   gap: 2px;
   padding: var(--space-sm) var(--space-md);
   background: var(--color-bg);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
 }
 .buildinfo-stat-label {
   font-size: var(--font-size-sm);
@@ -97,7 +97,7 @@
 .buildinfo-commit {
   padding: var(--space-sm) var(--space-md);
   background: var(--color-bg);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
 }
 .buildinfo-commit-hash {
   font-family: monospace;
@@ -143,7 +143,7 @@
 .sub-info-card {
   background: var(--color-surface);
   border: 1px solid var(--border-outer);
-  border-radius: 14px;
+  border-radius: 0;
   padding: 14px 16px;
   margin-bottom: 8px;
   font-size: 16px;
@@ -186,7 +186,7 @@
   cursor: pointer;
   user-select: none;
   padding: 5px 4px;
-  border-radius: 6px;
+  border-radius: 0;
   transition: background 0.12s;
   display: flex;
   align-items: center;
@@ -295,7 +295,7 @@
   padding: 4px 12px;
   border-left: 3px solid var(--accent-blue);
   background: var(--bg-page);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0;
   font-style: italic;
   color: var(--text-secondary);
 }
@@ -304,7 +304,7 @@
   font-size: 12px;
   background: var(--bg-page);
   border: 1px solid var(--border-outer);
-  border-radius: 3px;
+  border-radius: 0;
   padding: 0 3px;
   overflow-wrap: anywhere;
   word-break: break-all;
@@ -314,7 +314,7 @@
   padding: 8px 10px;
   background: var(--bg-page);
   border: 1px solid var(--border-outer);
-  border-radius: 6px;
+  border-radius: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 可共享路径：仅应用私有缓存目录下的缩略图，供 WebView 以 content:// URI 加载。 -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="thumbs" path="thumbs" />
+</paths>

@@ -159,30 +159,3 @@
   color: var(--color-text-secondary);
 }
 
-/* 桌面目录快捷选项：常见目录 chips（当前选中项强调色描边） */
-.desktop-dir-options {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
-}
-.desktop-dir-option {
-  height: 40px;
-  border: 1px solid var(--color-border);
-  border-radius: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  padding: 0 var(--space-xs);
-}
-.desktop-dir-option:active {
-  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
-}
-.desktop-dir-option.selected {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-  font-weight: 600;
-}

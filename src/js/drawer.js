@@ -11,10 +11,6 @@ App.Drawer = (function () {
 
   // ── 全盘授权引导（首次启动 / Drawer「授权手机存储」）──
   const PROMPT_KEY = 'all-files-prompted'
-  // 常见桌面目录（相对手机存储根）：第一项 = 全盘根（桌面直接渲染整个手机存储）
-  const COMMON_DIRS = ['', 'Desktop', 'Download', 'Documents', 'Pictures', 'DCIM', 'Music', 'Movies']
-  /** @type {Record<string, string>} */
-  const COMMON_DIRS_LABEL = { '': '手机存储根', Desktop: 'Desktop', Download: '下载', Documents: '文档', Pictures: '图片', DCIM: '相机', Music: '音乐', Movies: '电影' }
 
   /** @param {string} id @returns {HTMLElement | null} */
   function _getEl(id) { return document.getElementById(id) }
@@ -96,41 +92,14 @@ App.Drawer = (function () {
 
   // ── 桌面目录（all-files 模式桌面渲染的根目录）──
 
-  /** 打开桌面目录选择对话框：渲染常见目录选项（当前值高亮）+ 预填自定义输入 */
+  /** 打开系统目录选择器（SAF ACTION_OPEN_DOCUMENT_TREE）更换桌面目录。
+   *  all-files 模式下解析为相对路径；SAF/private 模式下直接作为新的根授权。 */
   /** @returns {void} */
-  function openDesktopDirDialog() {
-    let optionsEl = document.getElementById('desktop-dir-options')
-    if (!optionsEl) return
-    optionsEl.innerHTML = ''
-    const current = (App.Desktop && typeof App.Desktop.getDesktopRoot === 'function')
-      ? App.Desktop.getDesktopRoot() : 'Desktop'
-    COMMON_DIRS.forEach(function (dir) {
-      let btn = document.createElement('button')
-      btn.type = 'button'
-      btn.className = 'desktop-dir-option' + (dir === current ? ' selected' : '')
-      btn.textContent = COMMON_DIRS_LABEL[dir] !== undefined ? COMMON_DIRS_LABEL[dir] : dir
-      btn.setAttribute('data-dir', dir)
-      btn.addEventListener('click', function () { selectDesktopDir(dir) })
-      optionsEl.appendChild(btn)
-    })
-    let inputEl = /** @type {HTMLInputElement | null} */ (document.getElementById('desktop-dir-input'))
-    if (inputEl) inputEl.value = current
-    App.Dialog.open('desktop-dir-dialog-overlay', closeDesktopDirDialog)
-  }
-
-  /** @returns {void} */
-  function closeDesktopDirDialog() {
-    App.Dialog.close('desktop-dir-dialog-overlay')
-  }
-
-  /** 保存并切换桌面根：校验 + 交给 DesktopPersist（失败 toast 原因） */
-  /** @param {string} dir @returns {void} */
-  function selectDesktopDir(dir) {
-    if (!App.Desktop || typeof App.Desktop.saveDesktopRoot !== 'function') return
-    const ok = App.Desktop.saveDesktopRoot(dir)
-    if (ok) {
-      closeDesktopDirDialog()
-      App.toast.show('桌面目录已切换: ' + (dir || '手机存储根'))
+  function openDesktopDirPicker() {
+    if (App.bridge && typeof App.bridge.requestDesktopDir === 'function') {
+      App.bridge.requestDesktopDir()
+    } else {
+      App.toast.show('当前环境不支持系统目录选择器')
     }
   }
 
@@ -175,7 +144,7 @@ App.Drawer = (function () {
               openAllFilesDialog()
             }
           } else if (action === 'desktop-dir') {
-            openDesktopDirDialog()
+            openDesktopDirPicker()
           } else if (action === 'installed-apps') App.AppList.open()
           else if (action === 'new-website') App.WebsiteDialog.open()
         })
@@ -189,17 +158,6 @@ App.Drawer = (function () {
     if (grantBtn) App.utils.bindPress(grantBtn, grantAllFiles)
     let laterBtn = document.getElementById('all-files-later')
     if (laterBtn) App.utils.bindPress(laterBtn, closeAllFilesDialog)
-    // 桌面目录对话框按钮
-    let dirSaveBtn = document.getElementById('desktop-dir-save')
-    if (dirSaveBtn) {
-      App.utils.bindPress(dirSaveBtn, function () {
-        let inputEl = /** @type {HTMLInputElement | null} */ (document.getElementById('desktop-dir-input'))
-        if (!inputEl) return
-        selectDesktopDir(inputEl.value.trim())
-      })
-    }
-    let dirCancelBtn = document.getElementById('desktop-dir-cancel')
-    if (dirCancelBtn) App.utils.bindPress(dirCancelBtn, closeDesktopDirDialog)
   }
 
   /** @type {Drawer} */

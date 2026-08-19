@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 桌面目录改用系统 SAF 授权选择器（2026-08-19）
+
+- **移除固定路径 + 手动输入**：Drawer「桌面目录」不再弹出常见目录 chips + 自定义输入框，
+  改为直接调用系统 `ACTION_OPEN_DOCUMENT_TREE` 目录选择器
+- **支持应用私有目录**：通过 SAF 授权任意 DocumentsProvider 暴露的目录
+  （如经 MT 管理器注入文件提供器后暴露的应用 data 目录），选择后该目录成为新的桌面根
+- **forceSafMode 机制**：用户主动选择 SAF 目录后，即使仍持有全盘权限也强制走 SAF 分支
+  （保证所选目录生效）；主动点击「授权手机存储」并成功授权全盘后重置，恢复全盘 File 模式
+- **桥层变更**：`FileBridge.requestDesktopDir()` + `App.bridge.requestDesktopDir()` 新增；
+  `MainActivity` 处理 `REQ_DESKTOP_DIR` 并持久化 `rootUri`/`forceSafMode`；
+  `BridgeContext.isSafMode()` 支持 `forceSafMode` 遮蔽全盘；`rootInfo` 优先返回 SAF 模式
+- **前端清理**：移除 `desktop-dir-dialog` HTML/CSS/JS；更新 `docs/fs-scope.md`、
+  `docs/bridge-and-data-contract.md`、测试 `test-bridge.js`
+- **构建**：verify.sh 16 项门禁全绿，APK 归档 `/workspace/AAA 安装包`
+
 ### Viewer 状态持久化 + 矩形设计语言（2026-08-19）
 
 - **Viewer 持久化（只能手动关闭）**：画布态 Viewer 的打开状态 + 世界坐标位置经

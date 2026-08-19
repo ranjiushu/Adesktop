@@ -160,7 +160,7 @@ async function main() {
   // 记录旋转前相机（Home 槽位为空时应保持原位置）
   const camBefore = await page.evaluate(() => {
     const t = document.getElementById('desktop-canvas').style.transform
-    const m = /translate3d\((-?[\d.]+)px,\s*(-?[\d.]+)px,\s*(-?[\d.]+)px?\)\s*scale\(([\d.]+)\)/.exec(t)
+    const m = /translate3d\((-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px?\)\s*scale\(([\d.]+)\)/.exec(t)
     return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]), s: parseFloat(m[4]) } : null
   })
   await tap(client, menuBtn.x, menuBtn.y)
@@ -180,7 +180,7 @@ async function main() {
   // 相机 x/y/zoom 不变，只有 transform 追加 rotate(90deg)。
   const camAfter = await page.evaluate(() => {
     const t = document.getElementById('desktop-canvas').style.transform
-    const m = /translate3d\((-?[\d.]+)px,\s*(-?[\d.]+)px,\s*(-?[\d.]+)px?\)\s*rotate\(90deg\)\s*scale\(([\d.]+)\)/.exec(t)
+    const m = /translate3d\((-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px?\)\s*rotate\(90deg\)\s*scale\(([\d.]+)\)/.exec(t)
     if (!m) return null
     // rotation=90 的 transform 中 tx/ty 是「旋转后」的显示值，反推相机：
     //   tx = cam.y*zoom + (vw+vh)/2, ty = -cam.x*zoom + (vh-vw)/2
@@ -283,7 +283,7 @@ async function main() {
     await sleep(200)
     const camPortrait = await page.evaluate(() => {
       const t = document.getElementById('desktop-canvas').style.transform
-      const m = /translate3d\((-?[\d.]+)px,\s*(-?[\d.]+)px,\s*(-?[\d.]+)px?\)\s*scale\(([\d.]+)\)/.exec(t)
+      const m = /translate3d\((-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px?\)\s*scale\(([\d.]+)\)/.exec(t)
       return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]), s: parseFloat(m[4]) } : null
     })
     await tap(client, homeRect.x, homeRect.y, 650)

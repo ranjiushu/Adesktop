@@ -31,8 +31,8 @@ public class FileBridge {
     private final ExternalOpen externalOpen;
     private final UploadBridge uploadBridge;
 
-    FileBridge(Activity activity, WebView webView, Uri rootUri, File allFilesRoot) {
-        this.ctx = new BridgeContext(activity, webView, rootUri, allFilesRoot);
+    FileBridge(Activity activity, WebView webView, Uri rootUri, File allFilesRoot, boolean forceSafMode) {
+        this.ctx = new BridgeContext(activity, webView, rootUri, allFilesRoot, forceSafMode);
         this.fileStore = new FileStore(ctx);
         this.transferEngine = new TransferEngine(ctx);
         this.thumbnailService = new ThumbnailService(ctx);
@@ -54,6 +54,10 @@ public class FileBridge {
         return ctx.isAuthorized();
     }
 
+    void setForceSafMode(boolean force) {
+        ctx.setForceSafMode(force);
+    }
+
     /* 前端请求根目录授权（Drawer「切换根目录」）：主路径 = 引导全盘授权（跳系统设置页）；
      * Android 10 及以下 = WRITE_EXTERNAL_STORAGE 运行时权限框。 */
     @JavascriptInterface
@@ -61,6 +65,17 @@ public class FileBridge {
         ctx.activity.runOnUiThread(() -> {
             if (ctx.activity instanceof MainActivity) {
                 ((MainActivity) ctx.activity).requestAllFilesAccessFromBridge();
+            }
+        });
+    }
+
+    /* 前端请求更换桌面目录（Drawer「桌面目录」）：打开系统 SAF 目录选择器。
+     * all-files 模式下解析为相对路径；SAF/private 模式下直接作为新的根授权。 */
+    @JavascriptInterface
+    public void requestDesktopDir() {
+        ctx.activity.runOnUiThread(() -> {
+            if (ctx.activity instanceof MainActivity) {
+                ((MainActivity) ctx.activity).requestDesktopDir();
             }
         });
     }
@@ -88,14 +103,10 @@ public class FileBridge {
         ctx.executor.execute(() -> {
             try {
                 JSONObject o = new JSONObject();
-                // 模式优先级：全盘 > SAF > 私有（与 isSafMode/fileRoot 一致——全盘授权后
-                // 旧 SAF rootUri 被遮蔽，rootInfo 必须反映当前实际生效的模式）
-                if (ctx.allFilesRoot != null) {
-                    o.put("rootName", BridgeContext.ROOT_NAME_ALL_FILES);
-                    o.put("mode", "all-files");
-                    o.put("displayPath", ctx.allFilesRoot.getAbsolutePath());
-                    o.put("rootId", BridgeContext.ROOT_ID_ALL_FILES);
-                } else if (ctx.rootUri != null) {
+                // 模式优先级：用户主动 SAF 选择（forceSafMode）> 全盘 > SAF > 私有。
+                // 用户通过「桌面目录」选择器主动授权 SAF 目录（含应用私有目录）后，即使仍持有
+                // 全盘权限也走 SAF 分支，保证桌面根是用户授权的那棵树。
+                if (ctx.isSafMode()) {
                     androidx.documentfile.provider.DocumentFile df =
                         androidx.documentfile.provider.DocumentFile.fromTreeUri(ctx.activity, ctx.rootUri);
                     o.put("rootName", df != null && df.getName() != null ? df.getName() : "外部存储");
@@ -105,6 +116,11 @@ public class FileBridge {
                     // 前端 localStorage key 带 rootId（desktop.layout.<rootId>.v1），
                     // 切根 A→B 不再继承 A 的图标位置/相机/Home 快照（见 docs/operation-contract.md 1.6）
                     o.put("rootId", ctx.rootUri.toString());
+                } else if (ctx.allFilesRoot != null) {
+                    o.put("rootName", BridgeContext.ROOT_NAME_ALL_FILES);
+                    o.put("mode", "all-files");
+                    o.put("displayPath", ctx.allFilesRoot.getAbsolutePath());
+                    o.put("rootId", BridgeContext.ROOT_ID_ALL_FILES);
                 } else {
                     o.put("rootName", "应用私有目录");
                     o.put("mode", "private");

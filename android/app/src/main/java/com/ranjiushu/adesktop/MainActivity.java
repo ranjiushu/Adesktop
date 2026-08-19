@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.DocumentsContract;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -35,11 +36,13 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
 
-    private static final int REQ_OPEN_DOC_TREE = 1001;
+    private static final int REQ_OPEN_DOC_TREE = 1001;   // 首次启动 SAF 根目录授权（降级路径）
     private static final int REQ_GET_CONTENT = 1002;
     private static final int REQ_WRITE_STORAGE = 1003;   // Android 10 及以下全盘授权（运行时权限）
+    private static final int REQ_DESKTOP_DIR = 1004;     // Drawer「桌面目录」系统选择器
     private static final String PREFS = "desktop_prefs";
     private static final String KEY_ROOT_URI = "root_uri";
+    private static final String KEY_FORCE_SAF = "force_saf_mode";
 
     private WebView webView;
     private FileBridge fileBridge;
@@ -144,13 +147,17 @@ public class MainActivity extends Activity {
         // ── 文件系统桥：全盘根（授权访问手机存储，主模式）> SAF 授权根 > 私有目录兜底 ──
         // 模式判定：全盘权限动态检测（不持久化——权限被系统撤销后自动降级）；
         // SAF 授权持久化于 prefs（KEY_ROOT_URI，switchRoot 降级路径写入）；
+        // forceSafMode 持久化：用户通过「桌面目录」主动选择 SAF 目录后，即使仍持
+        // 有全盘权限也强制走 SAF 分支（以便选择应用私有目录等仅 SAF 可访问位置）。
         // 私有目录 filesDir/root 恒为最终兜底。
         boolean allFilesGranted = hasAllFilesAccess();
         lastAllFilesGranted = allFilesGranted;
-        String uriStr = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_ROOT_URI, null);
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String uriStr = prefs.getString(KEY_ROOT_URI, null);
         Uri rootUri = uriStr != null ? Uri.parse(uriStr) : null;
         File allFilesRoot = allFilesGranted ? Environment.getExternalStorageDirectory() : null;
-        fileBridge = new FileBridge(this, webView, rootUri, allFilesRoot);
+        boolean forceSafMode = prefs.getBoolean(KEY_FORCE_SAF, false);
+        fileBridge = new FileBridge(this, webView, rootUri, allFilesRoot, forceSafMode);
         webView.addJavascriptInterface(fileBridge, "FileBridge");
 
         // 单文件 bundle 由 build-local.sh 复制到 assets/index.html
@@ -208,11 +215,32 @@ public class MainActivity extends Activity {
         requestAllFilesAccess();
     }
 
-    /** 全盘权限状态变化 → 切换桥层模式并通知前端刷新（onResume 检测；含首次授权返回） */
+    /** 供 FileBridge 调用：打开系统目录选择器（SAF ACTION_OPEN_DOCUMENT_TREE）更换桌面目录 */
+    void requestDesktopDir() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQ_DESKTOP_DIR);
+        } catch (Exception e) {
+            // 无可用选择器： toast 提示
+            runOnUiThread(() -> webView.evaluateJavascript(
+                "window.App && App.toast && App.toast.show('无法打开系统目录选择器')", null));
+        }
+    }
+
+    /** 全盘权限状态变化 → 切换桥层模式并通知前端刷新（onResume 检测；含首次授权返回）。
+     *  用户主动「授权手机存储」成功后，重置 forceSafMode=false，恢复全盘 File 模式。 */
     private void syncAllFilesMode() {
         boolean grantedNow = hasAllFilesAccess();
         if (grantedNow == lastAllFilesGranted) return;
         lastAllFilesGranted = grantedNow;
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        if (grantedNow) {
+            prefs.edit().putBoolean(KEY_FORCE_SAF, false).apply();
+            fileBridge.setForceSafMode(false);
+        }
         fileBridge.setAllFilesRoot(grantedNow ? Environment.getExternalStorageDirectory() : null);
         if (webView != null) {
             webView.post(() -> webView.evaluateJavascript(
@@ -269,6 +297,26 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 // 授权失败：保持私有目录兜底
             }
+        } else if (requestCode == REQ_DESKTOP_DIR && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            try {
+                int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putString(KEY_ROOT_URI, uri.toString())
+                    .putBoolean(KEY_FORCE_SAF, true)
+                    .apply();
+                fileBridge.setRootUri(uri);
+                fileBridge.setForceSafMode(true);
+                // 通知前端根目录已变更，刷新桌面
+                webView.post(() -> webView.evaluateJavascript(
+                    "window.App && App.onRootChanged && App.onRootChanged()", null));
+            } catch (Exception e) {
+                // 授权失败：提示用户
+                webView.post(() -> webView.evaluateJavascript(
+                    "window.App && App.toast && App.toast.show('目录授权失败')", null));
+            }
         } else if (requestCode == REQ_GET_CONTENT) {
             // 网页上传的「重新选择」：GET_CONTENT 返回 URI 自带读授权，直接回传网页
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
@@ -279,12 +327,18 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Android 10 及以下：WRITE_EXTERNAL_STORAGE 运行时授权结果 → 切全盘模式（onResume 兜底再检测） */
+    /** Android 10 及以下：WRITE_EXTERNAL_STORAGE 运行时授权结果 → 切全盘模式（onResume 兜底再检测）。
+     *  授权成功后重置 forceSafMode=false。 */
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQ_WRITE_STORAGE && grantResults != null && grantResults.length > 0) {
             lastAllFilesGranted = hasAllFilesAccess();
+            if (lastAllFilesGranted) {
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putBoolean(KEY_FORCE_SAF, false).apply();
+                fileBridge.setForceSafMode(false);
+            }
             fileBridge.setAllFilesRoot(lastAllFilesGranted
                 ? Environment.getExternalStorageDirectory() : null);
             webView.post(() -> webView.evaluateJavascript(

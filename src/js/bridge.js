@@ -33,9 +33,22 @@ App.bridge = (function () {
     return false
   }
 
+  // 请求系统目录选择器（SAF ACTION_OPEN_DOCUMENT_TREE）更换桌面目录。
+  // all-files 模式下解析为相对路径并切换 desktopRoot；SAF/private 模式下直接作为新的根授权。
+  function requestDesktopDir() {
+    try {
+      if (window.FileBridge && typeof window.FileBridge.requestDesktopDir === 'function') {
+        window.FileBridge.requestDesktopDir()
+        return true
+      }
+    } catch (e) { console.warn('[bridge] requestDesktopDir 异常:', e instanceof Error ? e.message : String(e)) }
+    return false
+  }
+
   /** @type {AppBridge} */
   return {
     vibrate: vibrate,
-    requestRootAccess: requestRootAccess
+    requestRootAccess: requestRootAccess,
+    requestDesktopDir: requestDesktopDir
   }
 })()

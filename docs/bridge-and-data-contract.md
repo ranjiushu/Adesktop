@@ -44,6 +44,7 @@
 | `FileAPI.appIcon(pkg)` | `appIcon` | `pkg` | `data:image/png;base64,...` | 应用图标 base64 |
 | `App.bridge.vibrate(ms)` | `vibrate` | `ms` | 无回调 | 震动，时长钳制 1–500 ms |
 | `App.bridge.requestRootAccess()` | `requestRootAccess` | 无 | 无回调 | 触发原生弹授权选择器 |
+| `App.bridge.requestDesktopDir()` | `requestDesktopDir` | 无 | 无回调 | 触发原生 SAF 目录选择器（`ACTION_OPEN_DOCUMENT_TREE`），选择后切换桌面根/根授权 |
 
 关键映射（隐藏契约，最易改坏）：**前端 `del` 对应桥方法 `delete`**（不是 `remove`）。
 

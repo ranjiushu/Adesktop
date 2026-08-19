@@ -276,6 +276,7 @@ interface DesktopPersist {
 interface AppBridge {
   vibrate(ms?: number, amplitude?: number): void
   requestRootAccess(): boolean
+  requestDesktopDir(): boolean
 }
 
 /** 桌面运行时状态（App.DesktopCore）：状态中枢，内存投影。

@@ -46,15 +46,17 @@ class BridgeContext {
     /** 传输取消标志：cancelTransfer() 置位，copy 循环检查并尽快中止（单线程串行，同一时刻仅一个传输） */
     volatile boolean cancelRequested = false;
 
-    volatile Uri rootUri;          // SAF 授权根（非 null = SAF 模式）
-    volatile File allFilesRoot;    // 全盘根 Environment.getExternalStorageDirectory()（非 null = 全盘模式）
+    volatile Uri rootUri;          // SAF 授权根（非 null = 有 SAF 授权）
+    volatile File allFilesRoot;    // 全盘根 Environment.getExternalStorageDirectory()（非 null = 有全盘权限）
+    volatile boolean forceSafMode; // 用户主动通过「桌面目录」选择 SAF 目录后，强制走 SAF 模式（遮蔽 all-files）
     volatile File privateRoot;     // 兜底根 filesDir/root
 
-    BridgeContext(Activity activity, WebView webView, Uri rootUri, File allFilesRoot) {
+    BridgeContext(Activity activity, WebView webView, Uri rootUri, File allFilesRoot, boolean forceSafMode) {
         this.activity = activity;
         this.webView = webView;
         this.rootUri = rootUri;
         this.allFilesRoot = allFilesRoot;
+        this.forceSafMode = forceSafMode;
         File filesDir = activity.getFilesDir();
         this.privateRoot = new File(filesDir, "root");
         if (!privateRoot.exists()) {
@@ -71,15 +73,21 @@ class BridgeContext {
         this.allFilesRoot = root;
     }
 
+    /** 用户主动选择 SAF 桌面目录后强制走 SAF 模式；授权手机存储后重置 false */
+    void setForceSafMode(boolean force) {
+        this.forceSafMode = force;
+    }
+
     boolean isAuthorized() {
         return rootUri != null || allFilesRoot != null;
     }
 
-    /** SAF 模式（rootUri 授权树，且未被全盘遮蔽）；File 模式（全盘/私有）走 fileRoot()。
-     *  优先级：全盘 > SAF > 私有——全盘授权后旧 SAF rootUri 保留（撤销全盘自动降级回 SAF），
-     *  但 isSafMode() 返回 false，所有操作走 File 分支（否则全盘授权永远不生效）。 */
+    /** SAF 模式：用户主动选择 SAF 桌面目录（forceSafMode），或没有全盘权限但持有 SAF 授权。
+     *  优先级：用户主动 SAF 选择 > 全盘 > SAF > 私有。
+     *  forceSafMode=true 时即使持有全盘权限也走 SAF 分支，保证桌面目录可以是应用私有目录等
+     *  仅 SAF 能访问的位置；撤销/未授权全盘时同样生效。 */
     boolean isSafMode() {
-        return allFilesRoot == null && rootUri != null;
+        return forceSafMode || (allFilesRoot == null && rootUri != null);
     }
 
     /** 当前 File 模式根：全盘优先，否则私有目录兜底 */

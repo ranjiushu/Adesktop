@@ -39,9 +39,10 @@ App.DesktopViewerLink = (function () {
       })
     }
     // Viewer 位置/尺寸变化（拖动/媒体自适应）→ 锁定文件图标跟随（双向锚定防分家）：
-    // 图标 positions/bounds 与 Viewer rect 保持左上对齐，刷新/整理/恢复时不再错位
+    // 图标 positions/bounds 与 Viewer rect 保持左上对齐，刷新/整理/恢复时不再错位。
+    // onMove 回调入参 = 实例自身（getPath/getRect），契约见 ViewerInstance
     if (App.InternalViewer && typeof App.InternalViewer.setMoveListener === 'function') {
-      App.InternalViewer.setMoveListener(function (/** @type {any} */ inst) {
+      App.InternalViewer.setMoveListener(function (/** @type {ViewerInstance} */ inst) {
         const path = inst && typeof inst.getPath === 'function' ? inst.getPath() : null
         const rect = inst && typeof inst.getRect === 'function' ? inst.getRect() : null
         if (!path || !rect) return

@@ -81,6 +81,15 @@ interface ViewerRecord {
   rect: { x: number; y: number; w: number; h: number }
 }
 
+/** InternalViewer 画布态实例（moveListener/onMove 回调入参契约）：
+ * 位置变化（拖动/媒体自适应/取消）时携带实例自身，监听方经 getPath/getRect 读位置 */
+interface ViewerInstance {
+  id: number
+  getMode(): string
+  getPath(): string
+  getRect(): { x: number; y: number; w: number; h: number } | null
+}
+
 /** Viewer 状态存储（App.ViewerStore）：localStorage 缓存 + 隐藏文件（文件即真相） */
 interface ViewerStore {
   VERSION: number

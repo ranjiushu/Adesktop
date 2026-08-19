@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 
+import androidx.core.content.FileProvider;
 import androidx.documentfile.provider.DocumentFile;
 
 import java.io.File;
@@ -44,7 +45,7 @@ class ThumbnailService {
         }
         File cacheFile = thumbCacheFile(path, mtime, size);
         if (cacheFile.exists() && cacheFile.length() > 0) {
-            return Uri.fromFile(cacheFile).toString();
+            return thumbUri(cacheFile);
         }
         Bitmap bmp = isVideoPath(path) ? decodeVideoFrame(resolved) : decodeImageThumb(resolved);
         if (bmp == null) throw new IOException("无法生成缩略图: " + path);
@@ -57,7 +58,18 @@ class ThumbnailService {
             thumb.compress(Bitmap.CompressFormat.JPEG, 82, fos);
             fos.flush();
         }
-        return Uri.fromFile(cacheFile).toString();
+        return thumbUri(cacheFile);
+    }
+
+    /** 优先返回 content:// URI（FileProvider，适配 Android 高版本 WebView 私有目录访问）；
+     *  失败则回退 file:// URI。 */
+    private String thumbUri(File cacheFile) {
+        try {
+            return FileProvider.getUriForFile(ctx.activity,
+                ctx.activity.getPackageName() + ".fileprovider", cacheFile).toString();
+        } catch (Exception e) {
+            return Uri.fromFile(cacheFile).toString();
+        }
     }
 
     /** 缩略图缓存文件：key = 相对路径 + mtime + size 的 hash（文件修改后自然失效） */

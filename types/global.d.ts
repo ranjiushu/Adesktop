@@ -423,6 +423,8 @@ interface DesktopBrowseMode {
 interface TypeIcons {
   kindFor(name: string, isDir: boolean): string
   svgFor(kind: string): string
+  iconFor(name: string, isDir: boolean): string
+  kindSvg(kind: string): string
   extOf(name: any): string
 }
 

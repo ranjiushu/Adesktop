@@ -88,7 +88,9 @@ const sandbox = {
 sandbox.window = sandbox
 sandbox.App.TypeIcons = {
   kindFor: function (name, isDir) { return isDir ? 'folder' : 'text' },
-  svgFor: function (kind) { return '<svg>' + kind + '</svg>' }
+  svgFor: function (kind) { return '<svg>' + kind + '</svg>' },
+  iconFor: function () { return '<svg></svg>' },
+  kindSvg: function (kind) { return '<svg>' + kind + '</svg>' }
 }
 sandbox.App.Thumbnail = {
   canThumbnail: function () { return false },

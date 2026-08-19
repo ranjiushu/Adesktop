@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 类型图标升级为 Vivid 全彩（2026-08-19）
+
+- **图标源**：file-icon-vectors（MIT）Vivid 套，内置 163 个全彩图标（162 扩展名 + 扁平文件夹），
+  对标 MT 管理器图标覆盖面；压缩优化（去 xmlns/style/class、内联 fill）后内联进单文件
+- **三级解析**：扩展名精确匹配 → kind 级兜底（如 rs 走 code 的 js 图标）→ 线条占位
+- **系统态保留线条版**：trash/shortcut/unknown 仍为 stroke currentColor（随主题自适应）；
+  文件类型图标自带全彩，浅色/深色/自定义主题通用
+- **新模块**：`src/js/type-icons-data.js`（图标数据，由 `tools/gen-type-icons-data.js` 生成，
+  已登记 JS_ORDER）；新增 `TypeIcons.iconFor(name,isDir)` / `kindSvg(kind)` API，
+  渲染层 `desktop-render.js` 文件图标改走扩展名解析
+- **构建**：bundle 827KB → 1029KB（+24%，棘轮 130% 内）；verify.sh 16 项门禁全绿
+
 ### 桌面目录改用系统 SAF 授权选择器（2026-08-19）
 
 - **移除固定路径 + 手动输入**：Drawer「桌面目录」不再弹出常见目录 chips + 自定义输入框，

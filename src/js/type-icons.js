@@ -1,5 +1,8 @@
-/* 类型图标系统：按文件名/目录判定类型 → 返回内联 SVG 图标（stroke currentColor）。
- * 纯函数，零依赖（仅 namespace）。类型颜色经 CSS class `.type-icon.type-{kind}` 控制。
+/* 类型图标系统：按文件名/目录判定类型 → 返回内联 SVG 图标。
+ * 文件类型 → Vivid 全彩图标（数据在 type-icons-data.js，file-icon-vectors MIT）；
+ * trash/shortcut/unknown 等系统态 → 线条版（stroke currentColor，随主题自适应）。
+ * 三级解析：扩展名精确匹配 → kind 级兜底 → 线条占位。
+ * 纯函数，零依赖（仅 namespace + type-icons-data）。类型 CSS 尺寸经 `.type-icon` 控制。
  * 本模块只负责「类型图标」（缩略图 fallback 基线）；缩略图判定与获取在 thumbnail.js（ThumbnailService）。
  * 导出: App.TypeIcons
  */
@@ -7,6 +10,8 @@
 'use strict'
 
 App.TypeIcons = (function () {
+  /** 全彩图标数据（type-icons-data.js）：键 = 扩展名 / folder，值 = 内联 SVG */
+  const DATA = App.TypeIconsData || {}
   // 扩展名（小写）→ 类型 key
   /** @type {Record<string, Array<string>>} */
   const EXT_KINDS = {
@@ -50,6 +55,26 @@ App.TypeIcons = (function () {
     executable: 'terminal',
     shortcut: 'appGrid',
     unknown: 'file'
+  }
+
+  // 类型 → 全彩兜底图标（扩展名不在 DATA 时按 kind 取代表图标；shortcut/trash 无全彩 → 走线条版）
+  /** @type {Record<string, string>} */
+  const KIND_ICON = {
+    text: 'txt',
+    markdown: 'md',
+    json: 'json',
+    html: 'html',
+    code: 'js',
+    image: 'jpg',
+    video: 'mp4',
+    audio: 'mp3',
+    archive: 'zip',
+    pdf: 'pdf',
+    word: 'docx',
+    excel: 'xlsx',
+    ppt: 'pptx',
+    font: 'ttf',
+    executable: 'apk'
   }
 
   // Feather 风格 SVG 内部内容（24x24 stroke），统一 stroke=currentColor
@@ -98,10 +123,46 @@ App.TypeIcons = (function () {
     return '<svg class="type-icon type-' + (kind || 'unknown') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>'
   }
 
+  /** 全彩 SVG：给数据里的 <svg ...> 注入 type-icon type-{kind} class */
+  /** @param {string} kind @param {string} inner @returns {string} */
+  function colorSvg(kind, inner) {
+    const cls = 'type-icon type-' + (kind || 'unknown')
+    return inner.indexOf('<svg ') === 0
+      ? inner.replace('<svg ', '<svg class="' + cls + '" ')
+      : '<svg class="' + cls + '" viewBox="0 0 72 96">' + inner + '</svg>'
+  }
+
+  // 文件名/目录 → 全彩类型图标（三级：扩展名精确 → kind 兜底 → 线条占位）
+  /** @param {string} name @param {boolean} isDir @returns {string} */
+  function iconFor(name, isDir) {
+    if (isDir) {
+      return DATA.folder ? colorSvg('folder', DATA.folder) : svgFor('folder')
+    }
+    const ext = extOf(name)
+    if (ext && DATA[ext]) return colorSvg(kindFor(name, false), DATA[ext])
+    const kind = kindFor(name, false)
+    if (kind === 'shortcut' || kind === 'trash') return svgFor(kind)
+    const fb = KIND_ICON[kind]
+    if (fb && DATA[fb]) return colorSvg(kind, DATA[fb])
+    return svgFor('unknown')
+  }
+
+  // 类型 → 全彩图标（缩略图失败兜底等只有 kind 的场景）；无全彩则回退线条版
+  /** @param {string} kind @returns {string} */
+  function kindSvg(kind) {
+    if (kind === 'folder') return DATA.folder ? colorSvg('folder', DATA.folder) : svgFor('folder')
+    if (kind === 'shortcut' || kind === 'trash' || kind === 'unknown') return svgFor(kind)
+    const fb = KIND_ICON[kind]
+    if (fb && DATA[fb]) return colorSvg(kind, DATA[fb])
+    return svgFor(kind)
+  }
+
   /** @type {TypeIcons} */
   return {
     kindFor: kindFor,
     svgFor: svgFor,
+    iconFor: iconFor,
+    kindSvg: kindSvg,
     extOf: extOf
   }
 })()

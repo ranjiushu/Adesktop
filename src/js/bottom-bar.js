@@ -4,6 +4,8 @@
  * 右 2 = 上级目录（↑）驱动 Desktop.goUp。
  * 后退/前进禁用态：根目录不可后退、栈尾不可前进；上级与 Home 禁用态：子文件夹容器内禁用
  * （Home 只在桌面空间有意义，随 refresh 更新）。
+ * 循环演示：无「演示模式」开关——桌面空间存在快照时，前进/后退直接循环翻页
+ * （恒可用，无边界），目录历史导航仅在没有快照/文件夹视图时接管。
  * 依赖: namespace.js, utils.js, create-dialog.js, desktop.js, home-store.js
  * 导出: App.BottomBar
  * 手势: 底栏区域右滑呼出 Drawer 由 drawer-swipe.js 负责（监听底栏 touch 事件）
@@ -15,8 +17,15 @@ App.BottomBar = (function () {
   /** @param {string} id @returns {HTMLElement | null} */
   function _getEl(id) { return document.getElementById(id) }
 
+  /** @returns {boolean} 桌面空间 + 存在快照 → 前进/后退为循环演示（恒可用） */
+  function _inLoopMode() {
+    if (!App.Desktop || typeof App.Desktop.isFolderView !== 'function' || App.Desktop.isFolderView()) return false
+    if (!App.SnapshotStore || typeof App.SnapshotStore.hasAny !== 'function') return false
+    const rootId = (typeof App.Desktop.getRootId === 'function') ? App.Desktop.getRootId() : ''
+    return App.SnapshotStore.hasAny(rootId)
+  }
+
   // 更新后退/前进/上级/Home 禁用态（根目录可后退判定、栈尾不可前进、子文件夹容器内上级与 Home 禁用）
-  // 演示模式下前进/后退由 SnapshotSheet 接管，此处不做目录导航态更新。
   /** @returns {void} */
   function updateNavButtons() {
     let back = _getEl('bb-btn-back')
@@ -24,11 +33,12 @@ App.BottomBar = (function () {
     let up = _getEl('bb-btn-up')
     let home = _getEl('bb-btn-home')
     if (!App.Desktop) return
-    // 演示模式：SnapshotSheet 自行维护前进/后退边界态
-    if (App.SnapshotSheet && App.SnapshotSheet.isPresentationMode && App.SnapshotSheet.isPresentationMode()) {
-      if (up) _setEnabled(up, false)
+    if (_inLoopMode()) {
+      // 循环演示：前进/后退恒可用（无边界），上级/Home 按空间语义
+      if (back) _setEnabled(back, true)
+      if (fwd) _setEnabled(fwd, true)
+      if (up) _setEnabled(up, typeof App.Desktop.canGoUp === 'function' && App.Desktop.canGoUp())
       if (home) _setEnabled(home, true)
-      if (App.SnapshotSheet.updatePresentationState) App.SnapshotSheet.updatePresentationState()
       updateHomeState()
       return
     }
@@ -88,9 +98,8 @@ App.BottomBar = (function () {
     let back = _getEl('bb-btn-back')
     if (back) {
       App.utils.bindPress(back, function () {
-        // 演示模式下前进/后退切换快照
-        if (App.SnapshotSheet && App.SnapshotSheet.isPresentationMode && App.SnapshotSheet.isPresentationMode()) {
-          App.SnapshotSheet.goPrev()
+        // 循环演示：桌面空间存在快照时前进/后退翻页（无演示模式概念）
+        if (App.SnapshotSheet && typeof App.SnapshotSheet.goPrev === 'function' && App.SnapshotSheet.goPrev()) {
           return
         }
         if (App.Desktop && typeof App.Desktop.goBack === 'function') {
@@ -101,9 +110,8 @@ App.BottomBar = (function () {
     let fwd = _getEl('bb-btn-forward')
     if (fwd) {
       App.utils.bindPress(fwd, function () {
-        // 演示模式下前进/后退切换快照
-        if (App.SnapshotSheet && App.SnapshotSheet.isPresentationMode && App.SnapshotSheet.isPresentationMode()) {
-          App.SnapshotSheet.goNext()
+        // 循环演示：桌面空间存在快照时前进/后退翻页（无演示模式概念）
+        if (App.SnapshotSheet && typeof App.SnapshotSheet.goNext === 'function' && App.SnapshotSheet.goNext()) {
           return
         }
         if (App.Desktop && typeof App.Desktop.goForward === 'function') {

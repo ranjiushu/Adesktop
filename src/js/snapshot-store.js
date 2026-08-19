@@ -7,6 +7,8 @@
  * 语义：
  *   - 每个 rootId 独立一份快照数据；分组列表全局共用，每个方向（竖屏/横屏）
  *     的每个分组下各自保存快照。
+ *   - 快照带 `code` 字母编号（页代码，创建时分配 A..Z → AA..，全局唯一且随快照
+ *     稳定——拖动排序/移动分组不改变）；页码 = 扁平顺序（排序后变化，load 时派生）。
  *   - "Home" = 当前方向分组列表中由"插入位置"决定的那一项（默认 top，索引 0）。
  *     新创建的快照按插入位置放到 Home 分组；拖动排序可把任意快照拖到 Home 位。
  *   - 插入位置（top/bottom）可由底栏菜单修改，全局生效。
@@ -266,7 +268,65 @@ App.SnapshotStore = (function () {
   /** @param {string} rootId @returns {SnapshotData} */
   function loadSnapshots(rootId) {
     const bundle = loadBundle(rootId)
-    return bundleToData(bundle, currentRotation())
+    const data = bundleToData(bundle, currentRotation())
+    return ensureCodes(data)
+  }
+
+  // ── 字母编号（快照稳定标识）──
+  // 每个快照创建时分配一个唯一字母编号（A..Z → AA..AZ → ...），作为「页代码」：
+  // 拖动排序/移动分组不改变字母编号，数字页码随排序变化（load 时按扁平顺序回填）。
+  /** @param {number} i @returns {string} */
+  function codeFromIndex(i) {
+    let n = i
+    let out = ''
+    do {
+      out = String.fromCharCode(65 + (n % 26)) + out
+      n = Math.floor(n / 26) - 1
+    } while (n >= 0)
+    return out
+  }
+
+  /** @param {SnapshotData} data @returns {string} 分配当前数据中未使用的最小字母编号 */
+  function nextCode(data) {
+    const used = new Set()
+    if (data && Array.isArray(data.groups)) {
+      data.groups.forEach(function (g) {
+        if (!g || !Array.isArray(g.snapshots)) return
+        g.snapshots.forEach(function (s) {
+          if (s && typeof s.code === 'string' && s.code) used.add(s.code)
+        })
+      })
+    }
+    let i = 0
+    while (used.has(codeFromIndex(i))) i++
+    return codeFromIndex(i)
+  }
+
+  /** @param {SnapshotData} data @returns {SnapshotData} 旧数据无 code 的按扁平顺序回填字母编号（保留已有 code） */
+  function ensureCodes(data) {
+    if (!data || !Array.isArray(data.groups)) return data
+    const used = new Set()
+    data.groups.forEach(function (g) {
+      if (!g || !Array.isArray(g.snapshots)) return
+      g.snapshots.forEach(function (s) {
+        if (s && typeof s.code === 'string' && s.code) used.add(s.code)
+      })
+    })
+    let cursor = 0
+    function take() {
+      while (used.has(codeFromIndex(cursor))) cursor++
+      const c = codeFromIndex(cursor)
+      used.add(c)
+      cursor++
+      return c
+    }
+    data.groups.forEach(function (g) {
+      if (!g || !Array.isArray(g.snapshots)) return
+      g.snapshots.forEach(function (s) {
+        if (s && !s.code) s.code = take()
+      })
+    })
+    return data
   }
 
   /** @param {string} rootId @returns {SnapshotBundle | null} */
@@ -368,6 +428,7 @@ App.SnapshotStore = (function () {
     const snapshot = {
       id: generateId(),
       name: formatName(),
+      code: nextCode(data),
       camera: { x: camera.x, y: camera.y, zoom: camera.zoom, rotation: camera.rotation || 0 },
       createdAt: Date.now()
     }
@@ -560,6 +621,8 @@ App.SnapshotStore = (function () {
     deleteGroup: deleteGroup,
     getInsertPosition: getInsertPosition,
     setInsertPosition: setInsertPosition,
+    nextCode: nextCode,
+    ensureCodes: ensureCodes,
     homeGroupIndex: homeGroupIndex,
     getHomeGroup: getHomeGroup,
     homeSnapshotIndex: homeSnapshotIndex,

@@ -1,11 +1,14 @@
-/* 演示快照面板（App.SnapshotSheet）：底栏上滑呼出快照列表 + 演示模式。
+/* 演示快照面板（App.SnapshotSheet）：底栏上滑呼出快照列表 + 循环演示。
  * 手势：底栏区域垂直上滑跟手抬出面板，下滑/点遮罩/点关闭按钮关闭。
  * 分组：标签栏横排在列表顶部（点击或左右滑动切换分组），列表只显示当前分组；
  *       长按标签重命名/删除分组，标签栏末尾 + 新建分组。
  * 操作模式（参考 LexiCull）：长按快照行进入——FAB morph 展开操作按钮
  *       （删除 / 移动到其它分组 / ✕ 退出）；操作模式下长按行拖动排序
  *       （边缘智能滚动），单击行切换选中（多选）。
- * 演示模式：开启后底栏前进/后退按钮变为「下一个/上一个快照」，边界禁用并吐司提示。
+ * 循环演示：无「演示模式」开关——桌面空间存在快照时，底栏前进/后退直接按全部
+ *       分组扁平顺序循环翻页（无第一页/最后一页概念），从「当前页」进入；
+ *       呼出列表时当前页高亮，点击任意快照即跳转并成为当前页。
+ * 编号：快照带字母编号（页代码，创建时分配，拖动排序不变）+ 页码（扁平顺序，排序后更新）。
  * 依赖: namespace.js, utils.js, drag-sort.js, snapshot-store.js, fab-speed-dial.js,
  *       desktop-core.js, desktop-navigation.js, bottom-bar.js, toast.js, bridge.js
  * 导出: App.SnapshotSheet
@@ -42,9 +45,8 @@ App.SnapshotSheet = (function () {
   let _currentData = null
   /** @type {number} */
   let _currentGroupIdx = 0
-  /** @type {number} 扁平索引（所有分组快照按顺序），演示模式与跨组选中共用 */
+  /** @type {number} 扁平索引（所有分组快照按顺序），演示循环与跨组选中共用 */
   let _currentIndex = -1
-  let _presentationMode = false
   /** @type {boolean} 操作模式（长按快照行进入，FAB morph 展开操作按钮） */
   let _opMode = false
   /** @type {Set<string>} 操作模式选中快照 id */
@@ -106,11 +108,48 @@ App.SnapshotSheet = (function () {
     return cursor + found.snapshotIdx
   }
 
-  // 刷新 Home 高亮（BottomBar 已有 home-has-snapshot 类，这里只更新）
+  // 刷新底栏状态：Home 锚点高亮 + 前进/后退可用态（演示循环开启与否由 BottomBar 判定）
   function _updateHomeHighlight() {
     if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
       App.BottomBar.updateHomeState()
     }
+    if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
+      App.BottomBar.updateNavButtons()
+    }
+  }
+
+  // 解析「当前页」扁平索引：已访问过快照 → 沿用；从未访问 → 用相机匹配最近快照
+  //（当前视角恰好在某快照上，如 reload 后落回快照位）；仍不匹配 → -1（前进=第 1 页，后退=最后一页）。
+  /** @returns {number} */
+  function _resolveCurrentIndex() {
+    const flat = _flatSnapshots()
+    if (flat.length === 0) return -1
+    if (_currentIndex >= 0 && _currentIndex < flat.length) return _currentIndex
+    const m = _matchSnapshotByCamera(flat)
+    if (m >= 0) _currentIndex = m
+    return _currentIndex
+  }
+
+  /** @param {Array<Snapshot>} flat @returns {number} */
+  function _matchSnapshotByCamera(flat) {
+    const c = C.camera
+    if (!c) return -1
+    let best = -1
+    let bestDist = Infinity
+    flat.forEach(function (s, i) {
+      if ((s.camera.rotation || 0) !== (c.rotation || 0)) return
+      const dx = s.camera.x - c.x
+      const dy = s.camera.y - c.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      const z1 = s.camera.zoom || 1
+      const z2 = c.zoom || 1
+      const zoomRatio = Math.max(z1 / z2, z2 / z1)
+      if (dist <= 24 && zoomRatio <= 1.25 && dist < bestDist) {
+        bestDist = dist
+        best = i
+      }
+    })
+    return best
   }
 
   // ── 渲染：标签栏 + 当前分组列表 ──
@@ -196,29 +235,39 @@ App.SnapshotSheet = (function () {
     item.dataset.index = String(idx)
     if (_opSelection.has(s.id)) item.classList.add('op-selected')
 
+    // 字母编号徽标（页代码，随快照稳定）+ 名称 + 页码（扁平顺序，排序后更新）
+    const code = document.createElement('span')
+    code.className = 'snapshot-code'
+    code.textContent = s.code || '?'
+
     const name = document.createElement('span')
     name.className = 'snapshot-name'
     name.textContent = s.name
 
     const meta = document.createElement('span')
     meta.className = 'snapshot-meta'
-    meta.textContent = 'z' + Number(s.camera.zoom).toFixed(2)
+    const flatIdx = _findSnapshotFlatIndex(s.id)
+    meta.textContent = '第 ' + (flatIdx + 1) + ' 页'
 
+    item.appendChild(code)
     item.appendChild(name)
     item.appendChild(meta)
 
     // 长按 500ms（10px 容差）：普通模式 = 进入操作模式 + 选中 + 直接拖拽排序；
     // 操作模式 = 直接拖拽排序。单击：操作模式切换选中，普通模式飞行。
+    // 滚动/滑动（位移 > 10px 或手指滑出行外）不算点击（参考 LexiCull SWIPE_THRESHOLD）。
     let lpTimer = null
     let lpStartX = 0
     let lpStartY = 0
     let lpLastY = 0
     let lpHandled = false
+    let lpMoved = false
 
     item.addEventListener('touchstart', function (e) {
       if (e.touches.length !== 1) return
       if (_tabSwipe) _tabSwipe = null
       lpHandled = false
+      lpMoved = false
       lpStartX = e.touches[0].clientX
       lpStartY = e.touches[0].clientY
       lpLastY = lpStartY
@@ -235,8 +284,13 @@ App.SnapshotSheet = (function () {
     item.addEventListener('touchmove', function (e) {
       const t = e.touches[0]
       lpLastY = t.clientY
+      if (lpHandled) return // 拖拽中：drag-sort 全权接管，不做 tap/长按判定
       if (!lpTimer) return
-      if (Math.abs(t.clientY - lpStartY) > LP_TOL || Math.abs(t.clientX - lpStartX) > LP_TOL) {
+      const r = item.getBoundingClientRect()
+      if (Math.abs(t.clientX - lpStartX) > LP_TOL || Math.abs(t.clientY - lpStartY) > LP_TOL ||
+          t.clientX < r.left - 12 || t.clientX > r.right + 12 ||
+          t.clientY < r.top - 12 || t.clientY > r.bottom + 12) {
+        lpMoved = true
         clearTimeout(lpTimer)
         lpTimer = null
       }
@@ -244,13 +298,20 @@ App.SnapshotSheet = (function () {
 
     item.addEventListener('touchend', function () {
       if (lpTimer) { clearTimeout(lpTimer); lpTimer = null }
-      if (lpHandled) { lpHandled = false; return }
+      if (lpHandled) { lpHandled = false; return } // 长按已处理（操作模式/拖拽），不再做 tap
+      if (lpMoved) { lpMoved = false; return }     // 滚动/滑动手势不算点击
       if (item.dataset._dragSortJustFinished === '1') return
       if (_opMode) {
         _toggleOpSelect(s.id)
       } else {
         _flyToSnapshot(groupIdx, idx)
       }
+    }, { passive: true })
+
+    item.addEventListener('touchcancel', function () {
+      if (lpTimer) { clearTimeout(lpTimer); lpTimer = null }
+      lpHandled = false
+      lpMoved = false
     }, { passive: true })
 
     return item
@@ -548,7 +609,8 @@ App.SnapshotSheet = (function () {
   function _markCurrentInList() {
     if (!_list) return
     const flat = _flatSnapshots()
-    const currentId = flat[_currentIndex] ? flat[_currentIndex].id : null
+    const cur = _resolveCurrentIndex()
+    const currentId = flat[cur] ? flat[cur].id : null
     Array.prototype.forEach.call(_list.querySelectorAll('.snapshot-item'), function (el) {
       el.classList.toggle('snapshot-current', el.dataset.id === currentId)
     })
@@ -563,6 +625,8 @@ App.SnapshotSheet = (function () {
     if (!group) return
     data = App.SnapshotStore.reorder(data, group.id, from, to)
     App.SnapshotStore.save(data, rootId)
+    // 排序后扁平顺序变化：重置当前页索引，由相机匹配重新锚定（字母编号不变）
+    _currentIndex = -1
     _renderList()
     _updateHomeHighlight()
   }
@@ -590,9 +654,7 @@ App.SnapshotSheet = (function () {
 
   function _updateMenuLabels() {
     if (!_menu) return
-    const presBtn = _menu.querySelector('[data-action="presentation"]')
     const pos = App.SnapshotStore.getInsertPosition()
-    if (presBtn) presBtn.textContent = _presentationMode ? '关闭演示模式' : '开启演示模式'
     const topBtn = _menu.querySelector('[data-action="insert-top"]')
     const bottomBtn = _menu.querySelector('[data-action="insert-bottom"]')
     if (topBtn) topBtn.textContent = (pos === 'top' ? '✓ ' : '') + '新快照插入顶部'
@@ -600,11 +662,6 @@ App.SnapshotSheet = (function () {
   }
 
   function _onMenuAction(action) {
-    if (action === 'presentation') {
-      setPresentationMode(!_presentationMode)
-      _closeMenu()
-      return
-    }
     if (action === 'insert-top') {
       App.SnapshotStore.setInsertPosition('top')
       _renderList()
@@ -670,9 +727,12 @@ App.SnapshotSheet = (function () {
     if (_state === 'open' || _state === 'opening') return
     if (!_panel || !_overlay) return
     _state = 'opening'
-    // 默认打开第一个分组 tab（Home 与快照彻底分离，无 Home 位概念）
+    // 默认打开第一个分组 tab（Home 与快照彻底分离，无 Home 位概念）；
+    // 解析「当前页」供列表高亮（相机匹配，未访问过快照时）
     _currentGroupIdx = 0
+    _resolveCurrentIndex()
     _renderList()
+    _updateHomeHighlight()
     document.body.classList.add('snapshot-sheet-open')
     _overlay.classList.add('snapshot-sheet-overlay-visible')
     _overlay.setAttribute('aria-hidden', 'false')
@@ -878,119 +938,44 @@ App.SnapshotSheet = (function () {
     return null
   }
 
-  // 演示模式
-  function setPresentationMode(on) {
-    _presentationMode = !!on
-    if (_presentationMode && !_isDesktop()) {
-      _presentationMode = false
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('演示模式仅在桌面空间可用')
-      return
-    }
-    _updateMenuLabels()
-    _updatePresentationButtons()
-    if (App.toast && typeof App.toast.show === 'function') {
-      App.toast.show(_presentationMode ? '演示模式已开启' : '演示模式已关闭')
-    }
-  }
+  // 循环演示：桌面空间存在快照时，前进/后退直接按全部分组扁平顺序循环翻页
+  //（无第一页/最后一页概念，无边界禁用）；从「当前页」进入——当前页 = 已访问的
+  // 快照（或相机匹配到的最近快照），从未进入过时前进 = 第 1 页、后退 = 最后一页。
 
-  function isPresentationMode() {
-    return _presentationMode
-  }
-
-  function _updatePresentationButtons() {
-    const back = _getEl('bb-btn-back')
-    const fwd = _getEl('bb-btn-forward')
-    if (!back || !fwd) return
-    if (_presentationMode) {
-      back.classList.add('presentation-mode')
-      fwd.classList.add('presentation-mode')
-    } else {
-      back.classList.remove('presentation-mode')
-      fwd.classList.remove('presentation-mode')
-    }
-    updatePresentationState()
-  }
-
-  // 由 bottom-bar 调用：返回当前是否应走演示模式导航
-  function updatePresentationState() {
-    const back = _getEl('bb-btn-back')
-    const fwd = _getEl('bb-btn-forward')
-    if (!back || !fwd) return
+  /** @returns {boolean} 是否处于可循环演示状态（桌面空间 + 有快照） */
+  function _canLoop() {
+    if (!_isDesktop()) return false
     const rootId = _rootId()
-    const flat = rootId ? App.SnapshotStore.flatSnapshots(rootId) : []
-    const has = flat.length > 0
-    if (!_presentationMode || !has) {
-      if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
-        App.BottomBar.updateNavButtons()
-      }
-      return
-    }
-    if (_currentIndex < 0 || _currentIndex >= flat.length) {
-      _currentIndex = App.SnapshotStore.homeSnapshotIndex(flat, App.SnapshotStore.getInsertPosition())
-    }
-    back.removeAttribute('disabled')
-    back.setAttribute('aria-disabled', 'false')
-    fwd.removeAttribute('disabled')
-    fwd.setAttribute('aria-disabled', 'false')
-    if (_currentIndex <= 0) {
-      back.setAttribute('disabled', '')
-      back.setAttribute('aria-disabled', 'true')
-    }
-    if (_currentIndex >= flat.length - 1) {
-      fwd.setAttribute('disabled', '')
-      fwd.setAttribute('aria-disabled', 'true')
-    }
-  }
-
-  function goNextSnapshot() {
-    const rootId = _rootId()
-    if (!_presentationMode || !rootId) return false
+    if (!rootId) return false
     const flat = App.SnapshotStore.flatSnapshots(rootId)
-    if (_currentIndex < 0) _currentIndex = App.SnapshotStore.homeSnapshotIndex(flat, App.SnapshotStore.getInsertPosition())
-    if (_currentIndex >= flat.length - 1) {
-      if (App.toast && typeof App.toast.showAction === 'function') {
-        App.toast.showAction('已经是最后一页了', '回到第一页', function () {
-          _flyToIndex(0)
-          updatePresentationState()
-        })
-      } else if (App.toast && typeof App.toast.show === 'function') {
-        App.toast.show('已经是最后一页了')
-      }
-      return false
-    }
-    _flyToIndex(_currentIndex + 1)
-    updatePresentationState()
+    return flat.length > 0
+  }
+
+  /** @returns {boolean} */
+  function goNextSnapshot() {
+    if (!_canLoop()) return false
+    const rootId = _rootId()
+    const flat = App.SnapshotStore.flatSnapshots(rootId)
+    const cur = _resolveCurrentIndex()
+    const next = (cur + 1) % flat.length
+    _flyToIndex(next)
     return true
   }
 
+  /** @returns {boolean} */
   function goPrevSnapshot() {
+    if (!_canLoop()) return false
     const rootId = _rootId()
-    if (!_presentationMode || !rootId) return false
     const flat = App.SnapshotStore.flatSnapshots(rootId)
-    if (_currentIndex < 0) _currentIndex = App.SnapshotStore.homeSnapshotIndex(flat, App.SnapshotStore.getInsertPosition())
-    if (_currentIndex <= 0) {
-      const last = flat.length - 1
-      if (App.toast && typeof App.toast.showAction === 'function') {
-        App.toast.showAction('已经是第一页了', '回到最后一页', function () {
-          _flyToIndex(last)
-          updatePresentationState()
-        })
-      } else if (App.toast && typeof App.toast.show === 'function') {
-        App.toast.show('已经是第一页了')
-      }
-      return false
-    }
-    _flyToIndex(_currentIndex - 1)
-    updatePresentationState()
+    const cur = _resolveCurrentIndex()
+    const prev = (cur - 1 + flat.length) % flat.length
+    _flyToIndex(prev)
     return true
   }
 
   function refresh() {
     _renderList()
     _updateHomeHighlight()
-    if (_presentationMode && !_isDesktop()) {
-      setPresentationMode(false)
-    }
   }
 
   function init() {
@@ -1028,11 +1013,8 @@ App.SnapshotSheet = (function () {
     open: _openSheet,
     close: _closeSheet,
     isOpen: function () { return _state === 'open' || _state === 'opening' },
-    setPresentationMode: setPresentationMode,
-    isPresentationMode: isPresentationMode,
     goNext: goNextSnapshot,
     goPrev: goPrevSnapshot,
-    updatePresentationState: updatePresentationState,
     currentIndex: function () { return _currentIndex },
     setCurrentIndex: function (idx) { _currentIndex = idx; _markCurrentInList() },
     isOpMode: function () { return _opMode },

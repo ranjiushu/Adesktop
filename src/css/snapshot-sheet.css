@@ -239,6 +239,26 @@
   -webkit-user-select: none;
 }
 
+/* 字母编号徽标（页代码）：随快照稳定，拖动排序不改变；当前页高亮强调 */
+.snapshot-code {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--color-border);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.snapshot-item.snapshot-current .snapshot-code {
+  background: var(--color-accent);
+  color: #fff;
+}
+
 .snapshot-item.snapshot-home {
   background: rgba(59,130,246,0.06);
 }
@@ -282,6 +302,7 @@
   flex: none;
   font-size: 12px;
   color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .snapshot-item-dragging {
@@ -465,9 +486,4 @@
 .snapshot-move-cancel:active {
   background: var(--color-border);
   color: var(--color-text);
-}
-
-/* 演示模式：底栏按钮高亮 */
-.bottom-bar-btn.presentation-mode {
-  color: var(--color-accent);
 }

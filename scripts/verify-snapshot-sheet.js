@@ -46,6 +46,17 @@ async function swipeH(client, x, y, dx, steps = 8, gap = 14) {
   await sleep(TAP_GAP)
 }
 
+async function swipeV(client, x, y, dy, steps = 8, gap = 14) {
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+  for (let i = 1; i <= steps; i++) {
+    await sleep(gap)
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + dy * i / steps }] })
+  }
+  await sleep(gap)
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await sleep(TAP_GAP)
+}
+
 // 长按（>500ms 触发操作模式 + startDrag）后垂直拖动：验证排序生效且面板不跟随关闭
 async function longPressDrag(client, x, y, dy, steps = 10, gap = 16) {
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
@@ -173,6 +184,90 @@ async function main() {
     if (lay.fabVisible) pass('快照面板打开时 FAB 仍可见（始终最高层级）')
     else fail('FAB 应始终可见')
 
+    // ── 1b. 字母编号 + 页码 + 当前页高亮 ──
+    const codes = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('#snapshot-list .snapshot-item')).map(it => ({
+        code: (it.querySelector('.snapshot-code') || {}).textContent,
+        page: (it.querySelector('.snapshot-meta') || {}).textContent,
+        current: it.classList.contains('snapshot-current'),
+        id: it.dataset.id
+      })))
+    if (codes.length === 3 && codes[0].code === 'A' && codes[1].code === 'B' && codes[2].code === 'C')
+      pass('快照行带字母编号徽标（A/B/C，页代码随快照稳定）')
+    else fail('字母编号', JSON.stringify(codes))
+    if (codes.length === 3 && codes[0].page === '第 1 页' && codes[1].page === '第 2 页' && codes[2].page === '第 3 页')
+      pass('快照行显示页码（第 1/2/3 页，全分组扁平顺序）')
+    else fail('页码', JSON.stringify(codes))
+    if (codes.length === 3 && codes[0].current && codes[0].id === 's1')
+      pass('呼出列表时当前页高亮（相机匹配 s1，idx=0）')
+    else fail('当前页高亮', JSON.stringify(codes))
+
+    // ── 1c. 滚动不算点击：列表内垂直滑动不触发飞行 ──
+    const camBeforeSwipe = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom }
+    })
+    const rowS = await page.evaluate(() => {
+      const r = document.querySelector('#snapshot-list .snapshot-item')
+      const b = r.getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    })
+    await swipeV(client, rowS.x, rowS.y, -160)
+    const afterSwipe = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, curIdx: App.SnapshotSheet.currentIndex() }
+    })
+    if (Math.abs(afterSwipe.x - camBeforeSwipe.x) < 0.001 && Math.abs(afterSwipe.y - camBeforeSwipe.y) < 0.001)
+      pass('列表滑动不算点击（相机未动，不误触飞行）')
+    else fail('滑动误触点击', JSON.stringify({ before: camBeforeSwipe, after: afterSwipe }))
+
+    // ── 1d. 循环演示：无第一页/最后一页概念，前进/后退恒可用，从当前页进入 ──
+    // 关闭面板 → 前进 ×4 环绕回 s1（idx 0）→ 后退环绕到 s4（idx 3）→ 重新打开面板
+    const closeBtn = await page.evaluate(() => {
+      const b = document.querySelector('#snapshot-close-btn')
+      const r = b.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    })
+    await tap(client, closeBtn.x, closeBtn.y, 60)
+    await sleep(400)
+    const loopBtns = await page.evaluate(() => {
+      const f = document.querySelector('#bb-btn-forward')
+      const b = document.querySelector('#bb-btn-back')
+      return {
+        fwdDisabled: f.disabled,
+        backDisabled: b.disabled,
+        fwd: (function () { const r = f.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })(),
+        back: (function () { const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()
+      }
+    })
+    if (!loopBtns.fwdDisabled && !loopBtns.backDisabled) pass('有快照的桌面空间：前进/后退恒可用（循环无边界）')
+    else fail('循环按钮应可用', JSON.stringify({ fwd: loopBtns.fwdDisabled, back: loopBtns.backDisabled }))
+    // 前进 ×4：s1 → s2 → s3 → s4 → 环绕回 s1
+    for (let i = 0; i < 4; i++) {
+      await tap(client, loopBtns.fwd.x, loopBtns.fwd.y, 60)
+      await sleep(500)
+    }
+    const camLoop = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, idx: App.SnapshotSheet.currentIndex() }
+    })
+    if (Math.abs(camLoop.x - 0) < 0.5 && Math.abs(camLoop.y - 0) < 0.5 && camLoop.idx === 0)
+      pass('前进 ×4 → 环绕回第 1 页（s1，idx=0，相机回 (0,0,1)）')
+    else fail('前进循环', JSON.stringify(camLoop))
+    // 后退 → 环绕到最后一页（s4，idx 3）
+    await tap(client, loopBtns.back.x, loopBtns.back.y, 60)
+    await sleep(500)
+    const camBack = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, idx: App.SnapshotSheet.currentIndex() }
+    })
+    if (Math.abs(camBack.x - 50) < 0.5 && Math.abs(camBack.y - 80) < 0.5 && camBack.idx === 3)
+      pass('后退 → 环绕到最后一页（s4，idx=3，相机 (50,80)）')
+    else fail('后退环绕', JSON.stringify(camBack))
+    // 重新打开面板（后续步骤基于打开态）
+    await page.evaluate(() => App.SnapshotSheet.open())
+    await sleep(600)
+
     // ── 2. 长按快照行 → 进入操作模式 ──
     const row1 = await page.evaluate(() => {
       const r = document.querySelector('#snapshot-list .snapshot-item')
@@ -285,6 +380,15 @@ async function main() {
     }))
     if (afterDrag.names.length === 2 && afterDrag.names[0] !== beforeNames[0]) pass('长按拖拽 → 分组内排序生效（' + beforeNames[0] + ' → ' + afterDrag.names[0] + '）')
     else fail('拖拽排序', JSON.stringify({ before: beforeNames, after: afterDrag.names }))
+    const afterDragMeta = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('#snapshot-list .snapshot-item')).map(it => ({
+        code: (it.querySelector('.snapshot-code') || {}).textContent,
+        page: (it.querySelector('.snapshot-meta') || {}).textContent
+      })))
+    if (afterDragMeta.length === 2 && afterDragMeta[0].code === 'C' && afterDragMeta[0].page === '第 1 页' &&
+        afterDragMeta[1].code === 'D' && afterDragMeta[1].page === '第 2 页')
+      pass('拖拽排序：字母编号随快照不变（C 到首位），页码随排序更新（第 1/2 页）')
+    else fail('拖拽后编号', JSON.stringify(afterDragMeta))
     if (!afterDrag.panelTransform || afterDrag.panelTransform === 'translateY(0px)' || afterDrag.panelTransform === 'none') pass('拖拽时面板不跟随关闭（transform=' + afterDrag.panelTransform + '）')
     else fail('面板跟随关闭', afterDrag.panelTransform)
     if (afterDrag.opMode && afterDrag.fabMode === 'snapshot-operation') pass('拖拽后仍在操作模式（FAB 保持展开）')

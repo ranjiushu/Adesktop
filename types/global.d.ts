@@ -119,6 +119,8 @@ interface HomeStore {
 interface Snapshot {
   id: string
   name: string
+  /** 字母编号（页代码）：创建时分配 A..Z → AA..，随快照稳定，拖动排序不改变 */
+  code?: string
   camera: DesktopCameraState
   createdAt: number
 }
@@ -175,6 +177,8 @@ interface SnapshotStore {
   deleteGroup(rootId: string, groupId: string): boolean
   getInsertPosition(): 'top' | 'bottom'
   setInsertPosition(pos: 'top' | 'bottom'): boolean
+  nextCode(data: SnapshotData): string
+  ensureCodes(data: SnapshotData): SnapshotData
   homeGroupIndex(groups: Array<SnapshotGroup>, pos: 'top' | 'bottom'): number
   getHomeGroup(data: SnapshotData, pos: 'top' | 'bottom'): SnapshotGroup | null
   homeSnapshotIndex(list: Array<Snapshot>, pos: 'top' | 'bottom'): number

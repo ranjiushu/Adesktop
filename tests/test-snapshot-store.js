@@ -299,6 +299,70 @@ fakeCore.camera.rotation = 90
 d = S.load('v1Root')
 check(firstGroup(d).snapshots.length === 1 && firstGroup(d).snapshots[0].id === 'l1', 'version 1 扁平数据按 rotation 分流（横屏）')
 
+// ── 字母/数字编号：create 分配 code（页代码），reorder 不改变 code，页码派生 ──
+store = {}
+fakeCore.camera.rotation = 0
+d = S.load('codeRoot')
+const ca = S.create(cam1, 'codeRoot')
+check(ca && ca.code === 'A', '首个快照分配字母编号 A')
+const cb = S.create(cam2, 'codeRoot')
+check(cb && cb.code === 'B', '第二个快照分配字母编号 B')
+d = S.load('codeRoot')
+check(d.groups[0].snapshots[0].id === cb.id && d.groups[0].snapshots[0].code === 'B' &&
+      d.groups[0].snapshots[1].code === 'A', '插入顶部后 code 随快照（B 在 A 前，code 不按位置重排）')
+// reorder：把 A 移到顶部 → code 保持 A，不因排序变化
+d = S.reorder(d, d.groups[0].id, 1, 0)
+S.save(d, 'codeRoot')
+d = S.load('codeRoot')
+check(d.groups[0].snapshots[0].id === ca.id && d.groups[0].snapshots[0].code === 'A' &&
+      d.groups[0].snapshots[1].code === 'B', '拖动排序不改变字母编号（A 回首位仍为 A）')
+// 删除 B → 新建复用空闲 code B（最小未使用）
+d = S.delete(d, d.groups[0].id, cb.id)
+S.save(d, 'codeRoot')
+const cc = S.create(cam1, 'codeRoot')
+check(cc && cc.code === 'B', '删除后新建复用空闲字母编号 B')
+
+// ── 旧数据无 code → load 自动回填（按扁平顺序，保留已有 code）──
+store = {}
+store['desktop.snapshots.legacyCodes.v3'] = JSON.stringify({
+  version: 3,
+  groups: [{ id: 'g1', name: '默认分组' }, { id: 'g2', name: '项目A' }],
+  portrait: {
+    version: 3,
+    groups: [
+      { id: 'g1', snapshots: [
+        { id: 'o1', name: 'n1', camera: { x: 0, y: 0, zoom: 1, rotation: 0 }, createdAt: 1 },
+        { id: 'o2', name: 'n2', camera: { x: 1, y: 1, zoom: 1, rotation: 0 }, createdAt: 2 }
+      ] },
+      { id: 'g2', snapshots: [
+        { id: 'o3', name: 'n3', camera: { x: 2, y: 2, zoom: 1, rotation: 0 }, createdAt: 3 }
+      ] }
+    ]
+  },
+  landscape: { version: 3, groups: [{ id: 'g1', snapshots: [] }, { id: 'g2', snapshots: [] }] }
+})
+fakeCore.camera.rotation = 0
+d = S.load('legacyCodes')
+check(d.groups[0].snapshots[0].code === 'A' && d.groups[0].snapshots[1].code === 'B' &&
+      d.groups[1].snapshots[0].code === 'C', '旧数据 load 自动回填字母编号 A/B/C（扁平顺序）')
+// 已有 code 保留（回填只补缺失）
+store['desktop.snapshots.mixedCodes.v3'] = JSON.stringify({
+  version: 3,
+  groups: [{ id: 'g1', name: '默认分组' }],
+  portrait: { version: 3, groups: [{ id: 'g1', snapshots: [
+    { id: 'm1', name: 'm1', code: 'X', camera: { x: 0, y: 0, zoom: 1, rotation: 0 }, createdAt: 1 },
+    { id: 'm2', name: 'm2', camera: { x: 1, y: 1, zoom: 1, rotation: 0 }, createdAt: 2 }
+  ] }] },
+  landscape: { version: 3, groups: [{ id: 'g1', snapshots: [] }] }
+})
+fakeCore.camera.rotation = 0
+d = S.load('mixedCodes')
+check(d.groups[0].snapshots[0].code === 'X' && d.groups[0].snapshots[1].code === 'A',
+      '已有 code 保留，缺失的回填最小未使用（X 后补 A）')
+// nextCode 跳过已用字母
+d = S.load('mixedCodes')
+check(S.nextCode(d) === 'B', 'nextCode 返回最小未使用字母（A/X 已用 → B）')
+
 if (failures > 0) {
   console.error('  [FAIL] snapshot-store 测试 ' + failures + ' 项失败')
   process.exit(1)

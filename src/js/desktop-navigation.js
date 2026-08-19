@@ -80,11 +80,6 @@ App.DesktopNavigation = (function () {
       // 进入 folder：隐藏 canvas 态 Viewer（保留状态，退回根目录恢复）
       if (App.InternalViewer && App.InternalViewer.suspendCanvas) App.InternalViewer.suspendCanvas()
       C.camera = App.DesktopCamera.create(0, 0, 1)
-      // folder 视图快照无意义，自动退出演示模式避免迷航
-      if (App.SnapshotSheet && App.SnapshotSheet.setPresentationMode &&
-          App.SnapshotSheet.isPresentationMode && App.SnapshotSheet.isPresentationMode()) {
-        App.SnapshotSheet.setPresentationMode(false)
-      }
     } else {
       // 回到根目录：恢复 canvas 态 Viewer
       if (App.InternalViewer && App.InternalViewer.resumeCanvas) App.InternalViewer.resumeCanvas()

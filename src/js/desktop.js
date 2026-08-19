@@ -77,12 +77,13 @@ App.Desktop = (function () {
   N.setRefresh(P.refresh)
 
   // 旋转画布 toggle（view-menu 驱动）：桌面空间 0↔90 toggle；folder 容器无意义，忽略。
-  // 旋转是瞬时两态（无过渡动画）。切换方向后自动落到**目标方向**的 Home 槽位：
-  // 竖屏切横屏 → 读横屏槽位（landscapeHome/landscapeFallback），落在横屏 Home 视角；
-  // 横屏切回竖屏 → 读竖屏槽位（home/fallback），落在竖屏 Home 视角。
-  // 目标方向无槽位时**旋转保中心**（2026-08-19）：旋转前后视野的**世界中心点重合**——
-  // 图标世界坐标不变（整理区域/自由摆放位置），旋转后仍在视野内（曾「保持当前位置只转方向」
-  // 导致两方向出厂视野的世界区域完全不重叠，切横竖屏后图标全部跑出视野，用户找不到文件）。
+  // 旋转是瞬时两态（无过渡动画）。**纯保中心旋转**（2026-08-19）：只改 rotation，
+  // x/y/zoom 不动——旋转前后屏幕中心世界点相同（screenToWorld 在 rotation=90 时
+  // 屏幕中心对应世界点与竖屏相同：均为 (c.x + w/2z, c.y + h/2z)），整理/自由摆放的
+  // 图标世界坐标不变，旋转后仍围绕同一中心（曾「跳目标方向 Home 槽位」：目标方向
+  // 槽位是历史残留位置，与整理区域脱节 → 旋转后视野整体漂移，用户找不到文件）。
+  // Home 键（goHome）才按当前方向读槽位——整理锚已写入两方向槽位（同一中心），
+  // 旋转后点 Home 恒回到整理区域。
   // 旋转后同步手势层/Viewer 手柄/Home 高亮。
   /** @returns {boolean} */
   function toggleRotate() {
@@ -90,17 +91,7 @@ App.Desktop = (function () {
     const cam = C.camera
     if (!cam) return false
     const next = cam.rotation === 90 ? 0 : 90
-    // 1. 读目标方向（next）的 Home 槽位：快照优先 > 默认视角
-    let home = null
-    const data = App.HomeStore.load(C.state.rootId, next)
-    if (data && data.home) home = data.home
-    else if (data && data.fallback) home = data.fallback
-    // 2. 目标方向有槽位 → 落到该槽位（x/y/zoom + 目标方向 rotation）；
-    //    无槽位 → 保持当前位置只转方向（旋转前后**视野世界中心不变**——screenToWorld
-    //    在 rotation=90 时屏幕中心对应世界点与竖屏相同，图标相对位置不丢；
-    //    曾误加相机位移「保中心」，实测反而把图标移出视野，已撤销）
-    const base = home || { x: cam.x, y: cam.y, zoom: cam.zoom }
-    C.camera = App.DesktopCamera.create(base.x, base.y, base.zoom, next)
+    C.camera = App.DesktopCamera.create(cam.x, cam.y, cam.zoom, next)
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
       App.DesktopGesture.setCamera(C.camera)
     }

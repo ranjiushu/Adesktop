@@ -1,11 +1,11 @@
 /* 演示快照面板（App.SnapshotSheet）：底栏上滑呼出快照列表 + 演示模式。
  * 手势：底栏区域垂直上滑跟手抬出面板，下滑/点遮罩/点关闭按钮关闭。
- * 列表：按分组展示快照，点击切换，长按/拖动把手分组内排序。
- * 分组：支持新建、重命名、删除；分组内快照独立排序。
+ * 分组：标签栏横排在列表顶部（点击或左右滑动切换分组），列表只显示当前分组；
+ *       长按标签重命名/删除分组，标签栏末尾 + 新建分组；组内快照可拖动排序。
  * 菜单：右上角三点按钮，可开启/关闭演示模式、切换新快照插入位置（顶部/底部）、
  *       删除当前选中的快照。
  * 演示模式：开启后底栏前进/后退按钮变为「下一个/上一个快照」，边界禁用并吐司提示。
- * 依赖: namespace.js, utils.js, dialog.js, drag-sort.js, snapshot-store.js, desktop-core.js,
+ * 依赖: namespace.js, utils.js, drag-sort.js, snapshot-store.js, desktop-core.js,
  *       desktop-navigation.js, bottom-bar.js, toast.js, bridge.js
  * 导出: App.SnapshotSheet
  */
@@ -16,6 +16,8 @@ App.SnapshotSheet = (function () {
   const TAN_VERTICAL = 2.14       // tan(65°)，超过此角度视为垂直上滑
   const SWIPE_THRESHOLD = 24      // 上滑激活阈值 px
   const DEADZONE = 6              // 决策死区 px
+  const TAB_SWIPE_X = 60          // 列表内左右滑动切换分组的水平位移阈值 px
+  const TAB_SWIPE_RATIO = 1.5     // 水平判定：|dx| > |dy| * ratio
 
   /** @type {'closed' | 'opening' | 'open' | 'closing'} */
   let _state = 'closed'
@@ -26,18 +28,24 @@ App.SnapshotSheet = (function () {
   /** @type {HTMLElement | null} */
   let _list = null
   /** @type {HTMLElement | null} */
+  let _tabs = null
+  /** @type {HTMLElement | null} */
   let _menu = null
-  /** @type {Array<{engine: any, groupIdx: number}>} */
-  let _dragEngines = []
+  /** @type {any} */
+  let _dragEngine = null
   /** @type {SnapshotData | null} */
   let _currentData = null
   /** @type {number} */
+  let _currentGroupIdx = 0
+  /** @type {number} 扁平索引（所有分组快照按顺序），演示模式与跨组选中共用 */
   let _currentIndex = -1
   let _presentationMode = false
   /** @type {{deciding: boolean, active: boolean, sx: number, sy: number} | null} */
   let _swipe = null
   /** @type {number | null} */
   let _openRaf = null
+  /** @type {{sx: number, sy: number, id: number | null} | null} */
+  let _tabSwipe = null
 
   function _getEl(id) { return document.getElementById(id) }
 
@@ -72,8 +80,14 @@ App.SnapshotSheet = (function () {
     return App.SnapshotStore.load(rootId)
   }
 
+  function _homeGroupIdx() {
+    return App.SnapshotStore.homeGroupIndex(_data().groups, App.SnapshotStore.getInsertPosition())
+  }
+
   function _homeGroup() {
-    return App.SnapshotStore.getHomeGroup(_data(), App.SnapshotStore.getInsertPosition())
+    const data = _data()
+    const idx = _homeGroupIdx()
+    return idx >= 0 ? data.groups[idx] : null
   }
 
   function _flatSnapshots() {
@@ -100,70 +114,90 @@ App.SnapshotSheet = (function () {
     }
   }
 
-  // 渲染快照列表（按分组）
+  // ── 渲染：标签栏 + 当前分组列表 ──
   function _renderList() {
+    _renderTabs()
+    _renderGroupList()
+  }
+
+  function _renderTabs() {
+    if (!_tabs) return
+    const data = _data()
+    _tabs.innerHTML = ''
+    const homeIdx = _homeGroupIdx()
+    data.groups.forEach(function (group, idx) {
+      const tab = document.createElement('button')
+      tab.className = 'snapshot-tab' + (idx === _currentGroupIdx ? ' snapshot-tab-active' : '')
+      tab.setAttribute('role', 'tab')
+      tab.setAttribute('aria-selected', idx === _currentGroupIdx ? 'true' : 'false')
+      tab.dataset.groupIdx = String(idx)
+
+      const name = document.createElement('span')
+      name.className = 'snapshot-tab-name'
+      name.textContent = group.name
+      tab.appendChild(name)
+
+      const count = document.createElement('span')
+      count.className = 'snapshot-tab-count'
+      count.textContent = String(group.snapshots.length)
+      tab.appendChild(count)
+
+      // 点击切换分组；长按弹出分组菜单（重命名 / 删除）
+      App.utils.bindPressSplit(tab, {
+        onTap: function () { _switchGroup(idx) },
+        onLongPress: function () { _openTabMenu(idx) }
+      }, { longPressMs: 500, moveThreshold: 12 })
+
+      _tabs.appendChild(tab)
+    })
+
+    // 新建分组按钮
+    const add = document.createElement('button')
+    add.className = 'snapshot-tab-add'
+    add.setAttribute('aria-label', '新建分组')
+    add.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+    App.utils.bindPress(add, function () { _promptNewGroup() })
+    _tabs.appendChild(add)
+
+    // 当前 tab 滚入视野
+    const activeTab = _tabs.querySelector('.snapshot-tab-active')
+    if (activeTab && typeof activeTab.scrollIntoView === 'function') {
+      activeTab.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+    }
+  }
+
+  function _renderGroupList() {
     if (!_list) return
     const data = _data()
     _currentData = data
-    _cleanupDragEngines()
+    _cleanupDragEngine()
     _list.innerHTML = ''
-    if (data.groups.length === 0 || !_hasAnySnapshot(data)) {
+
+    const group = data.groups[_currentGroupIdx]
+    if (!group || group.snapshots.length === 0) {
       const empty = document.createElement('div')
       empty.className = 'snapshot-empty'
-      empty.textContent = '长按底栏 Home 记录快照'
+      empty.textContent = group ? '此分组暂无快照，长按底栏 Home 记录' : '长按底栏 Home 记录快照'
       _list.appendChild(empty)
       return
     }
-    const homeGroup = _homeGroup()
-    data.groups.forEach(function (group, groupIdx) {
-      const section = document.createElement('div')
-      section.className = 'snapshot-group'
-
-      const header = document.createElement('div')
-      header.className = 'snapshot-group-header'
-
-      const title = document.createElement('span')
-      title.className = 'snapshot-group-title'
-      title.textContent = group.name
-      header.appendChild(title)
-
-      const menuBtn = document.createElement('button')
-      menuBtn.className = 'snapshot-group-menu-btn'
-      menuBtn.setAttribute('aria-label', '分组菜单')
-      menuBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>'
-      App.utils.bindPress(menuBtn, function () { _openGroupMenu(groupIdx) })
-      header.appendChild(menuBtn)
-
-      section.appendChild(header)
-
-      const body = document.createElement('div')
-      body.className = 'snapshot-group-body'
-      body.dataset.groupIdx = String(groupIdx)
-      group.snapshots.forEach(function (s, idx) {
-        const item = _createSnapshotItem(s, groupIdx, idx, group.id === (homeGroup && homeGroup.id))
-        body.appendChild(item)
-      })
-      section.appendChild(body)
-
-      _list.appendChild(section)
-      _bindGroupDrag(body, groupIdx)
+    const isHomeGroup = _homeGroup() !== null && group.id === _homeGroup().id
+    const pos = App.SnapshotStore.getInsertPosition()
+    group.snapshots.forEach(function (s, idx) {
+      const item = _createSnapshotItem(s, _currentGroupIdx, idx, isHomeGroup && idx === App.SnapshotStore.homeSnapshotIndex(group.snapshots, pos))
+      _list.appendChild(item)
     })
+    _bindGroupDrag(_list, _currentGroupIdx)
     _markCurrentInList()
   }
 
-  function _hasAnySnapshot(data) {
-    return data.groups.some(function (g) { return g.snapshots.length > 0 })
-  }
-
-  function _createSnapshotItem(s, groupIdx, idx, isHomeGroup) {
+  function _createSnapshotItem(s, groupIdx, idx, isHome) {
     const item = document.createElement('div')
     item.className = 'snapshot-item'
     item.dataset.id = s.id
     item.dataset.groupIdx = String(groupIdx)
     item.dataset.index = String(idx)
-    if (isHomeGroup && idx === App.SnapshotStore.homeSnapshotIndex([s], App.SnapshotStore.getInsertPosition())) {
-      item.classList.add('snapshot-home')
-    }
+    if (isHome) item.classList.add('snapshot-home')
 
     const handle = document.createElement('span')
     handle.className = 'snapshot-drag-handle'
@@ -189,27 +223,23 @@ App.SnapshotSheet = (function () {
     })
 
     handle.addEventListener('touchstart', function (e) {
-      const engine = _dragEngines[groupIdx]
-      if (!engine) return
+      if (!_dragEngine) return
       e.preventDefault()
       if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(20)
-      engine.engine.startDrag(item, e.touches[0].clientY)
+      _dragEngine.startDrag(item, e.touches[0].clientY)
     }, { passive: false })
 
     return item
   }
 
-  function _cleanupDragEngines() {
-    _dragEngines.forEach(function (entry) {
-      if (entry && entry.engine && typeof entry.engine.cleanup === 'function') entry.engine.cleanup()
-    })
-    _dragEngines = []
+  function _cleanupDragEngine() {
+    if (_dragEngine && typeof _dragEngine.cleanup === 'function') _dragEngine.cleanup()
+    _dragEngine = null
   }
 
-  function _bindGroupDrag(body, groupIdx) {
-    if (!body) return
-    const engine = App.dragSort.createDragSortEngine({
-      container: body,
+  function _bindGroupDrag(container, groupIdx) {
+    _dragEngine = App.dragSort.createDragSortEngine({
+      container: container,
       itemSelector: '.snapshot-item',
       dragClass: 'snapshot-item-dragging',
       dragActiveClass: 'snapshot-list-dragging',
@@ -222,7 +252,67 @@ App.SnapshotSheet = (function () {
         return 10 * (window.innerHeight / 100) + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom') || '0')
       }
     })
-    _dragEngines[groupIdx] = { engine: engine, groupIdx: groupIdx }
+  }
+
+  // 切换分组（点击 tab）
+  function _switchGroup(idx) {
+    const data = _data()
+    if (idx < 0 || idx >= data.groups.length || idx === _currentGroupIdx) return
+    _currentGroupIdx = idx
+    _renderGroupList()
+    if (_list) _list.scrollTop = 0
+    _updateTabActive()
+  }
+
+  function _updateTabActive() {
+    if (!_tabs) return
+    Array.prototype.forEach.call(_tabs.querySelectorAll('.snapshot-tab'), function (tab) {
+      const on = Number(tab.dataset.groupIdx) === _currentGroupIdx
+      tab.classList.toggle('snapshot-tab-active', on)
+      tab.setAttribute('aria-selected', on ? 'true' : 'false')
+    })
+  }
+
+  // ── 分组菜单（长按标签）：重命名 / 删除 ──
+  function _openTabMenu(groupIdx) {
+    const data = _data()
+    const group = data.groups[groupIdx]
+    if (!group) return
+    const newName = window.prompt('重命名分组', group.name)
+    if (newName === null) return
+    const rootId = _rootId()
+    if (!rootId) return
+    const trimmed = newName.trim()
+    if (trimmed) {
+      App.SnapshotStore.renameGroup(rootId, group.id, trimmed)
+    }
+    const shouldDelete = window.confirm('是否删除分组「' + (trimmed || group.name) + '」？组内快照将一并删除。')
+    if (shouldDelete) {
+      App.SnapshotStore.deleteGroup(rootId, group.id)
+      if (_currentGroupIdx >= data.groups.length - 1) {
+        _currentGroupIdx = Math.max(0, data.groups.length - 2)
+      }
+      _currentIndex = -1
+    }
+    _renderList()
+    _updateHomeHighlight()
+  }
+
+  function _promptNewGroup() {
+    const name = window.prompt('新建分组名称', '新分组')
+    if (!name) return
+    const rootId = _rootId()
+    if (!rootId) return
+    const result = App.SnapshotStore.createGroup(rootId, name)
+    if (!result) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('创建分组失败')
+      return
+    }
+    // 新建分组后切换到新分组 tab
+    const data = _data()
+    _currentGroupIdx = Math.max(0, data.groups.length - 1)
+    _renderList()
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已创建分组：' + result.group.name)
   }
 
   function _flyToSnapshot(groupIdx, snapshotIdx) {
@@ -257,17 +347,8 @@ App.SnapshotSheet = (function () {
 
   function _markCurrentInList() {
     if (!_list) return
-    const data = _data()
-    let cursor = 0
-    let currentId = null
-    for (let i = 0; i < data.groups.length; i++) {
-      const g = data.groups[i]
-      if (_currentIndex >= cursor && _currentIndex < cursor + g.snapshots.length) {
-        currentId = g.snapshots[_currentIndex - cursor].id
-        break
-      }
-      cursor += g.snapshots.length
-    }
+    const flat = _flatSnapshots()
+    const currentId = flat[_currentIndex] ? flat[_currentIndex].id : null
     Array.prototype.forEach.call(_list.querySelectorAll('.snapshot-item'), function (el) {
       el.classList.toggle('snapshot-current', el.dataset.id === currentId)
     })
@@ -349,41 +430,6 @@ App.SnapshotSheet = (function () {
     }
   }
 
-  function _promptNewGroup() {
-    const name = window.prompt('新建分组名称', '新分组')
-    if (!name) return
-    const rootId = _rootId()
-    if (!rootId) return
-    const result = App.SnapshotStore.createGroup(rootId, name)
-    if (!result) {
-      if (App.toast && typeof App.toast.show === 'function') App.toast.show('创建分组失败')
-      return
-    }
-    _renderList()
-    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已创建分组：' + result.group.name)
-  }
-
-  function _openGroupMenu(groupIdx) {
-    const data = _data()
-    const group = data.groups[groupIdx]
-    if (!group) return
-    const newName = window.prompt('重命名分组', group.name)
-    if (newName === null) return
-    const rootId = _rootId()
-    if (!rootId) return
-    const trimmed = newName.trim()
-    if (trimmed) {
-      App.SnapshotStore.renameGroup(rootId, group.id, trimmed)
-    }
-    const shouldDelete = window.confirm('是否删除分组「' + (trimmed || group.name) + '」？组内快照将一并删除。')
-    if (shouldDelete) {
-      App.SnapshotStore.deleteGroup(rootId, group.id)
-      _currentIndex = -1
-    }
-    _renderList()
-    _updateHomeHighlight()
-  }
-
   function _deleteCurrent() {
     const rootId = _rootId()
     if (!rootId) return
@@ -424,6 +470,9 @@ App.SnapshotSheet = (function () {
     if (_state === 'open' || _state === 'opening') return
     if (!_panel || !_overlay) return
     _state = 'opening'
+    // 默认打开 Home 分组 tab
+    const homeIdx = _homeGroupIdx()
+    if (homeIdx >= 0) _currentGroupIdx = homeIdx
     _renderList()
     _overlay.classList.add('snapshot-sheet-overlay-visible')
     _overlay.setAttribute('aria-hidden', 'false')
@@ -515,6 +564,37 @@ App.SnapshotSheet = (function () {
     }
     bar.addEventListener('touchend', end, { passive: false, capture: true })
     bar.addEventListener('touchcancel', end, { passive: false, capture: true })
+  }
+
+  // 列表内左右滑动切换分组（tab swipe）
+  function _initTabSwipe() {
+    if (!_list) return
+    _list.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return
+      // 拖动排序进行中不响应
+      if (App.dragSort && App.dragSort.isDragSortActive && App.dragSort.isDragSortActive()) return
+      const t = e.touches[0]
+      _tabSwipe = { sx: t.clientX, sy: t.clientY, id: t.identifier }
+    }, { passive: true })
+
+    _list.addEventListener('touchend', function (e) {
+      if (!_tabSwipe) return
+      const t = _findTouch(e.changedTouches, _tabSwipe.id)
+      const dx = t ? t.clientX - _tabSwipe.sx : 0
+      const dy = t ? t.clientY - _tabSwipe.sy : 0
+      _tabSwipe = null
+      if (Math.abs(dx) < TAB_SWIPE_X) return
+      if (Math.abs(dy) > Math.abs(dx) / TAB_SWIPE_RATIO) return
+      const data = _data()
+      if (dx < 0 && _currentGroupIdx < data.groups.length - 1) {
+        _switchGroup(_currentGroupIdx + 1)
+      } else if (dx > 0 && _currentGroupIdx > 0) {
+        _switchGroup(_currentGroupIdx - 1)
+      }
+    }, { passive: true })
+    _list.addEventListener('touchcancel', function () {
+      _tabSwipe = null
+    }, { passive: true })
   }
 
   // 面板跟手下滑关闭
@@ -707,11 +787,13 @@ App.SnapshotSheet = (function () {
     _panel = _getEl('snapshot-sheet-panel')
     _overlay = _getEl('snapshot-sheet-overlay')
     _list = _getEl('snapshot-list')
+    _tabs = _getEl('snapshot-tabs')
     _menu = _getEl('snapshot-menu')
-    if (!_panel || !_overlay || !_list) return
+    if (!_panel || !_overlay || !_list || !_tabs) return
 
     _initBarSwipe()
     _initSheetDrag()
+    _initTabSwipe()
 
     const menuBtn = _getEl('snapshot-menu-btn')
     if (menuBtn) App.utils.bindPress(menuBtn, _toggleMenu)

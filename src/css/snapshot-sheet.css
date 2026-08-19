@@ -49,14 +49,110 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 12px 16px 8px;
+  border-bottom: none;
   flex: none;
 }
 
 .snapshot-sheet-title {
   font-size: 16px;
   font-weight: 600;
+  color: var(--color-text);
+}
+
+/* 分组标签栏：横排可滚动，点击/左右滑动切换分组 */
+.snapshot-tabs {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--color-border);
+  min-height: 42px;
+}
+
+.snapshot-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.snapshot-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 0 14px;
+  height: 42px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-tab::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.snapshot-tab-active {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.snapshot-tab-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.snapshot-tab-count {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border-radius: 8px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+
+.snapshot-tab-active .snapshot-tab-count {
+  background: rgba(59,130,246,0.12);
+  color: var(--color-accent);
+}
+
+.snapshot-tab-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  align-self: center;
+  margin-left: 2px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.snapshot-tab-add:active {
+  background: var(--color-border);
   color: var(--color-text);
 }
 
@@ -232,7 +328,7 @@
   color: var(--color-text);
 }
 
-/* 分组标题 */
+/* 分组标题（旧版同列表渲染，保留兼容样式；当前 Tab 模式不再使用） */
 .snapshot-group {
   flex: none;
 }

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 修复拖拽手势冲突 + Morph FAB 层级（2026-08-19）
+
+- **拖拽不跟手/面板跟随关闭（根因）**：面板下滑关闭手势在列表 scrollTop=0 时无条件接管
+  touchmove——drag-sort 拖拽时它也位移面板 + preventDefault，两者打架（阻力感 + 面板被拖走）。
+  修复：touchstart/touchmove 检测 `dragSort.isDragSortActive()`，拖拽中面板让权（不位移、
+  不拦截），drag-sort 全权接管
+- **边缘智能滚动修正**：`edgeInsetBottom` 由「10vh 底栏估算」改为实际 footer 关闭条高度
+  + 安全区（列表可视底缘即滚动生效边缘，手指搭关闭条也吃到越界加速）
+- **Morph FAB 始终最高层级**：移除「快照面板打开时 FAB 隐藏」规则——FAB（z-index 1500）
+  始终浮于面板（650）之上可见可点（LexiCull 同款）；操作模式 morph 为 ✕ + 操作按钮不变
+- **E2E**：`verify-snapshot-sheet.js` 扩展至 23 项——新增「长按拖拽排序生效 + 拖拽中
+  面板 transform 不变（不跟随关闭）+ 拖拽后操作模式保持」、FAB 始终可见断言；
+  verify.sh 15 项全绿（含 8 套 E2E）
+
 ### 快照面板操作模式：长按拖拽排序 + FAB 多选批量操作（2026-08-19）
 
 - **面板高度 70%**：参考 MT 管理器，固定 50vh → 70vh（更多快照可见）

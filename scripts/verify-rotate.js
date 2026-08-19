@@ -312,6 +312,11 @@ async function main() {
     })
     if (snapL && snapL.landscapeHome) pass('横屏长按 Home → 快照写入 landscapeHome 槽位')
     else fail('横屏快照写入断言', JSON.stringify(snapL))
+    // 记录横屏平移后的相机位置（P2'——保中心转回竖屏的参照）
+    const camLandBefore = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
+    })
     if (snapL && snapL.home && snapL.landscapeHome &&
         (Math.abs(snapL.home.x - snapL.landscapeHome.x) > 1 ||
          Math.abs(snapL.home.y - snapL.landscapeHome.y) > 1)) {
@@ -341,27 +346,48 @@ async function main() {
     if (hasSnapPort) pass('切回竖屏 → Home 高亮恢复（竖屏槽位快照保留）')
     else fail('切回竖屏后 Home 应高亮（竖屏槽位快照应保留）')
 
-    // ── 4.5b 核心断言：切到哪个方向就落在哪个方向的槽位位置 ──
-    // 竖屏槽位（home）= P1（竖屏平移后）；横屏槽位（landscapeHome）= P2（横屏再平移后，
-    // P2 ≠ P1）。验证：
-    //   转回竖屏 → 相机应回到 P1（竖屏槽位位置）
-    //   再转横屏 → 相机应落到 P2（横屏槽位位置，且 rotation=90）
+    // ── 4.5b 核心断言：旋转 = 纯保中心（不跳槽位）；Home 键才按方向回槽位 ──
+    // 语义变更（2026-08-19）：toggleRotate 只改 rotation（x/y/zoom 不动）——旋转前后
+    // 屏幕中心世界点相同（screenToWorld 推导），整理区域/自由摆放图标不丢。
+    // 曾「旋转跳目标方向槽位」：历史残留槽位与整理区域脱节 → 视野整体漂移（找不到）。
+    // 槽位只服务 Home 键：竖屏槽位（home）= P1、横屏槽位（landscapeHome）= P2。
+    // 验证：
+    //   转回竖屏（已在上方 rot6 执行）→ 相机 x/y/zoom = 横屏平移后（保中心）
+    //   竖屏点 Home → 回竖屏槽位 P1
+    //   再转横屏 → 相机 x/y/zoom 不变（保中心，rotation=90）
+    //   横屏点 Home → 回横屏槽位 P2
     // 直接用 App.DesktopCore.camera 数据层断言（绕过 transform 解析的旋转换算）
     const camBackPortrait = await page.evaluate(() => {
       const c = App.DesktopCore.camera
       return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
     })
     if (camBackPortrait && camBackPortrait.rotation === 0 &&
-        snapP && snapP.home &&
-        Math.abs(camBackPortrait.x - snapP.home.x) < 1e-6 &&
-        Math.abs(camBackPortrait.y - snapP.home.y) < 1e-6 &&
-        Math.abs(camBackPortrait.zoom - snapP.home.zoom) < 1e-6) {
-      pass('切回竖屏 → 相机落在竖屏槽位位置（home 槽位 P1）')
+        camLandBefore &&
+        Math.abs(camBackPortrait.x - camLandBefore.x) < 1e-6 &&
+        Math.abs(camBackPortrait.y - camLandBefore.y) < 1e-6 &&
+        Math.abs(camBackPortrait.zoom - camLandBefore.zoom) < 1e-6) {
+      pass('旋转保中心：转回竖屏相机 x/y/zoom 不变（仅 rotation 归 0，不跳槽位）')
     } else {
-      fail('切回竖屏应落在竖屏槽位位置',
-        'slot=' + JSON.stringify(snapP && snapP.home) + ' cam=' + JSON.stringify(camBackPortrait))
+      fail('转回竖屏应保中心（不跳槽位）',
+        'land=' + JSON.stringify(camLandBefore) + ' cam=' + JSON.stringify(camBackPortrait))
     }
-    // 再切横屏 → 应落在横屏槽位位置（landscapeHome 槽位 P2，rotation=90）
+    // 竖屏点 Home（单击：双击窗口 300ms + 飞行动画 400ms → 等待 900ms）→ 回竖屏槽位 P1
+    await tap(client, homeRect.x, homeRect.y)
+    await sleep(900)
+    const camHomeP = await page.evaluate(() => {
+      const c = App.DesktopCore.camera
+      return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
+    })
+    if (camHomeP && snapP && snapP.home &&
+        Math.abs(camHomeP.x - snapP.home.x) < 1e-6 &&
+        Math.abs(camHomeP.y - snapP.home.y) < 1e-6 &&
+        Math.abs(camHomeP.zoom - snapP.home.zoom) < 1e-6) {
+      pass('竖屏点 Home → 回竖屏槽位位置（home 槽位 P1）')
+    } else {
+      fail('竖屏点 Home 应回竖屏槽位位置',
+        'slot=' + JSON.stringify(snapP && snapP.home) + ' cam=' + JSON.stringify(camHomeP))
+    }
+    // 再切横屏 → 保中心（x/y/zoom 不变，仅 rotation=90）
     await tap(client, menuBtn.x, menuBtn.y)
     const rot7 = await rect('[data-rotate="toggle"]')
     await tap(client, rot7.x, rot7.y)
@@ -371,14 +397,14 @@ async function main() {
       return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
     })
     if (camLand && camLand.rotation === 90 &&
-        snapL && snapL.landscapeHome &&
-        Math.abs(camLand.x - snapL.landscapeHome.x) < 1e-6 &&
-        Math.abs(camLand.y - snapL.landscapeHome.y) < 1e-6 &&
-        Math.abs(camLand.zoom - snapL.landscapeHome.zoom) < 1e-6) {
-      pass('再切横屏 → 相机落在横屏槽位位置（landscapeHome 槽位 P2，rotation=90）')
+        camHomeP &&
+        Math.abs(camLand.x - camHomeP.x) < 1e-6 &&
+        Math.abs(camLand.y - camHomeP.y) < 1e-6 &&
+        Math.abs(camLand.zoom - camHomeP.zoom) < 1e-6) {
+      pass('旋转保中心：再切横屏相机 x/y/zoom 不变（仅 rotation=90，不跳槽位）')
     } else {
-      fail('再切横屏应落在横屏槽位位置',
-        'slot=' + JSON.stringify(snapL && snapL.landscapeHome) + ' cam=' + JSON.stringify(camLand))
+      fail('再切横屏应保中心（不跳槽位）',
+        'pre=' + JSON.stringify(camHomeP) + ' cam=' + JSON.stringify(camLand))
     }
     // ── 4.6 横屏下点 Home 按钮：rotation 应保持 90（P0-1 回归守卫）──
     // 此时处于横屏（rotation=90），横屏槽位有 landscapeHome 快照（P2）。
@@ -390,9 +416,9 @@ async function main() {
       const c = App.DesktopCore.camera
       return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
     })
-    // 点按 Home（短按，非长按）
+    // 点按 Home（短按，非长按；单击经 300ms 双击窗口延迟触发 + 400ms 动画 → 等待 900ms）
     await tap(client, homeRect.x, homeRect.y)
-    await sleep(600)   // 等 Home 动画完成（HOME_ANIM_MS=400 + 余量）
+    await sleep(900)   // 等 Home 动画完成（双击窗口 300ms + HOME_ANIM_MS=400 + 余量）
     const camAfterHome = await page.evaluate(() => {
       const c = App.DesktopCore.camera
       return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }

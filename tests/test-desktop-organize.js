@@ -54,12 +54,12 @@ check(sorted[5].name === 'a.txt' && sorted[6].name === 'b.txt' && sorted[7].name
   'txt 组：按名称升序（a.txt, b.txt, c.TXT——扩展名小写归一）')
 check(sorted.length === items.length, '排序不丢条目')
 
-// ── 2. 竖屏行优先（Android 启动器式：从左到右排满一行再下一行）＋ 居中 ──
-// 视口 412×700、zoom 1、相机 (0,0,1,0)：视野中心世界点 = (206,350)。
-// 8 条目 → 4 列 × 2 行：网格外接框 384×222 绕视野中心对称 → 左上角 (14,239)
+// ── 2. 竖屏行优先（Android 启动器式：从左到右排满一行再下一行）＋ 顶边基线 ──
+// 视口 412×700、zoom 1、相机 (0,0,1,0)：基线 = 视口顶部（y=0）+ PAD_TOP=16；
+// x 方向水平居中（视野中心 x=206）。8 条目 → 4 列 × 2 行 → 左上角 (14,16)
 const vp = O.organize(items, 412, 700, { x: 0, y: 0, zoom: 1, rotation: 0 })
 check(vp.length === items.length, 'organize 输出全部条目')
-check(vp[0].x === 14 && vp[0].y === 239, '竖屏第一项 = 网格居中左上角 (14,239)（非贴 (0,0)）')
+check(vp[0].x === 14 && vp[0].y === 16, '竖屏第一项 = 顶边基线左上角 (14,16)（y 贴视口顶 + 16）')
 check(vp[0].name === 'alpha', '排序后第一个（文件夹）占网格首格')
 check(vp[1].x === vp[0].x + O.GRID_W && vp[1].y === vp[0].y,
   '竖屏行优先：第二项在同一行右一格（x+GRID_W）')
@@ -69,25 +69,28 @@ check(vp[4].x === vp[0].x && vp[4].y === vp[0].y + O.GRID_H,
 check(vp[6].x === vp[0].x + 2 * O.GRID_W && vp[6].y === vp[0].y + O.GRID_H,
   '第 7 项在第二行第三个')
 
-// ── 2.5 网格中心 = 视野中心（居中语义，防横屏偏左上回归）──
-// 视觉对称以**格子中心**计（左上角 + cell 占位一半）
-function gridCenter(placed) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+// ── 2.5 基线断言：x 水平居中 + y 顶边基线（用户指定基线 = 靠近顶栏的画布边）──
+function gridCenterX(placed) {
+  let minX = Infinity, maxX = -Infinity
   placed.forEach(function (p) {
-    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y)
-    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y)
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
   })
-  return { x: (minX + maxX) / 2 + O.ICON_W / 2, y: (minY + maxY) / 2 + O.ICON_H / 2 }
+  return (minX + maxX) / 2 + O.ICON_W / 2
 }
-const vc = gridCenter(vp)
-check(Math.abs(vc.x - 206) < 0.01 && Math.abs(vc.y - 350) < 0.01,
-  '竖屏网格中心 = 视野中心 (206,350)（实际 ' + vc.x.toFixed(1) + ',' + vc.y.toFixed(1) + '）')
+function gridTopY(placed) {
+  let minY = Infinity
+  placed.forEach(function (p) { minY = Math.min(minY, p.y) })
+  return minY
+}
+check(Math.abs(gridCenterX(vp) - 206) < 0.01, '竖屏网格 x 中心 = 视野中心 (206)（实际 ' + gridCenterX(vp).toFixed(1) + '）')
+check(gridTopY(vp) === 16, '竖屏网格顶部 = 视口顶部 + PAD_TOP（16）——基线贴顶栏边')
 
-// ── 3. 横屏（真机视口 412×700，App 锁竖屏——横屏 = 画布旋转）：列优先视觉 ＋ 居中 ──
-// 相机 (0,0,1,90)：视野中心仍 = (206,350)。8 条目 → 每列 7 格（perCol=floor(700/100)），
-// 共 2 列：网格外接框 600×222 绕视野中心对称 → 左上角 (-136,355)
+// ── 3. 横屏（真机视口 412×700，App 锁竖屏——横屏 = 画布旋转）：列优先视觉 ＋ 顶边基线 ──
+// 相机 (0,0,1,90)：屏幕顶部对应世界 x = cx + (w-h)/2z = -144；基线 = -144 + PAD_TOP = -128。
+// y 方向水平居中（视野中心 y=350）。8 条目 → 每列 7 格（perCol=floor(700/100)），共 2 列
+// → 左上角 (-128,355)
 const hp = O.organize(items, 412, 700, { x: 0, y: 0, zoom: 1, rotation: 90 })
-check(hp[0].x === -136 && hp[0].y === 355, '横屏第一项 = 网格居中左上角 (-136,355)')
+check(hp[0].x === -128 && hp[0].y === 355, '横屏第一项 = 顶边基线左上角 (-128,355)')
 check(hp[1].x === hp[0].x + O.GRID_W && hp[1].y === hp[0].y,
   '横屏视觉列优先：第二项在列内下一格（x+GRID_W = 屏幕向下）')
 check(hp[5].x === hp[0].x + 5 * O.GRID_W, '第 6 项仍在第一列（每列 7 格满列前）')
@@ -95,9 +98,16 @@ check(hp[6].x === hp[0].x + 6 * O.GRID_W && hp[6].y === hp[0].y,
   '第 7 项仍在第一列（perCol=7 恰好满列）')
 check(hp[7].x === hp[0].x && hp[7].y === hp[0].y - O.GRID_H,
   '第 8 项（满列）换列：x 回到顶格、y-GRID_H（= 屏幕向右）')
-const hc = gridCenter(hp)
-check(Math.abs(hc.x - 206) < 0.01 && Math.abs(hc.y - 350) < 0.01,
-  '横屏网格中心 = 视野中心 (206,350)（实际 ' + hc.x.toFixed(1) + ',' + hc.y.toFixed(1) + '）')
+// 横屏基线断言：屏幕顶部基线（世界 x = cx + (w-h)/2z + PAD_TOP = -128）+ y 水平居中
+check(hp[0].x === -128, '横屏顶边基线 = 屏幕顶部世界 x + PAD_TOP（-128）')
+{
+  let minY = Infinity, maxY = -Infinity
+  hp.forEach(function (p) {
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+  })
+  const cy = (minY + maxY) / 2 + O.ICON_H / 2
+  check(Math.abs(cy - 350) < 0.01, '横屏网格 y 中心 = 视野中心 (350)（实际 ' + cy.toFixed(1) + '）')
+}
 
 // ── 3.5 屏幕映射验证：整理结果经真实 worldToScreen 全部落在视口内（与 Home 中心重合）──
 // 真机视口 412×700（App 锁竖屏，横屏 = 画布旋转）
@@ -116,13 +126,13 @@ allInViewport(
   O.organize(items, 412, 700, { x: 120, y: 80, zoom: 1, rotation: 90 }),
   { x: 120, y: 80, zoom: 1, rotation: 90 }, 412, 700, '横屏（Home 快照非原点）')
 
-// ── 4. zoom 影响可见区域（网格更稀疏，中心语义不变）──
+// ── 4. zoom 影响可见区域（网格更稀疏，基线语义不变）──
 const z2 = O.organize(items, 412, 700, { x: 0, y: 0, zoom: 2, rotation: 0 })
 check(z2[1].x === z2[0].x + O.GRID_W && z2[1].y === z2[0].y, 'zoom=2 竖屏行优先语义不变')
-// zoom=2 视野中心 = (0 + 412/4, 0 + 700/4) = (103,175)——网格中心跟随
-const zc = gridCenter(z2)
-check(Math.abs(zc.x - 103) < 0.01 && Math.abs(zc.y - 175) < 0.01,
-  'zoom=2 网格中心 = 缩放后视野中心 (103,175)（实际 ' + zc.x.toFixed(1) + ',' + zc.y.toFixed(1) + '）')
+// zoom=2 视野中心 x = 0 + 412/4 = 103——x 水平居中跟随；y 仍顶边基线（+PAD_TOP）
+check(Math.abs(gridCenterX(z2) - 103) < 0.01,
+  'zoom=2 网格 x 中心 = 缩放后视野中心 (103)（实际 ' + gridCenterX(z2).toFixed(1) + '）')
+check(gridTopY(z2) === 16, 'zoom=2 网格顶部仍 = 视口顶部 + PAD_TOP（16）')
 
 // ── 5. 空输入安全 ──
 check(O.sortEntries([]).length === 0, '空列表排序安全')
@@ -139,40 +149,25 @@ const a4 = O.anchorFromHome({ fallback: { x: 5, y: 6, zoom: 2 } }, 0)
 check(a4.x === 5 && a4.y === 6 && a4.zoom === 2, '无 home 快照 → fallback 槽位')
 const a5 = O.anchorFromHome({ home: { x: 10, y: 20, zoom: 1.5 } }, 90)
 check(a5.rotation === 90 && a5.x === 10, '横屏整理：快照槽位 + rotation=90')
-// 锚定 Home 视角的整理结果：网格中心 = Home 视野中心（与 Home 区域重合）
+// 锚定 Home 视角的整理结果：x 水平居中 + y 顶边基线（与 Home 顶部重合）
 const anchorCam = O.anchorFromHome(null, 0)
 const hv = O.organize(items, 412, 700, anchorCam)
-const hvc = gridCenter(hv)
-check(Math.abs(hvc.x - 206) < 0.01 && Math.abs(hvc.y - 350) < 0.01,
-  '整理结果锚定 Home 出厂视野中心（与 Home 完全重合）')
+check(Math.abs(gridCenterX(hv) - 206) < 0.01 && gridTopY(hv) === 16,
+  '整理结果锚定 Home 出厂视野：x 居中 + 顶边基线')
 
-// ── 6.5 交叉旋转可见性：中心图标可见 + 出屏对称（几何必然，拖动即可找回）──
+// ── 6.5 交叉旋转可见性：旋转后中心图标可见（几何必然，拖动即可找回）──
 // 24 条目（超过单方向容量：竖屏 4×6=24 满、横屏 7×3=21）——旋转后短边方向必出屏。
-// 正确行为 = 中心对齐 + 对称出屏（世界坐标不变，图标没丢，拖/双击 Home 可找回）。
-// 对称以**格子整体**（左上角 + cell 占位）的外接框计——左上角点计数会因
-// 占位偏移产生假不对称（曾误报左4/右8）。
+// 顶基线语义（2026-08-19 用户指定基线 = 顶栏边）下出屏**不一定对称**（基线侧贴边、
+// 对侧溢出）——断言核心：网格与视口相交（中心图标可见）+ 不全部丢失。图标世界坐标
+// 不变（没丢），拖动/双击 Home 可找回。
 function crossVisibility(placed, cam, label) {
-  let minSx = Infinity, maxSx = -Infinity, minSy = Infinity, maxSy = -Infinity
+  let inView = 0
   placed.forEach(function (p) {
     const tl = CAM.worldToScreen(p.x, p.y, cam, 412, 700)
     const br = CAM.worldToScreen(p.x + O.ICON_W, p.y + O.ICON_H, cam, 412, 700)
-    minSx = Math.min(minSx, tl.x, br.x)
-    maxSx = Math.max(maxSx, tl.x, br.x)
-    minSy = Math.min(minSy, tl.y, br.y)
-    maxSy = Math.max(maxSy, tl.y, br.y)
+    if (br.x > 0 && tl.x < 412 && br.y > 0 && tl.y < 700) inView++
   })
-  // 中心可见：外接框与视口有交集（中心图标必然可见）
-  const overlap = minSx < 412 && maxSx > 0 && minSy < 700 && maxSy > 0
-  check(overlap, label + '：旋转后网格与视口相交（中心图标可见）')
-  // 对称出屏：左出 = max(0, -minSx)、右出 = max(0, maxSx-412)，两侧差 ≤1px；y 方向同理
-  const leftOut = Math.max(0, -minSx)
-  const rightOut = Math.max(0, maxSx - 412)
-  const topOut = Math.max(0, -minSy)
-  const bottomOut = Math.max(0, maxSy - 700)
-  check(Math.abs(leftOut - rightOut) <= 1,
-    label + '：x 方向对称出屏（左 ' + leftOut.toFixed(0) + 'px / 右 ' + rightOut.toFixed(0) + 'px）')
-  check(Math.abs(topOut - bottomOut) <= 1,
-    label + '：y 方向对称出屏（上 ' + topOut.toFixed(0) + 'px / 下 ' + bottomOut.toFixed(0) + 'px）')
+  check(inView > 0, label + '：旋转后仍有图标在视口内（' + inView + '/' + placed.length + '）')
 }
 const grid24 = []
 for (let i = 0; i < 24; i++) grid24.push({ name: 'f' + i + '.txt', isDir: false })

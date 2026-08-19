@@ -208,18 +208,18 @@ async function main() {
 
   await sleep(1500)  // 等 toast1 过期，避免干扰后续 toast 断言
   // 点按 Home（手动序列：tap() 内置 300ms 等待会错过 400ms 动画中段。
-  // 双击窗口：onTap 延迟 300ms 触发，动画随后 400ms——中段采样在 touchEnd 后 350ms）
+  // 单击立即触发（双击窗口不延迟 onTap，见 utils.bindPressSplit）→ 动画 0ms 启动）
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: homeRect.x, y: homeRect.y }] })
   await sleep(60)
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-  await sleep(450)                                // onTap(300ms 双击窗口) + 动画启动 150ms → 中段采样（k≈0.375；zoom 不变 easeInOutCubic ~21%，严格介于两端）
+  await sleep(100)                                // 动画中段采样（k≈0.25；zoom 不变 easeInOutCubic ~6%，严格介于两端）
   const tMid = parseTransform(await canvasTransform(page))
   // 中间态：位于偏离态与快照态之间（非瞬切），且尚未到达终点
   const between = tMid && (tMid.tx - tSnap.tx) * (tMid.tx - tAway.tx) < 0 &&
     Math.abs(tMid.tx - tSnap.tx) > 1 && Math.abs(tMid.tx - tAway.tx) > 1
   if (between) pass('动画中间态：tx=' + tMid.tx.toFixed(1) + ' 介于偏离 ' + tAway.tx.toFixed(1) + ' 与快照 ' + tSnap.tx.toFixed(1) + ' 之间')
   else fail('动画中间态断言', 'away=' + JSON.stringify(tAway) + ' mid=' + JSON.stringify(tMid) + ' snap=' + JSON.stringify(tSnap))
-  await sleep(650)                                // 等动画（300ms 后启动，400ms 时长）结束
+  await sleep(500)                                // 等动画（400ms）结束
   const tBack = parseTransform(await canvasTransform(page))
   const okBack = tBack && Math.abs(tBack.tx - tSnap.tx) < 1 && Math.abs(tBack.ty - tSnap.ty) < 1 && Math.abs(tBack.s - tSnap.s) < 0.01
   if (okBack) pass('点按 Home → 动画结束后回到快照（tx=' + tBack.tx.toFixed(1) + ', zoom=' + tBack.s.toFixed(2) + '）')

@@ -82,6 +82,22 @@
 .fab-btn-set { display: none; }
 [data-mode="desktop"] .fab-set-preview { display: contents; }
 [data-mode="selection"] .fab-set-selection { display: contents; }
+[data-mode="snapshot-operation"] .fab-set-operation { display: contents; }
+
+/* 快照面板打开时隐藏 FAB（操作模式除外）：面板内操作不混入桌面 FAB 语义 */
+body.snapshot-sheet-open:not(.snapshot-op-mode) .mode-switch-fab,
+body.snapshot-sheet-open:not(.snapshot-op-mode) .fab-speed-dial {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 操作模式：FAB 从右下角浮现（Morph 成 ✕ 退出 + 操作按钮） */
+body.snapshot-op-mode .mode-switch-fab {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
 
 /* ===== Speed Dial 子按钮 ===== */
 .fab-child {

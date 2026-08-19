@@ -407,6 +407,28 @@ App.SnapshotStore = (function () {
     return { version: VERSION, groups: groups }
   }
 
+  /** @param {SnapshotData} data @param {string} fromGroupId @param {string} toGroupId @param {Array<string>} snapshotIds @returns {SnapshotData} */
+  function moveSnapshots(data, fromGroupId, toGroupId, snapshotIds) {
+    if (!data || !Array.isArray(data.groups)) return { version: VERSION, groups: [] }
+    const fromGroup = data.groups.find(function (g) { return g.id === fromGroupId })
+    const toGroup = data.groups.find(function (g) { return g.id === toGroupId })
+    if (!fromGroup || !toGroup || fromGroupId === toGroupId) return data
+    const ids = snapshotIds.filter(function (id) { return typeof id === 'string' })
+    if (ids.length === 0) return data
+    const moved = fromGroup.snapshots.filter(function (s) { return ids.indexOf(s.id) >= 0 })
+    if (moved.length === 0) return data
+    const groups = data.groups.map(function (g) {
+      if (g.id === fromGroupId) {
+        return { id: g.id, name: g.name, snapshots: g.snapshots.filter(function (s) { return ids.indexOf(s.id) < 0 }) }
+      }
+      if (g.id === toGroupId) {
+        return { id: g.id, name: g.name, snapshots: g.snapshots.concat(moved) }
+      }
+      return g
+    })
+    return { version: VERSION, groups: groups }
+  }
+
   /** @param {string} rootId @param {string} name @returns {{bundle: SnapshotBundle, group: SnapshotGroupMeta} | null} */
   function createGroup(rootId, name) {
     const bundle = loadBundle(rootId)
@@ -531,6 +553,7 @@ App.SnapshotStore = (function () {
     create: createSnapshot,
     delete: deleteSnapshot,
     reorder: reorderSnapshot,
+    move: moveSnapshots,
     createGroup: createGroup,
     renameGroup: renameGroup,
     deleteGroup: deleteGroup,

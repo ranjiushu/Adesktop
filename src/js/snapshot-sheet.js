@@ -1,12 +1,13 @@
 /* 演示快照面板（App.SnapshotSheet）：底栏上滑呼出快照列表 + 演示模式。
  * 手势：底栏区域垂直上滑跟手抬出面板，下滑/点遮罩/点关闭按钮关闭。
  * 分组：标签栏横排在列表顶部（点击或左右滑动切换分组），列表只显示当前分组；
- *       长按标签重命名/删除分组，标签栏末尾 + 新建分组；组内快照可拖动排序。
- * 菜单：右上角三点按钮，可开启/关闭演示模式、切换新快照插入位置（顶部/底部）、
- *       删除当前选中的快照。
+ *       长按标签重命名/删除分组，标签栏末尾 + 新建分组。
+ * 操作模式（参考 LexiCull）：长按快照行进入——FAB morph 展开操作按钮
+ *       （删除 / 移动到其它分组 / ✕ 退出）；操作模式下长按行拖动排序
+ *       （边缘智能滚动），单击行切换选中（多选）。
  * 演示模式：开启后底栏前进/后退按钮变为「下一个/上一个快照」，边界禁用并吐司提示。
- * 依赖: namespace.js, utils.js, drag-sort.js, snapshot-store.js, desktop-core.js,
- *       desktop-navigation.js, bottom-bar.js, toast.js, bridge.js
+ * 依赖: namespace.js, utils.js, drag-sort.js, snapshot-store.js, fab-speed-dial.js,
+ *       desktop-core.js, desktop-navigation.js, bottom-bar.js, toast.js, bridge.js
  * 导出: App.SnapshotSheet
  */
 'use strict'
@@ -18,6 +19,8 @@ App.SnapshotSheet = (function () {
   const DEADZONE = 6              // 决策死区 px
   const TAB_SWIPE_X = 60          // 列表内左右滑动切换分组的水平位移阈值 px
   const TAB_SWIPE_RATIO = 1.5     // 水平判定：|dx| > |dy| * ratio
+  const LP_MS = 500               // 长按进入操作模式/触发拖拽
+  const LP_TOL = 10               // 长按容差 px（静置微抖不取消，滚动/滑动取消）
 
   /** @type {'closed' | 'opening' | 'open' | 'closing'} */
   let _state = 'closed'
@@ -31,6 +34,8 @@ App.SnapshotSheet = (function () {
   let _tabs = null
   /** @type {HTMLElement | null} */
   let _menu = null
+  /** @type {HTMLElement | null} */
+  let _moveOverlay = null
   /** @type {any} */
   let _dragEngine = null
   /** @type {SnapshotData | null} */
@@ -40,6 +45,10 @@ App.SnapshotSheet = (function () {
   /** @type {number} 扁平索引（所有分组快照按顺序），演示模式与跨组选中共用 */
   let _currentIndex = -1
   let _presentationMode = false
+  /** @type {boolean} 操作模式（长按快照行进入，FAB morph 展开操作按钮） */
+  let _opMode = false
+  /** @type {Set<string>} 操作模式选中快照 id */
+  let _opSelection = new Set()
   /** @type {{deciding: boolean, active: boolean, sx: number, sy: number} | null} */
   let _swipe = null
   /** @type {number | null} */
@@ -146,7 +155,7 @@ App.SnapshotSheet = (function () {
       App.utils.bindPressSplit(tab, {
         onTap: function () { _switchGroup(idx) },
         onLongPress: function () { _openTabMenu(idx) }
-      }, { longPressMs: 500, moveThreshold: 12 })
+      }, { longPressMs: LP_MS, moveThreshold: 12 })
 
       _tabs.appendChild(tab)
     })
@@ -189,6 +198,7 @@ App.SnapshotSheet = (function () {
     })
     _bindGroupDrag(_list, _currentGroupIdx)
     _markCurrentInList()
+    _syncOpSelection()
   }
 
   function _createSnapshotItem(s, groupIdx, idx, isHome) {
@@ -198,11 +208,7 @@ App.SnapshotSheet = (function () {
     item.dataset.groupIdx = String(groupIdx)
     item.dataset.index = String(idx)
     if (isHome) item.classList.add('snapshot-home')
-
-    const handle = document.createElement('span')
-    handle.className = 'snapshot-drag-handle'
-    handle.setAttribute('aria-label', '拖动排序')
-    handle.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>'
+    if (_opSelection.has(s.id)) item.classList.add('op-selected')
 
     const name = document.createElement('span')
     name.className = 'snapshot-name'
@@ -212,22 +218,54 @@ App.SnapshotSheet = (function () {
     meta.className = 'snapshot-meta'
     meta.textContent = 'z' + Number(s.camera.zoom).toFixed(2)
 
-    item.appendChild(handle)
     item.appendChild(name)
     item.appendChild(meta)
 
-    item.addEventListener('click', function (e) {
-      if (e.target === handle || handle.contains(/** @type {Node} */(e.target))) return
-      if (item.dataset._dragSortJustFinished === '1') return
-      _flyToSnapshot(groupIdx, idx)
-    })
+    // 长按 500ms（10px 容差）：普通模式 = 进入操作模式 + 选中 + 直接拖拽排序；
+    // 操作模式 = 直接拖拽排序。单击：操作模式切换选中，普通模式飞行。
+    let lpTimer = null
+    let lpStartX = 0
+    let lpStartY = 0
+    let lpLastY = 0
+    let lpHandled = false
 
-    handle.addEventListener('touchstart', function (e) {
-      if (!_dragEngine) return
-      e.preventDefault()
-      if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(20)
-      _dragEngine.startDrag(item, e.touches[0].clientY)
-    }, { passive: false })
+    item.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return
+      if (_tabSwipe) _tabSwipe = null
+      lpHandled = false
+      lpStartX = e.touches[0].clientX
+      lpStartY = e.touches[0].clientY
+      lpLastY = lpStartY
+      lpTimer = setTimeout(function () {
+        lpTimer = null
+        lpHandled = true
+        if (!_opMode) _enterOpMode(groupIdx, s.id)
+        if (_dragEngine && typeof _dragEngine.isDragging === 'function' && !_dragEngine.isDragging()) {
+          _dragEngine.startDrag(item, lpLastY)
+        }
+      }, LP_MS)
+    }, { passive: true })
+
+    item.addEventListener('touchmove', function (e) {
+      const t = e.touches[0]
+      lpLastY = t.clientY
+      if (!lpTimer) return
+      if (Math.abs(t.clientY - lpStartY) > LP_TOL || Math.abs(t.clientX - lpStartX) > LP_TOL) {
+        clearTimeout(lpTimer)
+        lpTimer = null
+      }
+    }, { passive: true })
+
+    item.addEventListener('touchend', function () {
+      if (lpTimer) { clearTimeout(lpTimer); lpTimer = null }
+      if (lpHandled) { lpHandled = false; return }
+      if (item.dataset._dragSortJustFinished === '1') return
+      if (_opMode) {
+        _toggleOpSelect(s.id)
+      } else {
+        _flyToSnapshot(groupIdx, idx)
+      }
+    }, { passive: true })
 
     return item
   }
@@ -244,20 +282,193 @@ App.SnapshotSheet = (function () {
       dragClass: 'snapshot-item-dragging',
       dragActiveClass: 'snapshot-list-dragging',
       targetClass: 'snapshot-item-target',
-      isActive: function () { return true },
+      isActive: function () { return _opMode },
+      onDragActivate: function () {
+        // 拖动手势真正开始 → 清空选中（拖动即排序，不留选中态）
+        _opSelection.clear()
+        _syncOpSelection()
+      },
       onCommit: function (from, to) { _commitReorder(groupIdx, from, to) },
       edgeZone: 56,
       edgeInsetTop: 0,
       edgeInsetBottom: function () {
+        // 底栏 + 安全区（参考 LexiCull：有效边缘内缩到面板底缘之上）
         return 10 * (window.innerHeight / 100) + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom') || '0')
       }
     })
+  }
+
+  // ── 操作模式 ──
+  function _enterOpMode(groupIdx, snapshotId) {
+    if (_opMode) return
+    _opMode = true
+    _opSelection = new Set([snapshotId])
+    document.body.classList.add('snapshot-op-mode')
+    if (_list) _list.classList.add('op-mode')
+    _syncOpSelection()
+    // FAB morph 展开操作按钮（若被桌面 selection 态占用先收起）
+    if (App.fabSpeedDial) {
+      if (App.fabSpeedDial.getState && App.fabSpeedDial.getState().mode !== 'collapsed') {
+        App.fabSpeedDial.collapse()
+      }
+      if (typeof App.fabSpeedDial.expand === 'function') {
+        App.fabSpeedDial.expand('snapshot-operation')
+      }
+    }
+    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(20)
+    if (App.toast && typeof App.toast.show === 'function') {
+      App.toast.show('长按拖动排序，单击多选，点 FAB 操作')
+    }
+  }
+
+  function exitOpMode() {
+    if (!_opMode) return
+    _opMode = false
+    _opSelection.clear()
+    document.body.classList.remove('snapshot-op-mode')
+    if (_list) _list.classList.remove('op-mode')
+    _syncOpSelection()
+    if (App.fabSpeedDial && App.fabSpeedDial.getState &&
+        App.fabSpeedDial.getState().mode === 'snapshot-operation') {
+      App.fabSpeedDial.collapse() // collapse 会回调 exitOpMode，_opMode 已 false 防重入
+    }
+  }
+
+  function _syncOpSelection() {
+    if (!_list) return
+    Array.prototype.forEach.call(_list.querySelectorAll('.snapshot-item'), function (el) {
+      el.classList.toggle('op-selected', _opSelection.has(/** @type {string} */(el.dataset.id)))
+    })
+  }
+
+  function _toggleOpSelect(snapshotId) {
+    if (_opSelection.has(snapshotId)) _opSelection.delete(snapshotId)
+    else _opSelection.add(snapshotId)
+    _syncOpSelection()
+    if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(10)
+    if (_opSelection.size === 0) {
+      // 全部取消选中 → 退出操作模式（语义收敛：FAB 展开 ⇔ 选中态一致）
+      exitOpMode()
+    }
+  }
+
+  // FAB 操作按钮路由（fab-speed-dial 调用）
+  function onFabAction(action) {
+    if (action === 'snapshot-delete') _deleteSelected()
+    else if (action === 'snapshot-move') _showMovePicker()
+  }
+
+  function _selectedSnapshotIds() {
+    const flat = _flatSnapshots()
+    const ids = []
+    flat.forEach(function (s) {
+      if (_opSelection.has(s.id)) ids.push(s.id)
+    })
+    return ids
+  }
+
+  function _deleteSelected() {
+    const rootId = _rootId()
+    const ids = _selectedSnapshotIds()
+    if (!rootId || ids.length === 0) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('请先选中快照')
+      return
+    }
+    if (!window.confirm('删除选中的 ' + ids.length + ' 个快照？')) return
+    let data = App.SnapshotStore.load(rootId)
+    ids.forEach(function (id) {
+      const found = App.SnapshotStore.findIndex(data, id)
+      if (found) {
+        data = App.SnapshotStore.delete(data, data.groups[found.groupIdx].id, id)
+      }
+    })
+    App.SnapshotStore.save(data, rootId)
+    _opSelection.clear()
+    _currentIndex = -1
+    _renderList()
+    _updateHomeHighlight()
+    exitOpMode()
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已删除 ' + ids.length + ' 个快照')
+  }
+
+  // ── 移动分组选择浮层（面板内覆盖）──
+  function _showMovePicker() {
+    const rootId = _rootId()
+    const ids = _selectedSnapshotIds()
+    if (!rootId || ids.length === 0) {
+      if (App.toast && typeof App.toast.show === 'function') App.toast.show('请先选中快照')
+      return
+    }
+    if (!_panel) return
+    const data = App.SnapshotStore.load(rootId)
+    const curGroup = data.groups[_currentGroupIdx]
+    _closeMovePicker()
+    const overlay = document.createElement('div')
+    overlay.className = 'snapshot-move-overlay'
+    const title = document.createElement('div')
+    title.className = 'snapshot-move-title'
+    title.textContent = '移动 ' + ids.length + ' 个快照到分组'
+    overlay.appendChild(title)
+
+    const listEl = document.createElement('div')
+    listEl.className = 'snapshot-move-list'
+    data.groups.forEach(function (g) {
+      if (curGroup && g.id === curGroup.id) return
+      const btn = document.createElement('button')
+      btn.className = 'snapshot-move-item'
+      const name = document.createElement('span')
+      name.textContent = g.name
+      const count = document.createElement('span')
+      count.className = 'snapshot-move-count'
+      count.textContent = g.snapshots.length + ' 个'
+      btn.appendChild(name)
+      btn.appendChild(count)
+      btn.addEventListener('click', function () {
+        _doMove(rootId, curGroup.id, g.id, ids)
+      })
+      listEl.appendChild(btn)
+    })
+    overlay.appendChild(listEl)
+
+    const cancel = document.createElement('button')
+    cancel.className = 'snapshot-move-cancel'
+    cancel.textContent = '取消'
+    cancel.addEventListener('click', function () { _closeMovePicker() })
+    overlay.appendChild(cancel)
+
+    _panel.appendChild(overlay)
+    _moveOverlay = overlay
+  }
+
+  function _closeMovePicker() {
+    if (_moveOverlay && _moveOverlay.parentNode) {
+      _moveOverlay.parentNode.removeChild(_moveOverlay)
+    }
+    _moveOverlay = null
+  }
+
+  function _doMove(rootId, fromGroupId, toGroupId, ids) {
+    let data = App.SnapshotStore.load(rootId)
+    data = App.SnapshotStore.move(data, fromGroupId, toGroupId, ids)
+    App.SnapshotStore.save(data, rootId)
+    _closeMovePicker()
+    _opSelection.clear()
+    _currentIndex = -1
+    // 切到目标分组 tab
+    const targetIdx = data.groups.findIndex(function (g) { return g.id === toGroupId })
+    if (targetIdx >= 0) _currentGroupIdx = targetIdx
+    _renderList()
+    _updateHomeHighlight()
+    exitOpMode()
+    if (App.toast && typeof App.toast.show === 'function') App.toast.show('已移动 ' + ids.length + ' 个快照')
   }
 
   // 切换分组（点击 tab）
   function _switchGroup(idx) {
     const data = _data()
     if (idx < 0 || idx >= data.groups.length || idx === _currentGroupIdx) return
+    exitOpMode() // 跨组切换退出操作模式，防下标错位
+    _closeMovePicker()
     _currentGroupIdx = idx
     _renderGroupList()
     if (_list) _list.scrollTop = 0
@@ -474,6 +685,7 @@ App.SnapshotSheet = (function () {
     const homeIdx = _homeGroupIdx()
     if (homeIdx >= 0) _currentGroupIdx = homeIdx
     _renderList()
+    document.body.classList.add('snapshot-sheet-open')
     _overlay.classList.add('snapshot-sheet-overlay-visible')
     _overlay.setAttribute('aria-hidden', 'false')
     const target = 0
@@ -499,6 +711,8 @@ App.SnapshotSheet = (function () {
     if (!_panel || !_overlay) return
     _state = 'closing'
     _closeMenu()
+    _closeMovePicker()
+    exitOpMode()
     const from = 0
     const target = _panelHeight()
     const t0 = _now()
@@ -511,6 +725,7 @@ App.SnapshotSheet = (function () {
       else {
         _state = 'closed'
         _openRaf = null
+        document.body.classList.remove('snapshot-sheet-open')
         _overlay.classList.remove('snapshot-sheet-overlay-visible')
         _overlay.setAttribute('aria-hidden', 'true')
       }
@@ -571,7 +786,7 @@ App.SnapshotSheet = (function () {
     if (!_list) return
     _list.addEventListener('touchstart', function (e) {
       if (e.touches.length !== 1) return
-      // 拖动排序进行中不响应
+      // 拖动排序进行中 / 操作模式长按中不响应
       if (App.dragSort && App.dragSort.isDragSortActive && App.dragSort.isDragSortActive()) return
       const t = e.touches[0]
       _tabSwipe = { sx: t.clientX, sy: t.clientY, id: t.identifier }
@@ -824,6 +1039,9 @@ App.SnapshotSheet = (function () {
     goPrev: goPrevSnapshot,
     updatePresentationState: updatePresentationState,
     currentIndex: function () { return _currentIndex },
-    setCurrentIndex: function (idx) { _currentIndex = idx; _markCurrentInList() }
+    setCurrentIndex: function (idx) { _currentIndex = idx; _markCurrentInList() },
+    isOpMode: function () { return _opMode },
+    exitOpMode: exitOpMode,
+    onFabAction: onFabAction
   }
 })()

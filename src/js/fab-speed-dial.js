@@ -26,7 +26,7 @@ App.fabSpeedDial = (function () {
   let BACKDROP_ID = 'fab-backdrop'
   let FAB_ID = 'mode-switch-fab'
 
-  let _state = 'collapsed' // 'collapsed' | 'desktop' | 'selection'
+  let _state = 'collapsed' // 'collapsed' | 'desktop' | 'selection' | 'snapshot-operation'
 
   function _getEl(id) { return document.getElementById(id) }
 
@@ -34,6 +34,13 @@ App.fabSpeedDial = (function () {
   function _onChildClick(e) {
     let action = this.getAttribute('data-action')
     if (!action) return
+    // 快照操作模式按钮：路由给 SnapshotSheet（不收起，操作后由 SnapshotSheet 决定）
+    if (action === 'snapshot-delete' || action === 'snapshot-move') {
+      if (App.SnapshotSheet && typeof App.SnapshotSheet.onFabAction === 'function') {
+        App.SnapshotSheet.onFabAction(action)
+      }
+      return
+    }
     switch (action) {
       case 'new-folder':
         App.Actions.createFolder()
@@ -143,7 +150,7 @@ App.fabSpeedDial = (function () {
     collapse()
   }
 
-  // ── 遮罩点击（desktop 态模态；selection 态无遮罩，桌面保持可交互） ──
+  // ── 遮罩点击（desktop 态模态；selection/快照操作态无遮罩，保持面板可交互） ──
   function _onBackdropClick(e) {
     e.preventDefault()
     e.stopPropagation()
@@ -154,6 +161,10 @@ App.fabSpeedDial = (function () {
   function _syncContext() {
     const sd = _getEl(SPEED_DIAL_ID)
     if (!sd) return
+    if (_state === 'snapshot-operation') {
+      // 快照操作按钮始终显示（可见性由 SnapshotSheet 选中数控制？——保持全部可见，空选中时按钮无操作）
+      return
+    }
     if (_state === 'desktop') {
       // 粘贴按钮：仅剪贴板非空时显示
       const pasteBtn = sd.querySelector('[data-action="paste"]')
@@ -219,7 +230,7 @@ App.fabSpeedDial = (function () {
       sd.removeAttribute('data-mode')
     } else {
       sd.setAttribute('data-mode', _state)
-      // 遮罩仅 desktop 态显示（模态）；selection 态非模态（选中操作栏，桌面可交互）
+      // 遮罩仅 desktop 态显示（模态）；selection/快照操作态非模态（面板保持可交互）
       if (bd) bd.classList.toggle('fab-backdrop-visible', _state === 'desktop')
       sd.classList.add('fab-speed-dial-expanded')
       fab.classList.add('fab-speed-dial-active')
@@ -235,13 +246,14 @@ App.fabSpeedDial = (function () {
     _apply()
   }
 
-  // ── 收起（语义收敛：关闭 Morph FAB = 取消选中） ──
+  // ── 收起（语义收敛：关闭 Morph FAB = 取消选中 / 退出操作模式） ──
   // selection 态收起时先取消选中（Viewer 实体 + 文件），保证「FAB 展开 ⇔ 选中态」一致：
   // 先置 _state='collapsed' 再清选中——clearSelection → syncFab → setSelection(false)
   // 重入 collapse() 时直接 return，无递归风险。
   function collapse() {
     if (_state === 'collapsed') return
     const wasSelection = _state === 'selection'
+    const wasOpMode = _state === 'snapshot-operation'
     _state = 'collapsed'
     if (wasSelection) {
       if (App.InternalViewer && typeof App.InternalViewer.deselectAll === 'function') {
@@ -249,6 +261,12 @@ App.fabSpeedDial = (function () {
       }
       if (App.Desktop && typeof App.Desktop.clearSelection === 'function') {
         App.Desktop.clearSelection()
+      }
+    }
+    if (wasOpMode) {
+      // FAB ✕ = 退出快照操作模式（SnapshotSheet 内部防重入）
+      if (App.SnapshotSheet && typeof App.SnapshotSheet.exitOpMode === 'function') {
+        App.SnapshotSheet.exitOpMode()
       }
     }
     _apply()

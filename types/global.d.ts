@@ -169,6 +169,7 @@ interface SnapshotStore {
   create(camera: DesktopCameraState, rootId: string, groupId?: string): Snapshot | null
   delete(data: SnapshotData, groupId: string, snapshotId: string): SnapshotData
   reorder(data: SnapshotData, groupId: string, from: number, to: number): SnapshotData
+  move(data: SnapshotData, fromGroupId: string, toGroupId: string, snapshotIds: Array<string>): SnapshotData
   createGroup(rootId: string, name: string): { bundle: SnapshotBundle; group: SnapshotGroupMeta } | null
   renameGroup(rootId: string, groupId: string, name: string): boolean
   deleteGroup(rootId: string, groupId: string): boolean

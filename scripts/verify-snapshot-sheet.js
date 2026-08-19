@@ -1,12 +1,13 @@
 // 快照面板 E2E 门禁：CDP 无头 Chromium 实地验证
 // ═══════════════════════════════════════════════════════════════
 //  场景（evaluateOnNewDocument 预注入 FileBridge 内存桩）：
-//    1. 面板打开后高度 = 视口 50%（固定高度，参考 MT 管理器）
-//    2. 遮罩覆盖全屏且可见；面板贴底；底部有关闭按钮 + footer 条
-//    3. 分组标签栏在列表顶部：默认分组(3) / 项目A(1)，默认选中 Home 分组 tab
-//    4. 列表只显示当前分组快照（不混排）
-//    5. 点击 tab 切换分组；列表内左右滑动切换分组
-//    6. Home 位快照有高亮类；全程零 pageerror
+//    1. 面板打开后高度 = 视口 70%（固定高度）；遮罩/关闭按钮/footer 就位
+//    2. 分组标签栏在列表顶部：默认分组(3) / 项目A(1)，默认选中 Home 分组 tab；
+//       列表只渲染当前分组；点击 tab / 左右滑动切换分组
+//    3. 操作模式（参考 LexiCull）：长按快照行进入——FAB morph 展开（✕ 删除/移动），
+//       行选中高亮；单击多选；删除确认后批量删；移动浮层选目标分组后迁移并切 tab；
+//       FAB ✕ 退出操作模式
+//    4. 全程零 pageerror
 //
 //  用法: DESKTOP_BUNDLE=dist/adesktop.bundle.min.html node scripts/verify-snapshot-sheet.js
 //  退出码: 0 通过 / 1 失败
@@ -34,7 +35,6 @@ async function tap(client, x, y, holdMs = 60) {
   await sleep(TAP_GAP)
 }
 
-// 单指水平滑动（列表内切换分组）
 async function swipeH(client, x, y, dx, steps = 8, gap = 14) {
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
   for (let i = 1; i <= steps; i++) {
@@ -52,7 +52,6 @@ async function main() {
     const page = await browser.newPage()
     await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 2.75 })
 
-    // 预注入 FileBridge 桩（导航前）
     await page.evaluateOnNewDocument(() => {
       window.FileBridge = {
         vibrate: function () {},
@@ -72,6 +71,12 @@ async function main() {
       }
     })
 
+    // confirm/prompt 自动处理（删除确认 accept；重命名 prompt 取消）
+    page.on('dialog', async (d) => {
+      if (d.type() === 'confirm') await d.accept()
+      else await d.dismiss()
+    })
+
     await page.goto('file://' + BUNDLE, { waitUntil: 'networkidle0', timeout: 30000 })
     await sleep(1200)
 
@@ -79,10 +84,9 @@ async function main() {
     page.on('pageerror', e => errors.push('pageerror: ' + e.message))
     page.on('console', m => { if (m.type() === 'error') errors.push('console.error: ' + m.text()) })
 
-    // 注入快照/分组数据（用真实 rootId）+ 打开面板
+    // 注入快照/分组数据 + 打开面板
     await page.evaluate(() => {
-      const core = App.DesktopCore
-      const rootId = core.state.rootId
+      const rootId = App.DesktopCore.state.rootId
       try {
         const key = 'desktop.snapshots.' + rootId + '.v3'
         if (!localStorage.getItem(key)) {
@@ -109,7 +113,7 @@ async function main() {
 
     const client = await page.createCDPSession()
 
-    // ── 1. 面板布局：50vh / 遮罩 / 关闭按钮 / footer ──
+    // ── 1. 面板布局：70vh / 遮罩 / 关闭按钮 / footer / tab / 列表 ──
     const lay = await page.evaluate(() => {
       const rect = sel => {
         const el = document.querySelector(sel)
@@ -125,7 +129,6 @@ async function main() {
       return {
         vh: window.innerHeight,
         panel: rect('#snapshot-sheet-panel'),
-        overlay: rect('#snapshot-sheet-overlay'),
         overlayVisible: document.querySelector('#snapshot-sheet-overlay').classList.contains('snapshot-sheet-overlay-visible'),
         list: rect('#snapshot-list'),
         closeBtn: rect('#snapshot-close-btn'),
@@ -135,78 +138,159 @@ async function main() {
         addBtn: !!document.querySelector('.snapshot-tab-add'),
         items: document.querySelectorAll('#snapshot-list .snapshot-item').length,
         homeItems: document.querySelectorAll('#snapshot-list .snapshot-item.snapshot-home').length,
-        groupSections: document.querySelectorAll('#snapshot-list .snapshot-group').length
+        groupSections: document.querySelectorAll('#snapshot-list .snapshot-group').length,
+        fabVisible: (function () {
+          const s = getComputedStyle(document.querySelector('#mode-switch-fab'))
+          return s.visibility === 'visible' && s.pointerEvents !== 'none' && s.opacity !== '0'
+        })()
       }
     })
-    const half = lay.vh / 2
-    if (lay.panel && Math.abs(lay.panel.height - half) <= 2) pass('面板高度 = 50vh（' + lay.panel.height.toFixed(1) + ' / ' + lay.vh + '）')
-    else fail('面板高度 50vh', JSON.stringify(lay.panel))
+    const seven = lay.vh * 0.7
+    if (lay.panel && Math.abs(lay.panel.height - seven) <= 2) pass('面板高度 = 70vh（' + lay.panel.height.toFixed(1) + ' / ' + lay.vh + '）')
+    else fail('面板高度 70vh', JSON.stringify(lay.panel))
     if (lay.panel && Math.abs(lay.panel.bottom - lay.vh) <= 1) pass('面板贴底')
     else fail('面板贴底', JSON.stringify(lay.panel))
-    if (lay.overlay && lay.overlay.top === 0 && lay.overlayVisible) pass('遮罩覆盖全屏且可见')
-    else fail('遮罩', JSON.stringify(lay.overlay) + ' visible=' + lay.overlayVisible)
-    if (lay.closeBtn && lay.closeBtn.height > 0) pass('关闭按钮存在')
-    else fail('关闭按钮缺失')
-    if (lay.footer && lay.footer.height > 0) pass('footer 关闭条存在')
-    else fail('footer 缺失')
-    if (lay.list && lay.list.height > 60) pass('列表可滚动（高 ' + lay.list.height.toFixed(1) + '）')
-    else fail('列表高度', JSON.stringify(lay.list))
+    if (lay.overlayVisible) pass('遮罩可见')
+    else fail('遮罩不可见')
+    if (lay.closeBtn && lay.footer && lay.footer.height > 0) pass('关闭按钮 + footer 存在')
+    else fail('关闭按钮/footer 缺失')
+    if (lay.tabsRect && lay.tabs.length === 2 && lay.tabs[0].active && lay.tabs[0].count === '3') pass('标签栏默认选中 Home 分组（默认分组 3 项）')
+    else fail('标签栏', JSON.stringify(lay.tabs))
+    if (lay.items === 3 && lay.groupSections === 0) pass('列表只渲染当前分组（3 项无混排）')
+    else fail('列表渲染', 'items=' + lay.items + ' sections=' + lay.groupSections)
+    if (lay.homeItems === 1) pass('Home 位高亮 1 项')
+    else fail('Home 高亮', String(lay.homeItems))
+    if (!lay.fabVisible) pass('快照面板打开时 FAB 隐藏（操作模式除外）')
+    else fail('FAB 应隐藏')
 
-    // ── 2. 标签栏 ──
-    if (lay.tabsRect && lay.tabsRect.height > 0) pass('分组标签栏在列表上方')
-    else fail('标签栏缺失')
-    if (lay.tabs.length === 2 && lay.tabs[0].name === '默认分组' && lay.tabs[1].name === '项目A') pass('两个分组标签：' + lay.tabs.map(t => t.name).join(' / '))
-    else fail('标签内容', JSON.stringify(lay.tabs))
-    if (lay.tabs[0].active && lay.tabs[0].count === '3') pass('默认选中 Home 分组 tab（默认分组，3 项）')
-    else fail('默认 tab 态', JSON.stringify(lay.tabs[0]))
-    if (lay.addBtn) pass('标签栏末尾新建分组按钮存在')
-    else fail('新建分组按钮缺失')
-    if (lay.groupSections === 0 && lay.items === 3) pass('列表只渲染当前分组（3 项，无混排分组段）')
-    else fail('列表渲染', 'sections=' + lay.groupSections + ' items=' + lay.items)
-    if (lay.homeItems === 1) pass('Home 位快照高亮 1 项')
-    else fail('Home 高亮', 'homeItems=' + lay.homeItems)
+    // ── 2. 长按快照行 → 进入操作模式 ──
+    const row1 = await page.evaluate(() => {
+      const r = document.querySelector('#snapshot-list .snapshot-item')
+      const b = r.getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2, id: r.dataset.id }
+    })
+    await tap(client, row1.x, row1.y, 650) // 长按 > 500ms
+    const op1 = await page.evaluate(() => ({
+      opMode: App.SnapshotSheet.isOpMode(),
+      bodyClass: document.body.classList.contains('snapshot-op-mode'),
+      fabMode: document.querySelector('#fab-speed-dial').getAttribute('data-mode'),
+      fabVisible: (function () {
+        const s = getComputedStyle(document.querySelector('#mode-switch-fab'))
+        return s.visibility === 'visible' && s.pointerEvents !== 'none' && s.opacity !== '0'
+      })(),
+      fabActive: document.querySelector('#mode-switch-fab').classList.contains('fab-speed-dial-active'),
+      selected: document.querySelectorAll('#snapshot-list .snapshot-item.op-selected').length,
+      selId: (document.querySelector('#snapshot-list .snapshot-item.op-selected') || {}).dataset && document.querySelector('#snapshot-list .snapshot-item.op-selected').dataset.id
+    }))
+    if (op1.opMode && op1.bodyClass) pass('长按快照行 → 进入操作模式')
+    else fail('进入操作模式', JSON.stringify(op1))
+    if (op1.fabMode === 'snapshot-operation' && op1.fabVisible && op1.fabActive) pass('FAB morph 展开（snapshot-operation 态）')
+    else fail('FAB 展开', JSON.stringify(op1))
+    if (op1.selected === 1 && op1.selId === row1.id) pass('长按行自动选中')
+    else fail('自动选中', JSON.stringify(op1))
 
-    // ── 3. 点击第二个 tab 切换分组 ──
+    // ── 3. 单击多选 ──
+    const row2 = await page.evaluate(() => {
+      const r = document.querySelectorAll('#snapshot-list .snapshot-item')[1]
+      const b = r.getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    })
+    await tap(client, row2.x, row2.y, 60)
+    const op2 = await page.evaluate(() => ({
+      selected: document.querySelectorAll('#snapshot-list .snapshot-item.op-selected').length
+    }))
+    if (op2.selected === 2) pass('操作模式单击 → 多选 2 项')
+    else fail('多选', JSON.stringify(op2))
+
+    // ── 4. FAB 删除（confirm accept）→ 批量删 2 项，退出操作模式 ──
+    const delBtn = await page.evaluate(() => {
+      const b = document.querySelector('.fab-set-operation [data-action="snapshot-delete"]')
+      const r = b.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    })
+    await tap(client, delBtn.x, delBtn.y, 60)
+    await sleep(500)
+    const afterDel = await page.evaluate(() => ({
+      items: document.querySelectorAll('#snapshot-list .snapshot-item').length,
+      opMode: App.SnapshotSheet.isOpMode(),
+      bodyClass: document.body.classList.contains('snapshot-op-mode'),
+      tabCounts: Array.from(document.querySelectorAll('.snapshot-tab-count')).map(t => t.textContent)
+    }))
+    if (afterDel.items === 1 && afterDel.tabCounts[0] === '1') pass('删除 2 项后剩 1 项（默认分组 1 条）')
+    else fail('批量删除', JSON.stringify(afterDel))
+    if (!afterDel.opMode && !afterDel.bodyClass) pass('删除后自动退出操作模式')
+    else fail('删除后退出', JSON.stringify(afterDel))
+
+    // ── 5. 再进操作模式 → 多选 → FAB 移动到其它分组 ──
+    const rowA = await page.evaluate(() => {
+      const r = document.querySelector('#snapshot-list .snapshot-item')
+      const b = r.getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    })
+    await tap(client, rowA.x, rowA.y, 650)
+    const moveBtn = await page.evaluate(() => {
+      const b = document.querySelector('.fab-set-operation [data-action="snapshot-move"]')
+      const r = b.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    })
+    await tap(client, moveBtn.x, moveBtn.y, 60)
+    await sleep(300)
+    const picker = await page.evaluate(() => {
+      const overlay = document.querySelector('.snapshot-move-overlay')
+      if (!overlay) return null
+      const items = Array.from(overlay.querySelectorAll('.snapshot-move-item')).map(b => b.textContent)
+      const target = overlay.querySelector('.snapshot-move-item')
+      const r = target.getBoundingClientRect()
+      return { items, tx: r.left + r.width / 2, ty: r.top + r.height / 2 }
+    })
+    if (picker && picker.items.length === 1 && picker.items[0].indexOf('项目A') >= 0) pass('移动浮层列出目标分组（项目A）')
+    else fail('移动浮层', JSON.stringify(picker))
+    await tap(client, picker.tx, picker.ty, 60)
+    await sleep(400)
+    const afterMove = await page.evaluate(() => ({
+      activeTab: Array.from(document.querySelectorAll('.snapshot-tab')).findIndex(t => t.classList.contains('snapshot-tab-active')),
+      tabCounts: Array.from(document.querySelectorAll('.snapshot-tab-count')).map(t => t.textContent),
+      items: document.querySelectorAll('#snapshot-list .snapshot-item').length,
+      opMode: App.SnapshotSheet.isOpMode()
+    }))
+    if (afterMove.activeTab === 1 && afterMove.items === 2 && afterMove.tabCounts[1] === '2') pass('移动后切到项目A tab（2 条）')
+    else fail('移动结果', JSON.stringify(afterMove))
+    if (!afterMove.opMode) pass('移动后退出操作模式')
+    else fail('移动后退出', JSON.stringify(afterMove))
+
+    // ── 6. 再进操作模式 → FAB ✕ 退出 ──
+    const rowB = await page.evaluate(() => {
+      const r = document.querySelector('#snapshot-list .snapshot-item')
+      const b = r.getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    })
+    await tap(client, rowB.x, rowB.y, 650)
+    const fabRect = await page.evaluate(() => {
+      const b = document.querySelector('#mode-switch-fab').getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    })
+    await tap(client, fabRect.x, fabRect.y, 60) // FAB 原位 ✕ = 收起 + 退出
+    const afterExit = await page.evaluate(() => ({
+      opMode: App.SnapshotSheet.isOpMode(),
+      fabMode: document.querySelector('#fab-speed-dial').getAttribute('data-mode'),
+      fabVisible: (function () {
+        const s = getComputedStyle(document.querySelector('#mode-switch-fab'))
+        return s.visibility === 'visible' && s.pointerEvents !== 'none' && s.opacity !== '0'
+      })()
+    }))
+    if (!afterExit.opMode && afterExit.fabMode === null && !afterExit.fabVisible) pass('FAB ✕ → 退出操作模式 + FAB 收起隐藏')
+    else fail('FAB ✕ 退出', JSON.stringify(afterExit))
+
+    // ── 7. 点击 tab 切换仍正常 ──
     const tab2 = await page.evaluate(() => {
       const t = document.querySelectorAll('.snapshot-tab')[1]
       const b = t.getBoundingClientRect()
       return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
     })
     await tap(client, tab2.x, tab2.y)
-    const afterTap = await page.evaluate(() => ({
-      active: Array.from(document.querySelectorAll('.snapshot-tab')).findIndex(t => t.classList.contains('snapshot-tab-active')),
-      items: document.querySelectorAll('#snapshot-list .snapshot-item').length,
-      firstName: (document.querySelector('#snapshot-list .snapshot-name') || {}).textContent || ''
-    }))
-    if (afterTap.active === 1 && afterTap.items === 1 && afterTap.firstName === '08-19 11:00') pass('点击 tab → 切换到项目A（1 项）')
-    else fail('点击切换', JSON.stringify(afterTap))
-
-    // ── 4. 列表内右滑 → 切回默认分组 ──
-    const listRect = await page.evaluate(() => {
-      const b = document.querySelector('#snapshot-list').getBoundingClientRect()
-      return { x: b.left + b.width / 2, y: b.top + 80 }
-    })
-    await swipeH(client, listRect.x, listRect.y, 100)
-    const afterSwipe = await page.evaluate(() => ({
-      active: Array.from(document.querySelectorAll('.snapshot-tab')).findIndex(t => t.classList.contains('snapshot-tab-active')),
-      items: document.querySelectorAll('#snapshot-list .snapshot-item').length
-    }))
-    if (afterSwipe.active === 0 && afterSwipe.items === 3) pass('列表内右滑 → 切回默认分组（3 项）')
-    else fail('滑动切换', JSON.stringify(afterSwipe))
-
-    // ── 5. 左滑 → 切到项目A；到边界不再切换 ──
-    await swipeH(client, listRect.x, listRect.y, -100)
-    const afterSwipe2 = await page.evaluate(() => ({
-      active: Array.from(document.querySelectorAll('.snapshot-tab')).findIndex(t => t.classList.contains('snapshot-tab-active'))
-    }))
-    if (afterSwipe2.active === 1) pass('列表内左滑 → 切到项目A')
-    else fail('左滑切换', JSON.stringify(afterSwipe2))
-    await swipeH(client, listRect.x, listRect.y, -100)
-    const afterSwipe3 = await page.evaluate(() => ({
-      active: Array.from(document.querySelectorAll('.snapshot-tab')).findIndex(t => t.classList.contains('snapshot-tab-active'))
-    }))
-    if (afterSwipe3.active === 1) pass('最后一个分组再左滑 → 停留（边界保护）')
-    else fail('边界保护', JSON.stringify(afterSwipe3))
+    const afterTab = await page.evaluate(() => document.querySelectorAll('#snapshot-list .snapshot-item').length)
+    if (afterTab === 2) pass('tab 切换正常（项目A 2 条可见快照）')
+    else fail('tab 切换', 'items=' + afterTab)
 
     await page.screenshot({ path: SHOT })
     console.log('SHOT: ' + SHOT)

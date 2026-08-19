@@ -220,6 +220,22 @@ check(fi && fi.groupIdx === 0 && fi.snapshotIdx === 1, 'findIndex 命中（f1 �
 check(S.findIndex(d, 'nope') === null, 'findIndex 未命中返回 null')
 check(f1.id !== f2.id, '快照 id 不重复')
 
+// ── move（批量移动到其它分组）──
+store = {}
+fakeCore.camera.rotation = 0
+S.create(cam1, 'rootA') // 默认分组 s1
+S.create(cam2, 'rootA') // 默认分组 s2（顶部）
+const mg = S.createGroup('rootA', '目标组').group
+d = S.load('rootA')
+const mvIds = d.groups[0].snapshots.map(function (s) { return s.id })
+d = S.move(d, d.groups[0].id, mg.id, mvIds)
+check(d.groups[0].snapshots.length === 0, 'move 后源分组清空')
+check(d.groups[1].id === mg.id && d.groups[1].snapshots.length === 2, 'move 后目标分组 2 条')
+check(S.move(d, d.groups[0].id, mg.id, []) === d, '空 id 列表 move 返回原数据')
+check(S.move(d, d.groups[0].id, d.groups[0].id, ['x']) === d, '同组 move 返回原数据')
+d = S.move(d, d.groups[0].id, mg.id, ['nope'])
+check(d.groups[1].snapshots.length === 2, '不存在的 id 无影响')
+
 // ── flatSnapshots ──
 store = {}
 fakeCore.camera.rotation = 0

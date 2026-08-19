@@ -1,6 +1,8 @@
 /* 类型图标系统：按文件名/目录判定类型 → 返回内联 SVG 图标。
  * 文件类型 → 彩色圆角瓷砖（Material Design Icons 字形，数据在 type-icons-data.js，Apache-2.0）；
  * trash/shortcut/unknown 等系统态 → 线条版（stroke currentColor，随主题自适应）。
+ * 类型对齐 MT 管理器 15 类（text/html/image/video/audio/archive/pdf/excel/font/executable/dex/jar/lib/file/folder）
+ *   + markdown/code 两个额外细分；json/word/ppt 合入 text。
  * 三级解析：扩展名精确匹配 → kind 瓷砖 → 线条占位。
  * 纯函数，零依赖（仅 namespace + type-icons-data）。类型 CSS 尺寸经 `.type-icon` 控制。
  * 本模块只负责「类型图标」（缩略图 fallback 基线）；缩略图判定与获取在 thumbnail.js（ThumbnailService）。
@@ -12,12 +14,12 @@
 App.TypeIcons = (function () {
   /** 全彩图标数据（type-icons-data.js）：键 = 扩展名 / folder，值 = 内联 SVG */
   const DATA = App.TypeIconsData || {}
-  // 扩展名（小写）→ 类型 key
+  // 扩展名（小写）→ 类型 key（对齐 MT 管理器 15 类 + markdown/code 细分）
   /** @type {Record<string, Array<string>>} */
   const EXT_KINDS = {
-    text: ['txt', 'log', 'ini', 'conf', 'cfg', 'bat', 'sh', 'yml', 'yaml', 'toml', 'csv', 'tsv', 'text', 'nfo', 'readme'],
+    text: ['txt', 'log', 'ini', 'conf', 'cfg', 'bat', 'sh', 'yml', 'yaml', 'toml', 'csv', 'tsv', 'text', 'nfo', 'readme',
+           'json', 'jsonc', 'json5', 'doc', 'docx', 'odt', 'rtf', 'ppt', 'pptx', 'odp', 'key'],
     markdown: ['md', 'markdown', 'mdown', 'mkd'],
-    json: ['json', 'jsonc', 'json5'],
     html: ['html', 'htm', 'xhtml'],
     code: ['js', 'ts', 'jsx', 'tsx', 'mjs', 'cjs', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs', 'kt', 'swift', 'php', 'rb', 'css', 'scss', 'less', 'sass', 'sql', 'vue', 'svelte', 'xml', 'pl', 'lua', 'r', 'dart', 'zig'],
     image: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'ico', 'svg', 'heic', 'heif', 'avif'],
@@ -25,22 +27,22 @@ App.TypeIcons = (function () {
     audio: ['mp3', 'm4a', 'wav', 'ogg', 'aac', 'flac', 'opus', 'mid', 'midi', 'wma', 'amr'],
     archive: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tgz', 'iso'],
     pdf: ['pdf'],
-    word: ['doc', 'docx', 'odt', 'rtf'],
     excel: ['xls', 'xlsx', 'ods'],
-    ppt: ['ppt', 'pptx', 'odp', 'key'],
     font: ['ttf', 'otf', 'woff', 'woff2', 'eot'],
-    executable: ['apk', 'exe', 'deb', 'msi', 'dmg', 'bin', 'jar'],
+    executable: ['apk', 'exe', 'deb', 'msi', 'dmg', 'bin'],
+    dex: ['dex'],
+    jar: ['jar'],
+    lib: ['so', 'dll', 'dylib', 'a'],
     shortcut: ['desktop']
   }
 
-  // 类型 → 形态（同一形态 + 不同颜色可区分相近类型，如 text/md/json/pdf 共用 fileText）
+  // 类型 → 形态（同一形态 + 不同颜色可区分相近类型，如 text/md/pdf 共用 fileText）
   /** @type {Record<string, string>} */
   const KIND_SHAPE = {
     folder: 'folder',
     trash: 'trash',
     text: 'fileText',
     markdown: 'fileText',
-    json: 'fileText',
     html: 'code',
     code: 'code',
     image: 'image',
@@ -48,11 +50,13 @@ App.TypeIcons = (function () {
     audio: 'music',
     archive: 'archive',
     pdf: 'fileText',
-    word: 'fileText',
     excel: 'fileText',
-    ppt: 'fileText',
     font: 'type',
     executable: 'terminal',
+    dex: 'terminal',
+    jar: 'archive',
+    lib: 'terminal',
+    file: 'file',
     shortcut: 'appGrid',
     unknown: 'file'
   }

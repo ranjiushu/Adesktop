@@ -1,5 +1,5 @@
 /* 类型图标系统：SVG 图标尺寸 + 线条版图标的主题色（stroke=currentColor）。
- * 文件类型已升级为 Vivid 全彩图标（type-icons-data.js，自带颜色），无需语义色；
+ * 文件类型为 MDI 字形 + 彩色圆角瓷砖（type-icons-data.js，Apache-2.0），自带颜色；
  * 仅 trash/shortcut/unknown 等系统态仍为线条版，颜色在此控制（随主题可调）。 */
 
 /* 图标 SVG 尺寸（desktop 空间 + folder 容器网格/列表通用） */

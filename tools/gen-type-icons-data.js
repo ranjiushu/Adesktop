@@ -16,10 +16,11 @@ const OUT = process.argv[3] || path.join(__dirname, '..', 'src', 'js', 'type-ico
 if (!SRC) { console.error('用法: node gen-type-icons-data.js <mdi-svg-dir> [输出路径]'); process.exit(1) }
 
 // kind → { glyph: MDI 图标文件名, color: 瓷砖底色, label: 说明 }
+// 对齐 MT 管理器(Apktool M) 15 类文件图标 + markdown/code 两个额外细分
+// 合并: json→text, word→text, ppt→text; 新增: dex, jar, lib, file
 const SPEC = {
   text:       { glyph: 'file-document',     color: '#607d8b', label: '文本' },
   markdown:   { glyph: 'language-markdown', color: '#7b1fa2', label: 'Markdown' },
-  json:       { glyph: 'code-json',         color: '#f9a825', label: 'JSON' },
   html:       { glyph: 'language-html5',    color: '#f4511e', label: 'HTML' },
   code:       { glyph: 'code-tags',         color: '#0288d1', label: '代码' },
   image:      { glyph: 'image',             color: '#26a69a', label: '图片' },
@@ -27,11 +28,13 @@ const SPEC = {
   audio:      { glyph: 'music',             color: '#ec407a', label: '音频' },
   archive:    { glyph: 'zip-box',           color: '#fbc02d', label: '压缩包' },
   pdf:        { glyph: 'file-pdf-box',      color: '#e53935', label: 'PDF' },
-  word:       { glyph: 'file-word',         color: '#1e88e5', label: 'Word' },
   excel:      { glyph: 'file-excel',        color: '#43a047', label: 'Excel' },
-  ppt:        { glyph: 'file-powerpoint',   color: '#fb8c00', label: 'PPT' },
   font:       { glyph: 'format-font',       color: '#546e7a', label: '字体' },
   executable: { glyph: 'android',           color: '#00897b', label: '可执行' },
+  dex:        { glyph: 'file-cog',          color: '#5c6bc0', label: 'DEX' },
+  jar:        { glyph: 'archive-cog',       color: '#8d6e63', label: 'JAR' },
+  lib:        { glyph: 'library',           color: '#546e7a', label: '共享库' },
+  file:       { glyph: 'file',              color: '#78909c', label: '通用文件' },
   folder:     { glyph: 'folder',            color: '#ffb300', label: '目录（无瓷砖，经典黄色文件夹）' }
 }
 

@@ -31,7 +31,9 @@ check(T.kindFor('docs', true) === 'folder', '目录 → folder')
 check(T.kindFor('a.txt', false) === 'text', 'txt → text')
 check(T.kindFor('b.LOG', false) === 'text', 'LOG（大写）→ text')
 check(T.kindFor('notes.md', false) === 'markdown', 'md → markdown')
-check(T.kindFor('data.json', false) === 'json', 'json → json')
+check(T.kindFor('data.json', false) === 'text', 'json → text（合入 MT text 类型）')
+check(T.kindFor('report.docx', false) === 'text', 'docx → text（合入 MT text 类型）')
+check(T.kindFor('slides.pptx', false) === 'text', 'pptx → text（合入 MT text 类型）')
 
 // ── 标记/代码 ──
 check(T.kindFor('page.html', false) === 'html', 'html → html')
@@ -48,13 +50,17 @@ check(T.kindFor('song.mp3', false) === 'audio', 'mp3 → audio')
 // ── 压缩/办公 ──
 check(T.kindFor('backup.zip', false) === 'archive', 'zip → archive')
 check(T.kindFor('doc.pdf', false) === 'pdf', 'pdf → pdf')
-check(T.kindFor('report.docx', false) === 'word', 'docx → word')
 check(T.kindFor('sheet.xlsx', false) === 'excel', 'xlsx → excel')
-check(T.kindFor('slides.pptx', false) === 'ppt', 'pptx → ppt')
 
 // ── 字体/可执行 ──
 check(T.kindFor('font.ttf', false) === 'font', 'ttf → font')
 check(T.kindFor('app.apk', false) === 'executable', 'apk → executable')
+
+// ── MT 管理器新增类型 ──
+check(T.kindFor('classes.dex', false) === 'dex', 'dex → dex')
+check(T.kindFor('lib.jar', false) === 'jar', 'jar → jar')
+check(T.kindFor('libfoo.so', false) === 'lib', 'so → lib')
+check(T.kindFor('lib.dll', false) === 'lib', 'dll → lib')
 
 // ── 快捷方式 ──
 check(T.kindFor('微信.desktop', false) === 'shortcut', 'desktop → shortcut')
@@ -74,7 +80,7 @@ check(T.svgFor('no-such-kind').indexOf('M13 2H6') >= 0, 'svgFor 未知 kind 形�
 
 // ── 全彩瓷砖（iconFor 三级解析）──
 const dataKeys = Object.keys(sandbox.App.TypeIconsData || {})
-check(dataKeys.length >= 15, 'type-icons-data 内置瓷砖 ≥ 15（实际 ' + dataKeys.length + '）')
+check(dataKeys.length >= 17, 'type-icons-data 内置瓷砖 ≥ 17（实际 ' + dataKeys.length + '）')
 
 const pdfIcon = T.iconFor('a.pdf', false)
 check(pdfIcon.indexOf('<svg') === 0, 'iconFor pdf 返回 <svg>')
@@ -89,6 +95,11 @@ check(T.iconFor('a.png', false) === T.iconFor('a.jpg', false), 'png/jpg 归并�
 // kind 兜底：rs 不在数据表 → 走 code 瓷砖
 const rsIcon = T.iconFor('a.rs', false)
 check(rsIcon.indexOf('type-code') >= 0, 'iconFor rs 兜底 type-code')
+
+// 新增 MT 类型瓷砖
+check(T.iconFor('classes.dex', false).indexOf('type-dex') >= 0, 'iconFor dex → type-dex 瓷砖')
+check(T.iconFor('lib.jar', false).indexOf('type-jar') >= 0, 'iconFor jar → type-jar 瓷砖')
+check(T.iconFor('libfoo.so', false).indexOf('type-lib') >= 0, 'iconFor so → type-lib 瓷砖')
 
 // 未知扩展名 → 线条占位
 const unkIcon = T.iconFor('a.xyzzy', false)

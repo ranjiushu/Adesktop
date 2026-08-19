@@ -24,7 +24,7 @@ App.DesktopRender = (function () {
     img.decoding = 'async'
     img.onerror = function () {
       if (iconEl && iconEl.parentNode) {
-        iconEl.innerHTML = App.TypeIcons.svgFor(kind)
+        iconEl.innerHTML = App.TypeIcons.kindSvg(kind)
       }
     }
     img.src = uri
@@ -125,12 +125,12 @@ App.DesktopRender = (function () {
         }, function () { /* 失败：保持类型图标 */ })
       } else if (App.Thumbnail && App.Thumbnail.canThumbnail(kind)) {
         // 先类型图标（fallback 基线），异步请求缩略图，成功替换（渐进式：类型图标 → 真缩略图）
-        icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor(kind) : '📄'
+        icon.innerHTML = App.TypeIcons ? App.TypeIcons.iconFor(p.item.name, p.item.isDir) : '📄'
         App.Thumbnail.request(p.key, p.item.name, kind, function (uri) {
           if (icon.parentNode) setThumbImg(icon, uri, kind)
         }, function () { /* 失败：保持类型图标 */ })
       } else {
-        icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor(kind) : (p.item.isDir ? '📁' : '📄')
+        icon.innerHTML = App.TypeIcons ? App.TypeIcons.iconFor(p.item.name, p.item.isDir) : (p.item.isDir ? '📁' : '📄')
       }
       // 应用快捷方式（.desktop）：显示名剥离扩展名；回收站：显示「回收站」（真实名 .trash 隐藏）
       let displayName = p.item.name

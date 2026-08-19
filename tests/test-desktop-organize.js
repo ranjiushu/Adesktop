@@ -40,14 +40,15 @@ const items = [
   { name: 'zeta', isDir: true },
   { name: '照片.png', isDir: false },
   { name: 'alpha', isDir: true },
-  { name: 'c.TXT', isDir: false }
+  { name: 'c.TXT', isDir: false },
+  { name: 'z.md', isDir: false }
 ]
 const sorted = O.sortEntries(items)
 check(sorted[0].name === 'alpha' && sorted[1].name === 'zeta',
   '文件夹在前且按名称升序（alpha, zeta）')
-check(sorted[2].name === '报告.docx' && sorted[3].name === '照片.png',
-  '文件按扩展名字母序分组（docx 组 → png 组）')
-check(sorted[4].name === 'a.txt' && sorted[5].name === 'b.txt' && sorted[6].name === 'c.TXT',
+check(sorted[2].name === '报告.docx' && sorted[3].name === 'z.md' && sorted[4].name === '照片.png',
+  '文件按扩展名字母序分组（docx → md → png）')
+check(sorted[5].name === 'a.txt' && sorted[6].name === 'b.txt' && sorted[7].name === 'c.TXT',
   'txt 组：按名称升序（a.txt, b.txt, c.TXT——扩展名小写归一）')
 check(sorted.length === items.length, '排序不丢条目')
 
@@ -65,20 +66,21 @@ check(vp[4].x === vp[0].x && vp[4].y === vp[0].y + O.GRID_H,
 check(vp[6].x === vp[0].x + 2 * O.GRID_W && vp[6].y === vp[0].y + O.GRID_H,
   '第 7 项在第二行第三个')
 
-// ── 3. 横屏列优先（Windows 桌面式：从上到下排满一列再下一列）──
-// 视口 800×400、zoom 1、相机 (0,0,1,90)：屏幕左上角对应世界 (200,600)（画布绕视口中心旋转），
-// 每列 4 格（屏幕高 400/GRID_W=100）、6 列（屏幕宽 800/GRID_H=116）
-const hp = O.organize(items, 800, 400, { x: 0, y: 0, zoom: 1, rotation: 90 })
-check(hp[0].x === 200 && hp[0].y === 600, '横屏第一项 = 屏幕左上角对应世界点 (200,600)')
+// ── 3. 横屏（真机视口 412×700，App 锁竖屏——横屏 = 画布旋转）：列优先视觉
+// 相机 (0,0,1,90)：屏幕左上角对应世界 (-144,556)（画布绕视口中心旋转），
+// 每列 7 格（屏幕高 700/GRID_W=100）、3 列（屏幕宽 412/GRID_H=116）
+const hp = O.organize(items, 412, 700, { x: 0, y: 0, zoom: 1, rotation: 90 })
+check(hp[0].x === -144 && hp[0].y === 556, '横屏第一项 = 屏幕左上角对应世界点 (-144,556)')
 check(hp[1].x === hp[0].x + O.GRID_W && hp[1].y === hp[0].y,
-  '横屏列优先：第二项在同一列下一格（x+GRID_W = 屏幕向下）')
-check(hp[3].x === hp[0].x + 3 * O.GRID_W, '第 4 项仍在第一列（每列 4 格满列前）')
-check(hp[4].x === hp[0].x && hp[4].y === hp[0].y - O.GRID_H,
-  '第 5 项（满列）换列：x 回到顶行、y-GRID_H（= 屏幕向右）')
-check(hp[6].x === hp[0].x + 2 * O.GRID_W && hp[6].y === hp[0].y - O.GRID_H,
-  '第 7 项在第二列第三个')
+  '横屏视觉列优先：第二项在列内下一格（x+GRID_W = 屏幕向下）')
+check(hp[5].x === hp[0].x + 5 * O.GRID_W, '第 6 项仍在第一列（每列 7 格满列前）')
+check(hp[6].x === hp[0].x + 6 * O.GRID_W && hp[6].y === hp[0].y,
+  '第 7 项仍在第一列（perCol=7 恰好满列）')
+check(hp[7].x === hp[0].x && hp[7].y === hp[0].y - O.GRID_H,
+  '第 8 项（满列）换列：x 回到顶格、y-GRID_H（= 屏幕向右）')
 
 // ── 3.5 屏幕映射验证：整理结果经真实 worldToScreen 全部落在视口内（与 Home 完全重合）──
+// 真机视口 412×700（App 锁竖屏，横屏 = 画布旋转）
 function allInViewport(placed, camera, vw, vh, label) {
   let ok = true
   placed.forEach(function (p) {
@@ -88,11 +90,11 @@ function allInViewport(placed, camera, vw, vh, label) {
   check(ok, label + '：整理结果全部落在屏幕视口内')
 }
 allInViewport(vp, { x: 0, y: 0, zoom: 1, rotation: 0 }, 412, 700, '竖屏')
-allInViewport(hp, { x: 0, y: 0, zoom: 1, rotation: 90 }, 800, 400, '横屏')
+allInViewport(hp, { x: 0, y: 0, zoom: 1, rotation: 90 }, 412, 700, '横屏')
 // 有 Home 快照（非原点）时同样重合
 allInViewport(
-  O.organize(items, 800, 400, { x: 120, y: 80, zoom: 1, rotation: 90 }),
-  { x: 120, y: 80, zoom: 1, rotation: 90 }, 800, 400, '横屏（Home 快照非原点）')
+  O.organize(items, 412, 700, { x: 120, y: 80, zoom: 1, rotation: 90 }),
+  { x: 120, y: 80, zoom: 1, rotation: 90 }, 412, 700, '横屏（Home 快照非原点）')
 
 // ── 4. zoom 影响可见区域（网格更稀疏）──
 const z2 = O.organize(items, 412, 700, { x: 0, y: 0, zoom: 2, rotation: 0 })
@@ -118,6 +120,14 @@ check(a5.rotation === 90 && a5.x === 10, '横屏整理：快照槽位 + rotation
 const anchorCam = O.anchorFromHome(null, 0)
 const hv = O.organize(items, 412, 700, anchorCam)
 check(hv[0].x === 0 && hv[0].y === 0, '整理结果锚定 Home 出厂视角可见区域（与 Home 完全重合）')
+
+// ── 7. 旋转保持位置 = 中心不变（防回归：曾误加相机位移把图标移出视野）──
+// 屏幕中心 (w/2, h/2) 在 rotation=0 与 rotation=90 下对应**同一世界点** → 旋转无需动相机
+const c0 = CAM.screenToWorld(206, 350, { x: 0, y: 0, zoom: 1, rotation: 0 }, 412, 700)
+const c90 = CAM.screenToWorld(206, 350, { x: 0, y: 0, zoom: 1, rotation: 90 }, 412, 700)
+check(c0.x === 206 && c0.y === 350, '竖屏屏幕中心 → 世界 (206,350)')
+check(Math.abs(c90.x - c0.x) < 0.01 && Math.abs(c90.y - c0.y) < 0.01,
+  '旋转 90° 后屏幕中心 → 同一世界点（保持位置只转方向 = 中心不变，图标相对视野不丢）')
 
 if (failures > 0) {
   console.error('[fail] organize 测试失败 ' + failures + ' 项')

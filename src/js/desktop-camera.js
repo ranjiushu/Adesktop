@@ -304,20 +304,25 @@ App.DesktopCamera = (function () {
     el.style.transform = 'translate3d(' + t.tx + 'px,' + t.ty + 'px,0) scale(' + t.zoom + ')'
   }
 
+  // 旋转保中心：**撤销**（2026-08-19）——「保持位置只转方向」本来就保中心
+  // （screenToWorld 在 rotation=90 时屏幕中心对应世界点 = (x + w/2z, y + h/2z)，与竖屏相同）；
+  // 曾加此位移函数，实测旋转后把图标移出视野（rotate-e2e 回归），已从 desktop.js 移除。
+
   /** @type {DesktopCamera} */
   return {
     ZOOM_MIN: ZOOM_MIN,
     ZOOM_MAX: ZOOM_MAX,
     create: create,
     clampZoom: clampZoom,
+    clampRotation: clampRotation,
     easeInOutCubic: easeInOutCubic,
     lerp: lerp,
     lerpCentered: lerpCentered,
-    screenToWorld: screenToWorld,
-    worldToScreen: worldToScreen,
     panBy: panBy,
     pinchBy: pinchBy,
     clampToBounds: clampToBounds,
+    screenToWorld: screenToWorld,
+    worldToScreen: worldToScreen,
     transform: transform,
     applyTo: applyTo
   }

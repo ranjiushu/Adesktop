@@ -106,6 +106,11 @@ App.Actions = (function () {
     // 相机复位到整理锚点（保存/刷新后用户立即可见整理结果）
     C.camera = App.DesktopCamera.create(anchor.x, anchor.y, anchor.zoom, anchor.rotation)
     C.rootCamera = C.camera
+    // 整理锚点写入当前方向 Home 槽位：整理后点 Home 恒回到整理区域（两方向各自记录）
+    if (App.HomeStore && typeof App.HomeStore.saveHome === 'function') {
+      App.HomeStore.saveHome(
+        { x: anchor.x, y: anchor.y, zoom: anchor.zoom }, C.state.rootId, anchor.rotation)
+    }
     if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
       App.DesktopPersist.saveLayout()
     }

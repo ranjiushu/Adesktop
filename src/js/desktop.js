@@ -80,7 +80,9 @@ App.Desktop = (function () {
   // 旋转是瞬时两态（无过渡动画）。切换方向后自动落到**目标方向**的 Home 槽位：
   // 竖屏切横屏 → 读横屏槽位（landscapeHome/landscapeFallback），落在横屏 Home 视角；
   // 横屏切回竖屏 → 读竖屏槽位（home/fallback），落在竖屏 Home 视角。
-  // 目标方向无槽位时保持当前位置只转方向（不强制回出厂）。
+  // 目标方向无槽位时**旋转保中心**（2026-08-19）：旋转前后视野的**世界中心点重合**——
+  // 图标世界坐标不变（整理区域/自由摆放位置），旋转后仍在视野内（曾「保持当前位置只转方向」
+  // 导致两方向出厂视野的世界区域完全不重叠，切横竖屏后图标全部跑出视野，用户找不到文件）。
   // 旋转后同步手势层/Viewer 手柄/Home 高亮。
   /** @returns {boolean} */
   function toggleRotate() {
@@ -94,7 +96,9 @@ App.Desktop = (function () {
     if (data && data.home) home = data.home
     else if (data && data.fallback) home = data.fallback
     // 2. 目标方向有槽位 → 落到该槽位（x/y/zoom + 目标方向 rotation）；
-    //    无槽位 → 保持当前位置只转方向
+    //    无槽位 → 保持当前位置只转方向（旋转前后**视野世界中心不变**——screenToWorld
+    //    在 rotation=90 时屏幕中心对应世界点与竖屏相同，图标相对位置不丢；
+    //    曾误加相机位移「保中心」，实测反而把图标移出视野，已撤销）
     const base = home || { x: cam.x, y: cam.y, zoom: cam.zoom }
     C.camera = App.DesktopCamera.create(base.x, base.y, base.zoom, next)
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {

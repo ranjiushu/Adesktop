@@ -54,15 +54,17 @@ App.DesktopOrganize = (function () {
     return { x: 0, y: 0, zoom: 1, rotation: rot }
   }
 
-  /** 网格布局：锚定相机可见区域左上角，按视口尺寸铺满可见网格。
-   *  方向（用户约定，2026-08-19 修正）：
-   *    竖屏（rotation=0）= 行优先（Android 启动器式：从左到右排满一行再下一行）；
-   *    横屏（rotation=90）= 列优先（Windows 桌面式：从上到下排满一列再下一列）。
-   *  锚点（desktop-camera.js 契约）：
-   *    rotation=0：相机 x/y = 视口左上角对应世界点，可见区域 [x, x+w/z] × [y, y+h/z]；
-   *    rotation=90：画布绕视口中心旋转，屏幕左上角对应世界点
-   *      (x + (w-h)/(2z), y + (w+h)/(2z))，可见区域宽 = h/z、高 = w/z；
-   *      屏幕向下 = 世界 +x，屏幕向右 = 世界 -y（列内 x 递增，换列 y 递减）。
+  /** 网格布局：一种排列（「先左→右、再上→下」的二维网格），方向由画布旋转决定。
+   *  用户约定（2026-08-19）：
+   *    竖屏（rotation=0）——先从左往右，再从上到下；
+   *    横屏（rotation=90）——同一网格的行内方向映射到世界 -y（相当于竖屏行内反向），
+   *      屏幕上自然呈现「先从上到下，再从左往右」。
+   *  方向映射（desktop-camera.js 旋转契约）：
+   *    rotation=0：屏幕右 = 世界 +x（行内步长 GRID_W）、屏幕下 = 世界 +y（换行步长 GRID_H）；
+   *      锚点 = 相机 (cx, cy)（即视口左上角世界点）。
+   *    rotation=90：屏幕左上角对应世界 (cx+(w-h)/2z, cy+(w+h)/2z)；
+   *      屏幕下 = 世界 +x（列内步长 GRID_W）、屏幕右 = 世界 -y（换列步长 GRID_H）——
+   *      视觉 = 「先从上到下，再从左往右」（列优先）。
    *  @param {Array<{name: string, isDir: boolean}>} entries 排序后的条目
    *  @param {number} viewportW @param {number} viewportH
    *  @param {{x: number, y: number, zoom: number, rotation: number}} camera
@@ -76,10 +78,9 @@ App.DesktopOrganize = (function () {
     const h = viewportH || 0
     const sorted = sortEntries(entries)
     if (rotation === 90 && w > 0 && h > 0) {
-      // 横屏：列优先（Windows 桌面式）——屏幕左上角世界锚点 + 世界可见区域（宽 h/z 高 w/z）。
-      // 步长映射：屏幕向下 = 世界 +x → 列内步长 GRID_W（100）；屏幕向右 = 世界 -y → 列步长 GRID_H（116）
-      const x0 = cx + (w - h) / (2 * zoom)
-      const y0 = cy + (w + h) / (2 * zoom)
+      // 横屏：列内沿世界 +x（屏幕向下，步长 GRID_W），换列沿世界 -y（屏幕向右，步长 GRID_H）
+      const x0 = cx + (w - h) / (2 * zoom)   // 屏幕左上角对应世界 x
+      const y0 = cy + (w + h) / (2 * zoom)   // 屏幕左上角对应世界 y
       const perCol = Math.max(1, Math.floor((h / zoom) / GRID_W))   // 每列格子数（屏幕高方向）
       const colCount = Math.max(1, Math.floor((w / zoom) / GRID_H)) // 列数（屏幕宽方向）
       return sorted.map(function (item, i) {
@@ -92,14 +93,12 @@ App.DesktopOrganize = (function () {
         }
       })
     }
-    // 竖屏：行优先（Android 启动器式）——可见区域 [cx, cx+w/z] × [cy, cy+h/z]
-    const visW = w / zoom
-    const visH = h / zoom
-    const cols = Math.max(1, Math.floor(visW / GRID_W))
-    const rows = Math.max(1, Math.floor(visH / GRID_H))
+    // 竖屏：行内沿世界 +x（屏幕向右，步长 GRID_W），换行沿世界 +y（屏幕向下，步长 GRID_H）
+    const perRow = Math.max(1, Math.floor((w / zoom) / GRID_W))     // 每行格子数（屏幕宽方向）
+    const rowCount = Math.max(1, Math.floor((h / zoom) / GRID_H))   // 行数（屏幕高方向）
     return sorted.map(function (item, i) {
-      const row = Math.floor(i / cols)
-      const col = i % cols
+      const row = Math.floor(i / perRow)
+      const col = i % perRow
       return {
         name: item.name,
         x: Math.round(cx + col * GRID_W),

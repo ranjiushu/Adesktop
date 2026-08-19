@@ -306,17 +306,22 @@ App.DesktopGestureHandlers = (function () {
 
   // 已选中组上直接拿起（拖动即拿取，不必长按）；folder 容器不拿起（防御，hitTest 已挡）。
   // hitType 由手势层 down 时确定：viewer-selected=已选中 Viewer 拿起移动实体；selected=已选中文件组拿起
-  function handleDragStart(world, hitType) {
+  // startWorld = 按下起点世界点（drag-start 携带，命中基准；拖动基准仍是 world）
+  function handleDragStart(world, hitType, startWorld) {
     if (hitType === 'viewer-selected') {
       const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
         ? App.InternalViewer.selectedInstance() : null
       if (inst) inst.beginDrag(world)
       return
     }
-    // 拖动手柄：按住 = 自动选中 + 直接拿起（不受选中态限制的辅助拖动入口）
+    // 拖动手柄：按住 = 自动选中 + 直接拿起（不受选中态限制的辅助拖动入口）。
+    // 命中基准 = 按下起点 startWorld（down 时 hitTest 已确认命中手柄；拖动起点 world
+    // 已位移超阈值，手柄命中区仅 6px 高，移动后点必然出界——用移动点重新命中会
+    // 拿不起，表现为「手柄点不动/拖不动」。长按拿起（handleLongPress）同样以起点命中）
     if (hitType === 'viewer-handle') {
+      const p = startWorld || world
       const inst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-        ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
+        ? App.InternalViewer.handleAt(p.x, p.y, C.camera) : null
       if (inst) {
         App.InternalViewer.selectOnly(inst.id)
         App.DesktopRender.syncFab()

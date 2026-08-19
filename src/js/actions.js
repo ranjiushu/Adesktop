@@ -95,7 +95,8 @@ App.Actions = (function () {
     anchor.zoom = (C.camera && C.camera.zoom) || 1
     // 布局数据文件（.adesktop-layout.json）不参与整理（渲染时同样过滤——否则它被排进
     // 网格（json 组恰在 html/md 之间）但不可见 → 网格留空位，2026-08-19 真机反馈）
-    // 锁定文件（正在预览）不参与整理：图标与 Viewer 预览窗口双向锚定（窗口在文件上方），
+    // 锁定文件（正在预览）不参与整理：图标与 Viewer 预览窗口单向锚定（图标是网格
+    // 真相锚点，窗口自由浮动；整理挪图标会与窗口分家，故跳过）
     // 排走图标 = 与窗口分家/重叠；锁定文件保持原位，其余文件排布跳过其占位格子
     /** @type {Array<{x: number, y: number}>} */
     const lockedPoints = []

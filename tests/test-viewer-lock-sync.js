@@ -2,8 +2,8 @@
 // 背景：锁定文件有双位置源（图标 positions vs Viewer rect），打开时对齐后各自
 // 独立演化 → 拖动图标/拖动 Viewer/整理桌面/避让会让两者分家 → 重叠/占位混乱。
 // 修复语义（Windows 占用式）：
-//   1. 图标拖动 → Viewer 实时跟随（syncRectForPath）
-//   2. Viewer 拖动 → 图标实时跟随（moveListener → positions/bounds/iconEl）
+//   1. 图标拖动 → Viewer 实时跟随（syncRectForPath，单向锚定——图标是网格真相锚点）
+//   2. Viewer 拖动 → 图标不跟随（窗口自由浮动；desktop-viewer-link 不订阅 Viewer 位置变化）
 //   3. 整理桌面跳过锁定文件，其余排布让开其占位格（occupied）
 //   4. 其它文件拖动不能顶开锁定文件（resolvePlacement immovable 钉子户）
 // 驱动方式：真实 Desktop + 真实手势层 + InternalViewer 桩（记录双向同步），
@@ -215,24 +215,23 @@ function screen(wx, wy) { return { x: wx, y: wy + 56 } }
     'drop 网格吸附后 Viewer 同步到 (116,132)，实际 (' + viewerRect.x + ',' + viewerRect.y + ')')
   check(eq(C.positions['a.txt'], { x: 116, y: 132 }), '图标拖动 → positions 落位 (116,132)')
 
-  // ── 场景 2：Viewer 拖动 → 图标实时跟随 ──
+  // ── 场景 2：Viewer 拖动 → 图标不跟随（单向锚定：图标是网格真相锚点，窗口自由浮动）──
   const vBefore = C.positions['a.txt']
-  moveListenerFn(stubInst)   // 模拟 Viewer 拖动回调（getRect 返回当前 viewerRect）
-  check(eq(C.positions['a.txt'], vBefore), 'Viewer 拖动回调：位置未变时幂等（positions 不变）')
-  // 模拟 Viewer 拖到新位置
+  check(moveListenerFn === null, 'Viewer 位置变化监听未注入（desktop-viewer-link 不订阅 onMove）')
+  // 模拟 Viewer 窗口被拖到新位置（组件 onMove 只通知世界矩形，Desktop 层不响应）
   viewerRect.x = 150
   viewerRect.y = 260
-  moveListenerFn(stubInst)
-  check(eq(C.positions['a.txt'], { x: 150, y: 260 }), 'Viewer 拖到 (150,260) → 图标 positions 同步 (150,260)')
+  check(eq(C.positions['a.txt'], vBefore),
+    'Viewer 窗口移动后图标 positions 不变（' + JSON.stringify(vBefore) + '）')
   const aNode = C.iconEls['a.txt']
-  check(aNode && aNode.style.left === '150px' && aNode.style.top === '260px',
-    'Viewer 拖动 → 图标 DOM 同步（left/top 150/260）')
+  check(aNode && aNode.style.left === '116px' && aNode.style.top === '132px',
+    'Viewer 窗口移动后图标 DOM 不变（left/top 116/132，场景 1 drop 落位）')
 
   // ── 场景 3：整理桌面跳过锁定文件（图标与 Viewer 不再分家）──
   const aPosBefore = C.positions['a.txt']
   sandbox.App.Actions.organizeDesktop()
   await new Promise(function (res) { setTimeout(res, 30) })   // refresh 异步完成
-  check(eq(C.positions['a.txt'], aPosBefore), '整理桌面：锁定文件 a.txt 保持原位 (150,260)')
+  check(eq(C.positions['a.txt'], aPosBefore), '整理桌面：锁定文件 a.txt 保持原位 (' + aPosBefore.x + ',' + aPosBefore.y + ')')
   // 锁定文件占位格不被其它条目占用（a 的位置不是网格格点 → 无占用断言改为：b 不与 a 重叠）
   const bPos = C.positions['b.txt']
   const overlap = bPos && aPosBefore &&
@@ -243,7 +242,7 @@ function screen(wx, wy) { return { x: wx, y: wy + 56 } }
   // ── 场景 4：钉子户避让——拖动 b.txt 到锁定文件位置，a 不让位 ──
   const bCenter = screen(bPos.x + 42, bPos.y + 38)
   const nearStart = { x: bCenter.x + 8, y: bCenter.y }   // 微移触发 drag-start（起点=此处）
-  const dragTo = screen(150 + 42, 260 + 38)              // 目标：a 图标中心（世界 (192,298)）
+  const dragTo = screen(116 + 42, 132 + 38)              // 目标：a 图标中心（世界 (158,170)）
   // 选中 b
   viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, bCenter.x, bCenter.y)]))
   viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, bCenter.x, bCenter.y)]))
@@ -252,7 +251,7 @@ function screen(wx, wy) { return { x: wx, y: wy + 56 } }
   viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, nearStart.x, nearStart.y)]))
   viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, dragTo.x, dragTo.y)]))
   viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, dragTo.x, dragTo.y)]))
-  check(eq(C.positions['a.txt'], { x: 150, y: 260 }), '钉子户：拖动 b 后锁定文件 a 保持原位 (150,260)')
+  check(eq(C.positions['a.txt'], { x: 116, y: 132 }), '钉子户：拖动 b 后锁定文件 a 保持原位 (116,132)')
   const bAfter = C.positions['b.txt']
   check(bAfter && !(bAfter.x === 150 && bAfter.y === 260), '钉子户：b 与锁定文件冲突时让位（不占 a 的格）')
 
@@ -260,7 +259,7 @@ function screen(wx, wy) { return { x: wx, y: wy + 56 } }
     console.error('  [FAIL] test-viewer-lock-sync ' + failures + ' 项失败')
     process.exit(1)
   }
-  console.log('  [ok] test-viewer-lock-sync 锁定文件双向锚定回归全部通过')
+  console.log('  [ok] test-viewer-lock-sync 锁定文件单向锚定回归全部通过')
 })().catch(function (e) {
   console.error('  [FAIL] test-viewer-lock-sync 异常: ' + e.message)
   console.error(e.stack)

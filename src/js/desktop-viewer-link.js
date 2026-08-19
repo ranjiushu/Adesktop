@@ -25,8 +25,9 @@ App.DesktopViewerLink = (function () {
 
   // 注入 InternalViewer 持久化监听：画布态变化（打开/关闭/拖动结束/媒体自适应）
   // → ViewerStore.save（localStorage + 隐藏文件，文件即真相）。rootId 未就绪跳过。
-  // Viewer 拖动/自适应会同步锁定文件图标位置（moveListener），这里一并落盘布局
-  // ——否则图标位置只存在内存投影，刷新后回退错位。
+  // Viewer 位置变化（onMove）**不**订阅：Viewer 窗口自由浮动，图标是网格真相锚点
+  // （单向锚定——仅图标拖动带动 Viewer，见手势层 syncRectForPath；Viewer 拖动/
+  // 媒体自适应不带动图标，会话恢复时 restoreViewers 贴窗对齐一次）。
   /** @returns {void} */
   function init() {
     if (App.InternalViewer && typeof App.InternalViewer.setPersistListener === 'function') {
@@ -35,25 +36,6 @@ App.DesktopViewerLink = (function () {
         App.ViewerStore.save(viewers, C.state.rootId)
         if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
           App.DesktopPersist.saveLayout()
-        }
-      })
-    }
-    // Viewer 位置/尺寸变化（拖动/媒体自适应）→ 锁定文件图标跟随（双向锚定防分家）：
-    // 图标 positions/bounds 与 Viewer rect 保持左上对齐，刷新/整理/恢复时不再错位。
-    // onMove 回调入参 = 实例自身（getPath/getRect），契约见 ViewerInstance
-    if (App.InternalViewer && typeof App.InternalViewer.setMoveListener === 'function') {
-      App.InternalViewer.setMoveListener(function (/** @type {ViewerInstance} */ inst) {
-        const path = inst && typeof inst.getPath === 'function' ? inst.getPath() : null
-        const rect = inst && typeof inst.getRect === 'function' ? inst.getRect() : null
-        if (!path || !rect) return
-        C.positions[path] = { x: rect.x, y: rect.y }
-        if (C.bounds[path]) {
-          C.bounds[path] = { x: rect.x, y: rect.y, w: C.bounds[path].w, h: C.bounds[path].h }
-        }
-        const node = C.iconEls[path]
-        if (node) {
-          node.style.left = rect.x + 'px'
-          node.style.top = rect.y + 'px'
         }
       })
     }
@@ -97,8 +79,9 @@ App.DesktopViewerLink = (function () {
         }
       })
       C._lockedPaths.add(rec.path)
-      // 双向锚定：恢复的 Viewer 窗口左上 = 图标位置（图标可能在会话间被整理/拖动过，
-      // 以 Viewer rect 为窗口真相、图标贴窗对齐——修复历史数据分家/重叠）
+      // 恢复对齐：恢复的 Viewer 窗口左上 = 图标位置（图标可能在会话间被整理/拖动过，
+      // 以 Viewer rect 为窗口真相、图标贴窗对齐一次——防历史数据分家/重叠；此后
+      // 窗口自由浮动、图标保持网格锚点，见 docs/viewer.md 单向锚定语义）
       C.positions[rec.path] = { x: rect.x, y: rect.y }
       if (C.bounds[rec.path]) {
         C.bounds[rec.path] = { x: rect.x, y: rect.y, w: C.bounds[rec.path].w, h: C.bounds[rec.path].h }

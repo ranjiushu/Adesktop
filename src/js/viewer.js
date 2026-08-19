@@ -240,7 +240,7 @@ App.InternalViewer = (function () {
     let drag = null
     let reader = { scale: 1, wrap: true }   // 文本完整预览态：字号缩放 + 自动换行
     let handleEl = null    // 拖动手柄（屏幕层固定尺寸，随相机/卡片位置同步）
-    let onMove = null      // 位置变化回调（Desktop 注入：Viewer 拖动/自适应 → 同步锁定文件图标）；入参 = 实例自身（getPath/getRect）
+    let onMove = null      // 位置变化回调（Desktop 层可注入订阅；传入 = 世界矩形 state.rect——组件解耦，不依赖 Desktop 实例概念）
     let state = {
       open: false, mode: null, fsFrom: null, selected: false,
       path: '', name: '', kind: '', anchor: null, camera: null, onFallback: null, onClose: null,
@@ -419,7 +419,7 @@ App.InternalViewer = (function () {
         const rect = fitAspectRect(state.rect, natW, natH, _layer.clientWidth, _layer.clientHeight)
         if (rect) {
           applyCanvasRect(rect)
-          if (onMove) onMove(inst)   // 媒体自适应：图标锚定新窗口左上（双向锚定防分家）
+          if (onMove) onMove(state.rect)   // 位置变化通知（世界矩形；图标是否跟随由订阅方决定）
           _notifyPersist()   // 媒体自适应改变尺寸：持久化最终矩形
         }
       }
@@ -512,7 +512,7 @@ App.InternalViewer = (function () {
       const dx = world.x - drag.startWorld.x
       const dy = world.y - drag.startWorld.y
       applyCanvasRect(shiftRect(drag.startRect, dx, dy))
-      if (onMove) onMove(inst)
+      if (onMove) onMove(state.rect)
     }
 
     function endDrag() {
@@ -528,7 +528,7 @@ App.InternalViewer = (function () {
       syncHandleAfterMove()
       drag = null
       card.classList.remove('viewer-card-dragging')
-      if (onMove) onMove(inst)
+      if (onMove) onMove(state.rect)
     }
 
     function isDragging() { return !!drag }
@@ -543,7 +543,7 @@ App.InternalViewer = (function () {
       return true
     }
 
-    /** @param {((inst: ViewerInstance) => void) | null} fn */
+    /** @param {((rect: {x: number, y: number, w: number, h: number}) => void) | null} fn */
     function _setOnMove(fn) {
       onMove = typeof fn === 'function' ? fn : null
     }
@@ -839,7 +839,7 @@ App.InternalViewer = (function () {
       if (handleEl) handleEl.style.display = ''
     }
 
-    const inst = {
+    return {
       id: id,
       _card: card,
       open: open,
@@ -870,7 +870,6 @@ App.InternalViewer = (function () {
       _hideHandle: _hideHandle,
       _showHandle: _showHandle
     }
-    return inst
   }
 
   // ── 管理器 API ──
@@ -907,9 +906,9 @@ App.InternalViewer = (function () {
     _persistListener = typeof fn === 'function' ? fn : null
   }
 
-  /** 位置变化监听（Desktop 层注入：Viewer 拖动/媒体自适应 → 同步锁定文件图标到窗口左上）。
-   *  回调入参 = 实例自身（ViewerInstance，经 getPath/getRect 读取）。
-   *  @param {((inst: ViewerInstance) => void) | null} fn */
+  /** 位置变化监听（外部可订阅：Viewer 拖动/媒体自适应/取消时收到世界矩形；是否响应由订阅方决定）。
+   *  注意：Viewer 组件传纯数据矩形（非实例）——组件解耦，不依赖 Desktop 实例概念。
+   *  @param {((rect: {x: number, y: number, w: number, h: number}) => void) | null} fn */
   function setMoveListener(fn) {
     _moveListener = typeof fn === 'function' ? fn : null
   }

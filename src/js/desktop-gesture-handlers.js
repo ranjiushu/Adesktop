@@ -286,7 +286,7 @@ App.DesktopGestureHandlers = (function () {
         node.style.left = x + 'px'
         node.style.top = y + 'px'
       }
-      // 锁定文件图标拖动 → Viewer 预览窗口实时跟随（双向锚定防分家：图标与窗口始终对齐）
+      // 锁定文件图标拖动 → Viewer 预览窗口实时跟随（单向锚定：图标是网格真相锚点，窗口贴图标）
       if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
         App.InternalViewer.syncRectForPath(n, x, y)
       }

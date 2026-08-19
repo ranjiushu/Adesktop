@@ -150,6 +150,32 @@ async function main() {
     pass('TypeScript 类型声明在源码规模列表 + 仓库规模卡可见')
   else fail('TS 统计不可见: ' + JSON.stringify(tsVisible))
 
+  // ── 3c3. 非源码卡：展开按钮生效 + 类型颜色区分（防移植笔误回归） ──
+  const nsBar = await page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll('#build-other-body .ns-bar-row'))
+    if (rows.length === 0) return { skip: true, reason: '无 ns-bar-row' }
+    // 颜色区分：取每个 dot 的背景色集合
+    const colors = new Set()
+    rows.forEach(r => {
+      const dot = r.querySelector('span[style*="background:"]')
+      if (dot) colors.add(dot.style.background)
+    })
+    const btn = document.getElementById('other-bar-toggle')
+    if (!btn) return { skip: true, reason: '展开按钮不存在（条目 ≤ 8）', colors: Array.from(colors) }
+    const hiddenBefore = rows.filter(r => r.style.display === 'none').length
+    btn.click()
+    const hiddenAfter = Array.from(document.querySelectorAll('#build-other-body .ns-bar-row'))
+      .filter(r => r.style.display === 'none').length
+    return { skip: false, colors: Array.from(colors), hiddenBefore: hiddenBefore, hiddenAfter: hiddenAfter }
+  })
+  if (nsBar.skip) pass('非源码卡展开断言跳过: ' + nsBar.reason)
+  else if (nsBar.hiddenBefore > 0 && nsBar.hiddenAfter === 0)
+    pass('「工具/脚本/测试/配置」展开按钮生效（' + nsBar.hiddenBefore + ' 行展开）')
+  else fail('展开按钮失效: ' + JSON.stringify(nsBar))
+  if (nsBar.colors && nsBar.colors.length >= 2 && nsBar.colors.indexOf('rgb(153, 153, 153)') < 0)
+    pass('非源码文件类型颜色区分（' + nsBar.colors.length + ' 种色）')
+  else fail('非源码文件颜色区分度低: ' + JSON.stringify(nsBar))
+
   // ── 3d. 文件详情弹窗：统一模板 + 文字可复制 + 无取消按钮 + 返回键关闭 ──
   const fileModal = await page.evaluate(() => {
     window.App.BuildInfo.showFileDetailModal(window.FILE_STATS[0])

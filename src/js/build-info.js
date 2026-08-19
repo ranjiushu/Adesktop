@@ -506,8 +506,10 @@ App.BuildInfo = (function () {
     }
     if (nsStats.length > 0) {
       // 工具/脚本/测试/配置在前、Markdown 文档在后（与 LexiCull 顺序一致）
+      // colorMap 与 LexiCull 同款六色方案（doc/tool/script/test/config/gradle）
+      const nsColorMap = { doc: '#1ABC9C', tool: '#E67E22', script: '#F39C12', test: '#2ECC71', config: '#95A5A6', gradle: '#8E44AD' }
       sections.push(wrapSection('工具/脚本/测试/配置', '<div id="build-other-body">' + renderBarList(nsStats, {
-        slice: 'other', rowClass: 'ns-bar-row', globalRef: 'NON_SOURCE_STATS',
+        slice: 'other', rowClass: 'ns-bar-row', colorMap: nsColorMap, globalRef: 'NON_SOURCE_STATS',
         toggleId: 'other-bar-toggle', expandUnit: '个文件',
         sortKeys: ['lines', 'name', 'modified'], sortLabels: ['行数', '名称', '最近修改'],
         bodyId: 'build-other-body'
@@ -515,7 +517,7 @@ App.BuildInfo = (function () {
       let hasDoc = nsStats.some(function (it) { return it.type === 'doc' })
       if (hasDoc) {
         sections.push(wrapSection('Markdown 文档', '<div id="build-doc-body">' + renderBarList(nsStats, {
-          slice: 'doc', rowClass: 'doc-bar-row', globalRef: 'NON_SOURCE_STATS',
+          slice: 'doc', rowClass: 'doc-bar-row', colorMap: nsColorMap, globalRef: 'NON_SOURCE_STATS',
           toggleId: 'doc-bar-toggle', expandUnit: '个文档',
           sortKeys: ['lines', 'name', 'modified', 'chars'], sortLabels: ['行数', '名称', '最近修改', '字数'],
           bodyId: 'build-doc-body'
@@ -541,7 +543,7 @@ App.BuildInfo = (function () {
     // 交互绑定
     bindExpandToggle('file-bar-toggle', '.file-bar-row', 8)
     bindExpandToggle('doc-bar-toggle', '.doc-bar-row', 8)
-    bindExpandToggle('other-bar-toggle', '.other-bar-row', 8)
+    bindExpandToggle('other-bar-toggle', '.ns-bar-row', 8)
     bindExpandToggle('commit-toggle', '.build-commit-item', 10)
     bindSortChips('build-source-body')
     bindSortChips('build-doc-body')

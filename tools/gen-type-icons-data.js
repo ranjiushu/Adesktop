@@ -47,13 +47,20 @@ function glyphPath(svgFile) {
   return m[1]
 }
 
-// 生成条目：瓷砖 = 彩色圆角方块 + 白色字形；folder 例外（经典文件夹字形，无底）
+// 生成条目：瓷砖 = 彩色圆角方块 + 白色缩小字形；folder 例外（经典文件夹字形，无底）
+// 字形缩放到 16x16 居中（4px 边距），匹配 MT 管理器留白比例
+const GLYPH_SIZE = 16
+const GLYPH_OFFSET = (24 - GLYPH_SIZE) / 2  // 4
+const GLYPH_SCALE = (GLYPH_SIZE / 24).toFixed(4)  // 0.6667
+
 function tile(kind, spec) {
   const d = glyphPath(spec.glyph)
   if (kind === 'folder') {
     return '<svg viewBox="0 0 24 24"><path fill="' + spec.color + '" d="' + d + '"/></svg>'
   }
-  return '<svg viewBox="0 0 24 24"><rect width="24" height="24" rx="4.5" fill="' + spec.color + '"/><path fill="#fff" d="' + d + '"/></svg>'
+  return '<svg viewBox="0 0 24 24"><rect width="24" height="24" rx="4.5" fill="' + spec.color + '"/>' +
+    '<g transform="translate(' + GLYPH_OFFSET + ',' + GLYPH_OFFSET + ') scale(' + GLYPH_SCALE + ')">' +
+    '<path fill="#fff" d="' + d + '"/></g></svg>'
 }
 
 const entries = Object.keys(SPEC).map(kind => {

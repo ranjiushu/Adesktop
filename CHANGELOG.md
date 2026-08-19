@@ -2,17 +2,18 @@
 
 ## Unreleased
 
-### 类型图标升级为 Vivid 全彩（2026-08-19）
+### 类型图标升级为 Material 彩色瓷砖（MT 管理器风格，2026-08-19）
 
-- **图标源**：file-icon-vectors（MIT）Vivid 套，内置 163 个全彩图标（162 扩展名 + 扁平文件夹），
-  对标 MT 管理器图标覆盖面；压缩优化（去 xmlns/style/class、内联 fill）后内联进单文件
-- **三级解析**：扩展名精确匹配 → kind 级兜底（如 rs 走 code 的 js 图标）→ 线条占位
-- **系统态保留线条版**：trash/shortcut/unknown 仍为 stroke currentColor（随主题自适应）；
-  文件类型图标自带全彩，浅色/深色/自定义主题通用
-- **新模块**：`src/js/type-icons-data.js`（图标数据，由 `tools/gen-type-icons-data.js` 生成，
-  已登记 JS_ORDER）；新增 `TypeIcons.iconFor(name,isDir)` / `kindSvg(kind)` API，
+- **图标源**：Material Design Icons（Apache-2.0，Pictogrammers）官方字形 + 彩色圆角方块，
+  白色字形 = MT/NP/ApktoolM 三款工具同款图标风格（已拆包证实其文件图标即 Material 字形）；
+  16 个 kind 各一个瓷砖，标准语义色（pdf 红 / word 蓝 / excel 绿 / ppt 橙 / image 青 / audio 粉…）
+- **目录图标**：经典黄色 Material folder 字形（非瓷砖），与 MT 管理器一致
+- **三级解析**：扩展名精确匹配 → kind 瓷砖 → 线条占位；trash/shortcut/unknown 保持线条版
+  （stroke currentColor，随主题自适应）；全彩瓷砖自带颜色，浅色/深色/自定义主题通用
+- **新模块**：`src/js/type-icons-data.js`（16 个瓷砖，由 `tools/gen-type-icons-data.js` 生成，
+  已登记 JS_ORDER）；`TypeIcons.iconFor(name,isDir)` / `kindSvg(kind)` API，
   渲染层 `desktop-render.js` 文件图标改走扩展名解析
-- **构建**：bundle 827KB → 1029KB（+24%，棘轮 130% 内）；verify.sh 16 项门禁全绿
+- **构建**：bundle 827KB → 840KB（+1.5%）；verify.sh 16 项门禁全绿
 
 ### 桌面目录改用系统 SAF 授权选择器（2026-08-19）
 

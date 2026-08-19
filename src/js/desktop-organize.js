@@ -16,6 +16,7 @@ App.DesktopOrganize = (function () {
   const GRID_H = 116
   const ICON_W = 84    // 与 desktop-render.js cell 占位宽一致（网格外接框边缘）
   const ICON_H = 106   // 与 desktop-render.js cell 占位高一致（网格外接框边缘）
+  const PAD_TOP = 16   // 顶边基线边距（网格不贴视口顶部）
 
   /** 扩展名（小写；无扩展名/点开头 = ''） */
   /** @param {string} name @returns {string} */
@@ -57,8 +58,8 @@ App.DesktopOrganize = (function () {
   }
 
   /** 网格布局：一种排列（「先左→右、再上→下」的二维网格），方向由画布旋转决定。
-   *  网格**绕相机视野中心对称铺**（2026-08-19 修正：原锚视野左上角，横屏网格挤在
-   *  屏幕左上方、右 64px 下 100px 空白——旋转到另一方向时内容整体偏向一侧更难找回）。
+   *  **基线 = 靠近顶栏的画布边**（视口顶部，2026-08-19 用户指定）——网格从屏幕顶部
+   *  开始往下排（像手机桌面/Windows 桌面），另一方向水平居中（避免横屏右侧大片空白）。
    *  用户约定：
    *    竖屏（rotation=0）——先从左往右，再从上到下（行优先）；
    *    横屏（rotation=90）——同一网格的行内方向映射到世界 -y（相当于竖屏行内反向），
@@ -66,9 +67,10 @@ App.DesktopOrganize = (function () {
    *  方向映射（desktop-camera.js 旋转契约）：
    *    rotation=0：屏幕右 = 世界 +x（行内步长 GRID_W）、屏幕下 = 世界 +y（换行步长 GRID_H）；
    *    rotation=90：屏幕下 = 世界 +x（列内步长 GRID_W）、屏幕右 = 世界 -y（换列步长 GRID_H）。
-   *  视野中心世界点 = (c.x + w/2z, c.y + h/2z)——两方向同式（见 desktop-camera.js 推导）。
-   *  网格外接框（含 cell 占位 ICON_W×ICON_H）以视野中心对称 → 整理结果在 Home 视角
-   *  下完整可见且居中；旋转 90° 后中心对齐、边缘对称出屏（拖动/双击 Home 可找回）。
+   *  基线实现：
+   *    竖屏：y0 = camera.y + PAD_TOP（视口顶部）；x 方向水平居中（绕视野中心）。
+   *    横屏：屏幕顶部对应世界 x = camera.x + (w-h)/2z（屏幕左上角世界 x）→
+   *      x0 = 该值 + PAD_TOP（顶边基线）；y 方向水平居中。
    *  @param {Array<{name: string, isDir: boolean}>} entries 排序后的条目
    *  @param {number} viewportW @param {number} viewportH
    *  @param {{x: number, y: number, zoom: number, rotation: number}} camera
@@ -87,13 +89,12 @@ App.DesktopOrganize = (function () {
     const centerX = cx + w / (2 * zoom)
     const centerY = cy + h / (2 * zoom)
     if (rotation === 90 && w > 0 && h > 0) {
-      // 横屏：列内沿世界 +x（屏幕向下，步长 GRID_W），换列沿世界 -y（屏幕向右，步长 GRID_H）
+      // 横屏：列内沿世界 +x（屏幕向下，步长 GRID_W），换列沿世界 -y（屏幕向右，步长 GRID_H）。
+      // 顶边基线 = 屏幕顶部世界 x = cx + (w-h)/2z；y 方向水平居中。
       const perCol = Math.max(1, Math.floor((h / zoom) / GRID_W))   // 每列格子数（屏幕高方向）
       const cols = Math.max(1, Math.ceil(n / perCol))               // 实际列数
       const rowsInCol = Math.min(n, perCol)                         // 实际每列格数
-      // 网格外接框（格子中心间距 + cell 占位）绕视野中心对称：
-      // 格子中心 Cy(col) = y0 - col·GRID_H + ICON_H/2，对称 → y0 = centerY + (cols-1)·GRID_H/2 - ICON_H/2
-      const x0 = centerX - ((rowsInCol - 1) * GRID_W + ICON_W) / 2
+      const x0 = cx + (w - h) / (2 * zoom) + PAD_TOP
       const y0 = centerY + ((cols - 1) * GRID_H - ICON_H) / 2
       return sorted.map(function (item, i) {
         const col = Math.floor(i / perCol)
@@ -105,12 +106,13 @@ App.DesktopOrganize = (function () {
         }
       })
     }
-    // 竖屏：行内沿世界 +x（屏幕向右，步长 GRID_W），换行沿世界 +y（屏幕向下，步长 GRID_H）
+    // 竖屏：行内沿世界 +x（屏幕向右，步长 GRID_W），换行沿世界 +y（屏幕向下，步长 GRID_H）。
+    // 顶边基线 = 视口顶部世界 y = camera.y；x 方向水平居中。
     const perRow = Math.max(1, Math.floor((w / zoom) / GRID_W))     // 每行格子数（屏幕宽方向）
     const rows = Math.max(1, Math.ceil(n / perRow))                 // 实际行数
     const colsInRow = Math.min(n, perRow)                           // 实际每行格数
+    const y0 = cy + PAD_TOP
     const x0 = centerX - ((colsInRow - 1) * GRID_W + ICON_W) / 2
-    const y0 = centerY - ((rows - 1) * GRID_H + ICON_H) / 2
     return sorted.map(function (item, i) {
       const row = Math.floor(i / perRow)
       const col = i % perRow

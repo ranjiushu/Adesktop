@@ -86,8 +86,8 @@ App.utils = (function () {
     let touchFired = false
     /** @type {number | null} */
     let timer = null
-    // 双击状态：pendingTap = 第一击已松手、等待第二击；tapTimer = 单击延迟定时器
-    // （双击模式下单击延迟 doubleTapMs 判定——只影响启用双击的按钮，Home 低频操作可接受）
+    // 双击状态：pendingTap = 第一击已松手、双击窗口内等待第二击；tapTimer = 双击窗口定时器
+    // （双击模式下单击**立即**执行，窗口仅用于检测第二击——不引入单击延迟，见 touchend）
     let pendingTap = false
     /** @type {number | null} */
     let tapTimer = null
@@ -143,20 +143,22 @@ App.utils = (function () {
       if (longFired) return
       if (hasDouble) {
         if (pendingTap) {
-          // 双击第二击：取消待触发的单击，改触发 onDoubleTap
+          // 双击第二击：取消双击窗口，改触发 onDoubleTap
+          // （第一击已立即执行 onTap——双击场景下其动画会被 onDoubleTap 打断覆盖，
+          //   见 goHome/fitAllFiles 的 animateCameraTo cancelCameraAnim）
           pendingTap = false
           cancelTapTimer()
           if (handlers.onDoubleTap) handlers.onDoubleTap.call(btn, e)
           return
         }
-        // 第一击：延迟单击（双击窗口内第二击到达则改判双击）
+        // 第一击：**立即**执行 onTap（单击零延迟，双击窗口仅作第二击检测——
+        // 曾延迟 300ms 判定，用户感知点击无反应/动画变慢，2026-08-19 真机反馈）
         pendingTap = true
         tapTimer = setTimeout(function () {
-          if (!pendingTap) return
           pendingTap = false
           tapTimer = null
-          if (handlers.onTap) handlers.onTap.call(btn, e)
         }, doubleTapMs)
+        if (handlers.onTap) handlers.onTap.call(btn, e)
         return
       }
       if (handlers.onTap) handlers.onTap.call(btn, e)

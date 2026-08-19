@@ -234,17 +234,20 @@ App.DesktopNavigation = (function () {
 
   // 一览全部文件（双击底栏 Home 触发）：fit-bounds——全部图标包围盒中心 + 当前方向
   // 最大可见 zoom（zoom 最大化：「尽可能多的文件出现在屏幕里面」）。
-  // 位置来源 = C.positions（render 已补齐自动排布位置，见 desktop-render layout()）。
-  // 过滤布局隐藏文件；无文件 → toast 提示；folder 容器 Home 已禁用（此处防御）。
-  // 临时视野：不写 Home 快照（单击 Home 仍回锚；可长按重新记录）。
+  // 位置来源 = C.positions 中**当前 items 的 key**（render 已补齐自动排布位置）——
+  // 曾统计全表：历史残留 key（已删/拖走过/跨目录）让包围盒虚大 → zoom 被压小、
+  // 大片无意义空白（2026-08-19 真机反馈）。过滤布局隐藏文件；无文件 → toast 提示；
+  // folder 容器 Home 已禁用（此处防御）。临时视野：不写 Home 快照。
   /** @returns {boolean} */
   function fitAllFiles() {
     if (C.isFolderView()) return false
     if (!App.DesktopFit || typeof App.DesktopFit.fitCamera !== 'function') return false
     const pts = []
-    Object.keys(C.positions).forEach(function (k) {
-      if (k === C.LAYOUT_FILE) return
-      const p = C.positions[k]
+    C.state.items.forEach(function (it) {
+      if (it.name === C.LAYOUT_FILE) return
+      const key = (C.state.mode === 'all-files' && it.name === C.state.trashName && !C.isFolderView())
+        ? C.state.trashName : C.fullPath(it.name)
+      const p = C.positions[key]
       if (p && typeof p.x === 'number' && typeof p.y === 'number') pts.push(p)
     })
     const target = App.DesktopFit.fitCamera(

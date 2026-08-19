@@ -154,6 +154,7 @@ App.Desktop = (function () {
     captureHome: N.captureHome,
     captureDefaultView: N.captureDefaultView,
     goHome: N.goHome,
+    fitAllFiles: N.fitAllFiles,
     setAdvancedBrowse: B.setAdvancedBrowse,
     isAdvancedBrowse: B.isAdvancedBrowse,
     exitTempMode: B.exitTempMode,

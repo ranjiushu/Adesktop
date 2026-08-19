@@ -88,13 +88,19 @@ App.BottomBar = (function () {
         }
       })
     }
-    // Home：点按 = 回空间锚点视角（快照优先，无则默认视角）；长按 500ms = 记录当前位置快照
+    // Home：单击 = 回空间锚点视角（快照优先，无则默认视角）；双击 = 一览全部文件
+    // （fit-bounds：全部图标放进屏幕，见 DesktopFit）；长按 500ms = 记录当前位置快照
     let home = _getEl('bb-btn-home')
     if (home) {
       App.utils.bindPressSplit(home, {
         onTap: function () {
           if (App.Desktop && typeof App.Desktop.goHome === 'function') {
             App.Desktop.goHome()
+          }
+        },
+        onDoubleTap: function () {
+          if (App.Desktop && typeof App.Desktop.fitAllFiles === 'function') {
+            App.Desktop.fitAllFiles()
           }
         },
         onLongPress: function () {

@@ -23,7 +23,7 @@ mkdir -p "$(dirname "$OUTPUT")"
 JS_ORDER=(
   namespace.js icons.js utils.js bridge.js toast.js dialog.js loading.js file-api.js shortcut.js type-icons.js thumbnail.js markdown.js viewer.js file-opener.js clipboard.js double-tap.js
   desktop-nav.js desktop-selection.js folder-sort.js
-  desktop-grid.js folder-layout.js layout-store.js view-store.js home-store.js desktop-camera.js desktop-gesture.js desktop-core.js desktop-render.js desktop-organize.js desktop-browse-mode.js desktop-navigation.js desktop-persist.js desktop-viewer-link.js desktop-gesture-handlers.js desktop.js
+  desktop-grid.js folder-layout.js layout-store.js view-store.js home-store.js desktop-camera.js desktop-gesture.js desktop-core.js desktop-render.js desktop-organize.js desktop-fit.js desktop-browse-mode.js desktop-navigation.js desktop-persist.js desktop-viewer-link.js desktop-gesture-handlers.js desktop.js
   view-menu.js actions.js app-list.js fab-speed-dial.js move-target.js fab-drag.js drawer.js drawer-swipe.js build-info.js inspector.js
   ui.js ime-adapter.js bottom-bar.js create-dialog.js rename-dialog.js website-dialog.js web-upload.js main.js
 )

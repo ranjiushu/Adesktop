@@ -110,6 +110,7 @@ e2e_step "bottom-bar-e2e"  scripts/verify-bottom-bar.js
 e2e_step "buildinfo-e2e"   scripts/verify-buildinfo.js
 e2e_step "fab-inspector-e2e" scripts/verify-fab-inspector.js
 e2e_step "rotate-e2e"      scripts/verify-rotate.js
+e2e_step "fit-e2e"         scripts/verify-fit.js
 
 # ── 摘要 ──
 echo ""

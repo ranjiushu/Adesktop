@@ -247,12 +247,14 @@ interface DesktopCore {
 /** 按压处理器（utils.js） */
 interface PressHandlers {
   onTap?: (e: Event) => void
+  onDoubleTap?: (e: Event) => void
   onLongPress?: (e: Event) => void
 }
 
 interface PressOpts {
   longPressMs?: number
   moveThreshold?: number
+  doubleTapMs?: number
 }
 
 interface AppUtils {
@@ -567,6 +569,19 @@ interface DesktopOrganize {
   GRID_H: number
 }
 
+/** 一览模式纯函数（App.DesktopFit）：fit-bounds——全部图标包围盒中心 + 当前方向最大可见 zoom */
+interface DesktopFit {
+  fitCamera(
+    positions: Array<{ x: number; y: number }>,
+    viewportW: number,
+    viewportH: number,
+    rotation?: number
+  ): DesktopCameraState | null
+  ICON_W: number
+  ICON_H: number
+  PAD: number
+}
+
 /** 桌面编排入口（App.Desktop）：各模块能力聚合 + 手势初始化 */
 interface Desktop {
   refresh(): Promise<any>
@@ -603,6 +618,7 @@ interface Desktop {
   captureHome: () => void
   captureDefaultView: () => void
   goHome: () => void
+  fitAllFiles: () => boolean
   setAdvancedBrowse: (on: boolean) => void
   isAdvancedBrowse: () => boolean
   exitTempMode: () => void
@@ -688,6 +704,7 @@ interface AppNamespace {
   ViewStore: ViewStore
   DesktopPersist: DesktopPersist
   DesktopOrganize: DesktopOrganize
+  DesktopFit: DesktopFit
   DesktopCore: DesktopCore
   DesktopNav: DesktopNav
   DesktopBrowseMode: DesktopBrowseMode

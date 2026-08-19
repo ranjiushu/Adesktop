@@ -16,6 +16,7 @@ App.BottomBar = (function () {
   function _getEl(id) { return document.getElementById(id) }
 
   // 更新后退/前进/上级/Home 禁用态（根目录可后退判定、栈尾不可前进、子文件夹容器内上级与 Home 禁用）
+  // 演示模式下前进/后退由 SnapshotSheet 接管，此处不做目录导航态更新。
   /** @returns {void} */
   function updateNavButtons() {
     let back = _getEl('bb-btn-back')
@@ -23,6 +24,14 @@ App.BottomBar = (function () {
     let up = _getEl('bb-btn-up')
     let home = _getEl('bb-btn-home')
     if (!App.Desktop) return
+    // 演示模式：SnapshotSheet 自行维护前进/后退边界态
+    if (App.SnapshotSheet && App.SnapshotSheet.isPresentationMode && App.SnapshotSheet.isPresentationMode()) {
+      if (up) _setEnabled(up, false)
+      if (home) _setEnabled(home, true)
+      if (App.SnapshotSheet.updatePresentationState) App.SnapshotSheet.updatePresentationState()
+      updateHomeState()
+      return
+    }
     const canBack = typeof App.Desktop.canGoBack === 'function' && App.Desktop.canGoBack()
     const canFwd = typeof App.Desktop.canGoForward === 'function' && App.Desktop.canGoForward()
     const canUp = typeof App.Desktop.canGoUp === 'function' && App.Desktop.canGoUp()
@@ -47,18 +56,26 @@ App.BottomBar = (function () {
     }
   }
 
-  // Home 快照视觉：已记录快照 → 图标强调色（用户可感知「快照存在」）。
-  // 按当前画布方向（rotation）读对应槽位：竖屏/横屏各有独立快照标记。
+  // Home 快照视觉：存在快照列表 → 图标强调色（用户可感知「快照存在」）。
+  // 快照列表已取代单一 Home 快照语义，但仍保留 HomeStore 数据兼容。
   /** @returns {void} */
   function updateHomeState() {
     let home = _getEl('bb-btn-home')
-    if (!home || !App.HomeStore) return
+    if (!home) return
     const rootId = (App.Desktop && typeof App.Desktop.getRootId === 'function')
       ? App.Desktop.getRootId() : ''
-    const rot = (App.Desktop && typeof App.Desktop.isRotated === 'function' && App.Desktop.isRotated())
-      ? 90 : 0
-    const data = App.HomeStore.load(rootId, rot)
-    if (data && data.home) home.classList.add('home-has-snapshot')
+    let hasSnapshot = false
+    if (App.SnapshotStore) {
+      const data = App.SnapshotStore.load(rootId)
+      hasSnapshot = data.snapshots.length > 0
+    }
+    if (!hasSnapshot && App.HomeStore) {
+      const rot = (App.Desktop && typeof App.Desktop.isRotated === 'function' && App.Desktop.isRotated())
+        ? 90 : 0
+      const data = App.HomeStore.load(rootId, rot)
+      hasSnapshot = !!(data && data.home)
+    }
+    if (hasSnapshot) home.classList.add('home-has-snapshot')
     else home.classList.remove('home-has-snapshot')
   }
 
@@ -75,6 +92,11 @@ App.BottomBar = (function () {
     let back = _getEl('bb-btn-back')
     if (back) {
       App.utils.bindPress(back, function () {
+        // 演示模式下前进/后退切换快照
+        if (App.SnapshotSheet && App.SnapshotSheet.isPresentationMode && App.SnapshotSheet.isPresentationMode()) {
+          App.SnapshotSheet.goPrev()
+          return
+        }
         if (App.Desktop && typeof App.Desktop.goBack === 'function') {
           App.Desktop.goBack()
         }
@@ -83,6 +105,11 @@ App.BottomBar = (function () {
     let fwd = _getEl('bb-btn-forward')
     if (fwd) {
       App.utils.bindPress(fwd, function () {
+        // 演示模式下前进/后退切换快照
+        if (App.SnapshotSheet && App.SnapshotSheet.isPresentationMode && App.SnapshotSheet.isPresentationMode()) {
+          App.SnapshotSheet.goNext()
+          return
+        }
         if (App.Desktop && typeof App.Desktop.goForward === 'function') {
           App.Desktop.goForward()
         }

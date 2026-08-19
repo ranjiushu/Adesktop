@@ -70,6 +70,10 @@ App.boot = function boot() {
   if (App.ImeAdapter && typeof App.ImeAdapter.init === 'function') {
     App.ImeAdapter.init()
   }
+  // 演示快照面板（底栏上滑呼出，依赖 BottomBar 按钮但 init 早于绑定点击）
+  if (App.SnapshotSheet && typeof App.SnapshotSheet.init === 'function') {
+    App.SnapshotSheet.init()
+  }
   // 底部工具栏（加号 → 新建对话框，其余占位）
   if (App.BottomBar && typeof App.BottomBar.init === 'function') {
     App.BottomBar.init()
@@ -138,6 +142,10 @@ if (App.Drawer && typeof App.Drawer.isOpen === 'function' && App.Drawer.isOpen()
   }
   if (App.ViewMenu && typeof App.ViewMenu.isOpen === 'function' && App.ViewMenu.isOpen()) {
     App.ViewMenu.close()
+    return true
+  }
+  if (App.SnapshotSheet && typeof App.SnapshotSheet.isOpen === 'function' && App.SnapshotSheet.isOpen()) {
+    App.SnapshotSheet.close()
     return true
   }
   if (App.BuildInfo && typeof App.BuildInfo.isOpen === 'function' && App.BuildInfo.isOpen()) {

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 演示快照 + 演示模式（2026-08-19）
+
+- **演示快照面板**：底栏区域垂直上滑跟手呼出快照列表；列表显示快照名称与缩放层级；
+  点击切换快照（相机平滑飞行）；长按拖动把手重排顺序
+- **Home 语义迁移到快照列表**：长按底栏 Home 在当前方向（竖屏/横屏）快照列表的 Home
+  位插入新快照；点按 Home 飞回当前方向 Home 位；新快照插入位置可在快照菜单切换
+  （顶部/底部，默认顶部）
+- **快照存储**：`snapshot-store.js` 独立模块，version 2 结构 `{portrait, landscape}` 双槽位
+  按画布方向隔离；持久化走 localStorage + 桌面空间目录 `.adesktop-snapshots.json`（文件为真相）；
+  兼容旧版 `HomeStore.home/fallback` 自动生成初始快照
+- **演示模式**：快照面板三点菜单开启；开启后底栏前进/后退切换为「下一个/上一个快照」，
+  到边界禁用并吐司提示，吐司内提供「回到第一页/最后一页」快速跳转
+- **拖动排序引擎**：移植 LexiCull `drag-sort.js`（FLIP 智能避让 + 边缘自动滚动）到 Adesktop，
+  用于快照列表排序
+- **吐司增强**：`toast.js` 新增 `showAction(msg, actionText, onAction)`，支持带操作按钮的
+  Snackbar 样式吐司；普通吐司超时保持 1800ms，操作吐司 3500ms
+- **测试**：新增 `test-snapshot-store.js`（竖横屏隔离/CRUD/插入位置/Home 位/兼容迁移）、
+  `test-toast-action.js`；更新 `verify-home.js`/`verify-rotate.js` 适配 SnapshotStore 存储结构
+
 ### 修复布局持久化 + 布局落目录文件 + 整理桌面（2026-08-19）
 
 - **修复布局持久化被破坏（根因）**：refresh 的 positions 清理按「key 无 '/'」判定根级——

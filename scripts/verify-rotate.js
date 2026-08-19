@@ -288,11 +288,12 @@ async function main() {
     })
     await tap(client, homeRect.x, homeRect.y, 650)
     await sleep(300)
-    const snapP = await page.evaluate(() => {
-      try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
+    const bundleP = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2')) } catch (e) { return null }
     })
-    if (snapP && snapP.home) pass('竖屏长按 Home → 快照写入顶层 home 槽位（tx=' + camPortrait.tx.toFixed(0) + '）')
-    else fail('竖屏快照写入断言', JSON.stringify(snapP))
+    const snapP = bundleP && bundleP.portrait && bundleP.portrait.snapshots && bundleP.portrait.snapshots[0]
+    if (snapP && snapP.camera) pass('竖屏长按 Home → 快照写入 portrait 槽位（tx=' + camPortrait.tx.toFixed(0) + '）')
+    else fail('竖屏快照写入断言', JSON.stringify(bundleP))
     // 旋转到横屏：横屏槽位尚无快照 → 保持当前位置只转方向（相机位置不变，仅加 rotate）
     await tap(client, menuBtn.x, menuBtn.y)
     const rot5 = await rect('[data-rotate="toggle"]')
@@ -307,34 +308,39 @@ async function main() {
     await sleep(200)
     await tap(client, homeRect.x, homeRect.y, 650)
     await sleep(300)
-    const snapL = await page.evaluate(() => {
-      try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
+    const bundleL = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2')) } catch (e) { return null }
     })
-    if (snapL && snapL.landscapeHome) pass('横屏长按 Home → 快照写入 landscapeHome 槽位')
-    else fail('横屏快照写入断言', JSON.stringify(snapL))
+    const snapL = bundleL && bundleL.landscape && bundleL.landscape.snapshots && bundleL.landscape.snapshots[0]
+    if (snapL && snapL.camera) pass('横屏长按 Home → 快照写入 landscape 槽位')
+    else fail('横屏快照写入断言', JSON.stringify(bundleL))
     // 记录横屏平移后的相机位置（P2'——保中心转回竖屏的参照）
     const camLandBefore = await page.evaluate(() => {
       const c = App.DesktopCore.camera
       return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
     })
-    if (snapL && snapL.home && snapL.landscapeHome &&
-        (Math.abs(snapL.home.x - snapL.landscapeHome.x) > 1 ||
-         Math.abs(snapL.home.y - snapL.landscapeHome.y) > 1)) {
-      pass('竖屏/横屏快照槽位独立且位置不同（home 与 landscapeHome 分存）')
+    const homeCam = snapP && snapP.camera
+    const landCam = snapL && snapL.camera
+    if (homeCam && landCam &&
+        (Math.abs(homeCam.x - landCam.x) > 1 ||
+         Math.abs(homeCam.y - landCam.y) > 1)) {
+      pass('竖屏/横屏快照槽位独立且位置不同（portrait 与 landscape 分存）')
     } else {
-      fail('竖屏/横屏快照槽位应独立且位置不同', JSON.stringify(snapL))
+      fail('竖屏/横屏快照槽位应独立且位置不同', JSON.stringify({ homeCam, landCam }))
     }
     // 竖屏更新快照 → 横屏槽位保留原值（互不覆盖）
     await tap(client, homeRect.x, homeRect.y, 650)
     await sleep(300)
-    const snapP2 = await page.evaluate(() => {
-      try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
+    const bundleP2 = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v2')) } catch (e) { return null }
     })
-    if (snapP2 && snapP2.landscapeHome &&
-        JSON.stringify(snapP2.landscapeHome) === JSON.stringify(snapL.landscapeHome)) {
+    const snapP2 = bundleP2 && bundleP2.portrait && bundleP2.portrait.snapshots && bundleP2.portrait.snapshots[0]
+    const stillLand = bundleP2 && bundleP2.landscape && bundleP2.landscape.snapshots && bundleP2.landscape.snapshots[0]
+    if (stillLand && stillLand.camera &&
+        JSON.stringify(stillLand.camera) === JSON.stringify(snapL.camera)) {
       pass('更新竖屏快照 → 横屏槽位保留（互不覆盖）')
     } else {
-      fail('更新竖屏后横屏槽位应保留', JSON.stringify(snapP2))
+      fail('更新竖屏后横屏槽位应保留', JSON.stringify(bundleP2))
     }
     // 转回竖屏 → Home 高亮恢复（竖屏槽位有快照）
     await tap(client, menuBtn.x, menuBtn.y)
@@ -378,14 +384,14 @@ async function main() {
       const c = App.DesktopCore.camera
       return { x: c.x, y: c.y, zoom: c.zoom, rotation: c.rotation }
     })
-    if (camHomeP && snapP && snapP.home &&
-        Math.abs(camHomeP.x - snapP.home.x) < 1e-6 &&
-        Math.abs(camHomeP.y - snapP.home.y) < 1e-6 &&
-        Math.abs(camHomeP.zoom - snapP.home.zoom) < 1e-6) {
-      pass('竖屏点 Home → 回竖屏槽位位置（home 槽位 P1）')
+    if (camHomeP && snapP2 && snapP2.camera &&
+        Math.abs(camHomeP.x - snapP2.camera.x) < 1e-6 &&
+        Math.abs(camHomeP.y - snapP2.camera.y) < 1e-6 &&
+        Math.abs(camHomeP.zoom - snapP2.camera.zoom) < 1e-6) {
+      pass('竖屏点 Home → 回竖屏槽位位置（portrait 槽位 P1）')
     } else {
       fail('竖屏点 Home 应回竖屏槽位位置',
-        'slot=' + JSON.stringify(snapP && snapP.home) + ' cam=' + JSON.stringify(camHomeP))
+        'slot=' + JSON.stringify(snapP2 && snapP2.camera) + ' cam=' + JSON.stringify(camHomeP))
     }
     // 再切横屏 → 保中心（x/y/zoom 不变，仅 rotation=90）
     await tap(client, menuBtn.x, menuBtn.y)
@@ -429,14 +435,14 @@ async function main() {
       fail('横屏下点 Home 应保持 rotation=90',
         'before=' + JSON.stringify(camBeforeHome) + ' after=' + JSON.stringify(camAfterHome))
     }
-    if (camAfterHome && snapL && snapL.landscapeHome &&
-        Math.abs(camAfterHome.x - snapL.landscapeHome.x) < 1e-6 &&
-        Math.abs(camAfterHome.y - snapL.landscapeHome.y) < 1e-6 &&
-        Math.abs(camAfterHome.zoom - snapL.landscapeHome.zoom) < 1e-6) {
-      pass('横屏下点 Home → 落在横屏槽位位置（landscapeHome）')
+    if (camAfterHome && snapL && snapL.camera &&
+        Math.abs(camAfterHome.x - snapL.camera.x) < 1e-6 &&
+        Math.abs(camAfterHome.y - snapL.camera.y) < 1e-6 &&
+        Math.abs(camAfterHome.zoom - snapL.camera.zoom) < 1e-6) {
+      pass('横屏下点 Home → 落在横屏槽位位置（landscape 槽位）')
     } else {
       fail('横屏下点 Home 应落在横屏槽位位置',
-        'slot=' + JSON.stringify(snapL && snapL.landscapeHome) + ' cam=' + JSON.stringify(camAfterHome))
+        'slot=' + JSON.stringify(snapL && snapL.camera) + ' cam=' + JSON.stringify(camAfterHome))
     }
 
     // 转回竖屏，恢复初始状态（供场景 5 pageerror 检查）

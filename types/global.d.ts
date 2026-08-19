@@ -115,6 +115,45 @@ interface HomeStore {
   DEFAULT_CAMERA: AppCamera
 }
 
+/** 演示快照 */
+interface Snapshot {
+  id: string
+  name: string
+  camera: DesktopCameraState
+  createdAt: number
+}
+
+/** 快照列表持久化结构（当前方向视图） */
+interface SnapshotData {
+  version: number
+  snapshots: Array<Snapshot>
+}
+
+/** 快照完整持久化结构（含竖屏/横屏双槽位） */
+interface SnapshotBundle {
+  version: number
+  portrait: SnapshotData
+  landscape: SnapshotData
+}
+
+/** 快照存储（App.SnapshotStore） */
+interface SnapshotStore {
+  VERSION: number
+  SNAPSHOTS_FILE: string
+  load(rootId: string): SnapshotData
+  save(data: SnapshotData, rootId: string): boolean
+  create(camera: DesktopCameraState, rootId: string): Snapshot | null
+  delete(data: SnapshotData, id: string): SnapshotData
+  reorder(data: SnapshotData, from: number, to: number): SnapshotData
+  getInsertPosition(): 'top' | 'bottom'
+  setInsertPosition(pos: 'top' | 'bottom'): boolean
+  homeIndex(list: Array<Snapshot>, pos: 'top' | 'bottom'): number
+  getHome(data: SnapshotData, pos: 'top' | 'bottom'): Snapshot | null
+  at(data: SnapshotData, idx: number): Snapshot | null
+  hasAny(rootId: string): boolean
+  loadFromFile(rootId: string): Promise<SnapshotBundle | null>
+}
+
 /** 运行时相机状态（DesktopCamera 约定：含画布旋转角） */
 interface DesktopCameraState {
   x: number
@@ -261,6 +300,44 @@ interface AppUtils {
   escapeHtml(str: any): string
   bindPress(btn: HTMLElement | null, handler: (e: Event) => void): void
   bindPressSplit(btn: HTMLElement | null, handlers: PressHandlers, opts?: PressOpts): void
+}
+
+/** 拖拽排序引擎配置 */
+interface DragSortConfig {
+  container: HTMLElement
+  itemSelector: string
+  dragClass: string
+  dragActiveClass: string
+  targetClass: string
+  dividerSelector?: string | null
+  isActive(): boolean
+  onCommit?(from: number, to: number): void
+  onDragStart?(): void
+  onDragActivate?(): void
+  edgeZone?: number
+  edgeZoneTop?: number
+  edgeZoneBottom?: number
+  edgeInsetTop?: number | (() => number)
+  edgeInsetBottom?: number | (() => number)
+  minScroll?: number
+  maxScroll?: number
+  hardMaxScroll?: number
+  overshootGain?: number
+  dragThreshold?: number
+}
+
+/** 拖拽排序引擎实例 */
+interface DragSortEngine {
+  startDrag(itemEl: HTMLElement, clientY: number): void
+  cleanup(): void
+  isDragging(): boolean
+  config: DragSortConfig
+}
+
+/** 拖拽排序模块（App.dragSort） */
+interface DragSort {
+  isDragSortActive(): boolean
+  createDragSortEngine(config: DragSortConfig): DragSortEngine
 }
 
 /** 文件夹视图排布（App.FolderLayout）：网格/列表坐标纯函数 */
@@ -436,9 +513,18 @@ interface DesktopNav {
   basename(path: string): string
 }
 
+/** 带操作按钮的吐司队列项 */
+interface ToastActionItem {
+  type: 'action'
+  msg: string
+  actionText: string
+  onAction: () => void
+}
+
 /** 轻量吐司（App.toast） */
 interface Toast {
   show(msg: string): void
+  showAction(msg: string, actionText: string, onAction: () => void): void
   pending(): number
 }
 
@@ -550,6 +636,22 @@ interface BottomBar {
   init(): void
   updateNavButtons(): void
   updateHomeState(): void
+}
+
+/** 演示快照面板（App.SnapshotSheet） */
+interface SnapshotSheet {
+  init(): void
+  refresh(): void
+  open(): void
+  close(): void
+  isOpen(): boolean
+  setPresentationMode(on: boolean): void
+  isPresentationMode(): boolean
+  goNext(): boolean
+  goPrev(): boolean
+  updatePresentationState(): void
+  currentIndex(): number
+  setCurrentIndex(idx: number): void
 }
 
 /** 整理桌面纯函数（App.DesktopOrganize） */
@@ -700,6 +802,7 @@ interface AppNamespace {
   FileAPI: FileApi
   LayoutStore: LayoutStore
   HomeStore: HomeStore
+  SnapshotStore: SnapshotStore
   DesktopCamera: DesktopCamera
   ViewStore: ViewStore
   DesktopPersist: DesktopPersist
@@ -724,6 +827,7 @@ interface AppNamespace {
   Loading: Loading
   Drawer: Drawer
   BottomBar: BottomBar
+  SnapshotSheet: SnapshotSheet
   DoubleTap: DoubleTap
   ImeAdapter: ImeAdapter
   Desktop: Desktop
@@ -738,6 +842,7 @@ interface AppNamespace {
   ui: AppUi
   bridge: AppBridge
   toast: Toast
+  dragSort: DragSort
   [key: string]: any
 }
 

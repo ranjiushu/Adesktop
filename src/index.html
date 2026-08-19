@@ -435,6 +435,26 @@
   </div>
 </div>
 
+<!-- ===== 演示快照面板：底栏上滑呼出，管理快照 + 演示模式 ===== -->
+<div id="snapshot-sheet" class="snapshot-sheet" aria-hidden="true">
+  <div id="snapshot-sheet-overlay" class="snapshot-sheet-overlay" aria-hidden="true"></div>
+  <div id="snapshot-sheet-panel" class="snapshot-sheet-panel">
+    <div class="snapshot-sheet-header">
+      <span class="snapshot-sheet-title">演示快照</span>
+      <button id="snapshot-menu-btn" class="snapshot-sheet-menu-btn" aria-label="快照菜单" aria-haspopup="true" aria-expanded="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <div id="snapshot-menu" class="snapshot-menu snapshot-menu-hidden" aria-hidden="true">
+        <button class="snapshot-menu-item" data-action="presentation">开启演示模式</button>
+        <button class="snapshot-menu-item" data-action="insert-top">新快照插入顶部</button>
+        <button class="snapshot-menu-item" data-action="insert-bottom">新快照插入底部</button>
+        <button class="snapshot-menu-item" data-action="delete-current">删除当前快照</button>
+      </div>
+    </div>
+    <div id="snapshot-list" class="snapshot-list"></div>
+  </div>
+</div>
+
 <script>
 // __JS_PLACEHOLDER__
 </script>

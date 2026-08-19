@@ -80,6 +80,11 @@ App.DesktopNavigation = (function () {
       // 进入 folder：隐藏 canvas 态 Viewer（保留状态，退回根目录恢复）
       if (App.InternalViewer && App.InternalViewer.suspendCanvas) App.InternalViewer.suspendCanvas()
       C.camera = App.DesktopCamera.create(0, 0, 1)
+      // folder 视图快照无意义，自动退出演示模式避免迷航
+      if (App.SnapshotSheet && App.SnapshotSheet.setPresentationMode &&
+          App.SnapshotSheet.isPresentationMode && App.SnapshotSheet.isPresentationMode()) {
+        App.SnapshotSheet.setPresentationMode(false)
+      }
     } else {
       // 回到根目录：恢复 canvas 态 Viewer
       if (App.InternalViewer && App.InternalViewer.resumeCanvas) App.InternalViewer.resumeCanvas()
@@ -143,6 +148,25 @@ App.DesktopNavigation = (function () {
   // rotation 透传：竖屏（0）/横屏（90）各存各的槽位，切换画布方向后 Home 回对应槽位。
   function captureHome() {
     if (C.isFolderView()) return false
+    if (App.SnapshotStore && typeof App.SnapshotStore.create === 'function') {
+      const s = App.SnapshotStore.create(C.camera, C.state.rootId)
+      if (!s) {
+        if (App.toast && typeof App.toast.show === 'function') App.toast.show('快照保存失败')
+        return false
+      }
+      if (App.bridge && typeof App.bridge.vibrate === 'function') App.bridge.vibrate(30)
+      if (App.toast && typeof App.toast.show === 'function') {
+        App.toast.show('已记录快照：' + s.name)
+      }
+      if (App.SnapshotSheet && typeof App.SnapshotSheet.refresh === 'function') {
+        App.SnapshotSheet.refresh()
+      }
+      if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
+        App.BottomBar.updateHomeState()
+      }
+      return true
+    }
+    // 降级：旧版 HomeStore
     const cam = { x: C.camera.x, y: C.camera.y, zoom: C.camera.zoom }
     if (!App.HomeStore.saveHome(cam, C.state.rootId, C.camera.rotation)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('Home 视角保存失败')
@@ -169,19 +193,37 @@ App.DesktopNavigation = (function () {
     return true
   }
 
-  // 回到 Home：快照优先，其次默认视角，最后出厂 (0,0,1)。
-  // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera——
-  // 从文件夹返回仍恢复进文件夹前的视角，Home 只负责「现在」的空间锚点。
-  // rotation 透传：create 第四参确保目标相机保持当前旋转态（横屏点 Home 不闪回竖屏）。
+  // 回到 Home：优先使用快照列表的 Home 位（由插入位置 top/bottom 决定）；
+  // 无快照时回退到旧版 HomeStore；再无则出厂 (0,0,1)。
+  // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera。
+  // rotation 透传：create 第四参确保目标相机保持当前旋转态。
   function goHome() {
     if (C.isFolderView()) return
     const rot = C.camera.rotation
     let target = App.DesktopCamera.create(0, 0, 1, rot)
-    const data = App.HomeStore.load(C.state.rootId, rot)
-    if (data && data.home) {
-      target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom, rot)
-    } else if (data && data.fallback) {
-      target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom, rot)
+    let found = false
+    if (App.SnapshotStore) {
+      const data = App.SnapshotStore.load(C.state.rootId)
+      const pos = App.SnapshotStore.getInsertPosition()
+      const home = App.SnapshotStore.getHome(data, pos)
+      if (home && home.camera) {
+        target = App.DesktopCamera.create(home.camera.x, home.camera.y, home.camera.zoom, rot)
+        found = true
+        if (App.SnapshotSheet && typeof App.SnapshotSheet.setCurrentIndex === 'function') {
+          const idx = App.SnapshotStore.homeIndex(data.snapshots, pos)
+          App.SnapshotSheet.setCurrentIndex(idx)
+        }
+      }
+    }
+    if (!found && App.HomeStore) {
+      const data = App.HomeStore.load(C.state.rootId, rot)
+      if (data && data.home) {
+        target = App.DesktopCamera.create(data.home.x, data.home.y, data.home.zoom, rot)
+        found = true
+      } else if (data && data.fallback) {
+        target = App.DesktopCamera.create(data.fallback.x, data.fallback.y, data.fallback.zoom, rot)
+        found = true
+      }
     }
     animateCameraTo(target)
   }

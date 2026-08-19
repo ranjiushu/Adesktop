@@ -1,7 +1,7 @@
 /* 类型图标系统：按文件名/目录判定类型 → 返回内联 SVG 图标。
- * 文件类型 → Vivid 全彩图标（数据在 type-icons-data.js，file-icon-vectors MIT）；
+ * 文件类型 → 彩色圆角瓷砖（Material Design Icons 字形，数据在 type-icons-data.js，Apache-2.0）；
  * trash/shortcut/unknown 等系统态 → 线条版（stroke currentColor，随主题自适应）。
- * 三级解析：扩展名精确匹配 → kind 级兜底 → 线条占位。
+ * 三级解析：扩展名精确匹配 → kind 瓷砖 → 线条占位。
  * 纯函数，零依赖（仅 namespace + type-icons-data）。类型 CSS 尺寸经 `.type-icon` 控制。
  * 本模块只负责「类型图标」（缩略图 fallback 基线）；缩略图判定与获取在 thumbnail.js（ThumbnailService）。
  * 导出: App.TypeIcons
@@ -57,25 +57,8 @@ App.TypeIcons = (function () {
     unknown: 'file'
   }
 
-  // 类型 → 全彩兜底图标（扩展名不在 DATA 时按 kind 取代表图标；shortcut/trash 无全彩 → 走线条版）
-  /** @type {Record<string, string>} */
-  const KIND_ICON = {
-    text: 'txt',
-    markdown: 'md',
-    json: 'json',
-    html: 'html',
-    code: 'js',
-    image: 'jpg',
-    video: 'mp4',
-    audio: 'mp3',
-    archive: 'zip',
-    pdf: 'pdf',
-    word: 'docx',
-    excel: 'xlsx',
-    ppt: 'pptx',
-    font: 'ttf',
-    executable: 'apk'
-  }
+  // 类型 → 全彩瓷砖（DATA 键 = kind 名；shortcut/trash/unknown 无瓷砖 → 走线条版）
+  //（扩展名精确匹配已由 iconFor 直接查 DATA[ext] 承担，pdf 等 ext==kind 的场景自然命中）
 
   // Feather 风格 SVG 内部内容（24x24 stroke），统一 stroke=currentColor
   /** @type {Record<string, string>} */
@@ -132,7 +115,7 @@ App.TypeIcons = (function () {
       : '<svg class="' + cls + '" viewBox="0 0 72 96">' + inner + '</svg>'
   }
 
-  // 文件名/目录 → 全彩类型图标（三级：扩展名精确 → kind 兜底 → 线条占位）
+  // 文件名/目录 → 全彩类型图标（三级：扩展名精确 → kind 瓷砖 → 线条占位）
   /** @param {string} name @param {boolean} isDir @returns {string} */
   function iconFor(name, isDir) {
     if (isDir) {
@@ -142,18 +125,16 @@ App.TypeIcons = (function () {
     if (ext && DATA[ext]) return colorSvg(kindFor(name, false), DATA[ext])
     const kind = kindFor(name, false)
     if (kind === 'shortcut' || kind === 'trash') return svgFor(kind)
-    const fb = KIND_ICON[kind]
-    if (fb && DATA[fb]) return colorSvg(kind, DATA[fb])
+    if (DATA[kind]) return colorSvg(kind, DATA[kind])
     return svgFor('unknown')
   }
 
-  // 类型 → 全彩图标（缩略图失败兜底等只有 kind 的场景）；无全彩则回退线条版
+  // 类型 → 全彩瓷砖（缩略图失败兜底等只有 kind 的场景）；无瓷砖则回退线条版
   /** @param {string} kind @returns {string} */
   function kindSvg(kind) {
     if (kind === 'folder') return DATA.folder ? colorSvg('folder', DATA.folder) : svgFor('folder')
     if (kind === 'shortcut' || kind === 'trash' || kind === 'unknown') return svgFor(kind)
-    const fb = KIND_ICON[kind]
-    if (fb && DATA[fb]) return colorSvg(kind, DATA[fb])
+    if (DATA[kind]) return colorSvg(kind, DATA[kind])
     return svgFor(kind)
   }
 

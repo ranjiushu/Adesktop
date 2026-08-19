@@ -72,21 +72,21 @@ check(T.svgFor('unknown').indexOf('type-unknown') >= 0, 'svgFor unknown 回退 c
 check(T.svgFor('no-such-kind').indexOf('type-no-such-kind') >= 0, 'svgFor 未登记 kind 保留原 class（形态回退 file）')
 check(T.svgFor('no-such-kind').indexOf('M13 2H6') >= 0, 'svgFor 未知 kind 形态回退 file')
 
-// ── 全彩图标（iconFor 三级解析）──
+// ── 全彩瓷砖（iconFor 三级解析）──
 const dataKeys = Object.keys(sandbox.App.TypeIconsData || {})
-check(dataKeys.length >= 150, 'type-icons-data 内置图标数 ≥ 150（实际 ' + dataKeys.length + '）')
+check(dataKeys.length >= 15, 'type-icons-data 内置瓷砖 ≥ 15（实际 ' + dataKeys.length + '）')
 
 const pdfIcon = T.iconFor('a.pdf', false)
 check(pdfIcon.indexOf('<svg') === 0, 'iconFor pdf 返回 <svg>')
 check(pdfIcon.indexOf('type-icon type-pdf') >= 0, 'iconFor pdf 含 type-pdf class')
-check(pdfIcon.indexOf('viewBox="0 0 72 96"') >= 0, 'iconFor pdf 为 Vivid 全彩（72x96）')
+check(pdfIcon.indexOf('viewBox="0 0 24 24"') >= 0, 'iconFor pdf 为 24x24 瓷砖')
 check(pdfIcon.indexOf('stroke="currentColor"') < 0, 'iconFor pdf 非线条版')
-check(pdfIcon.indexOf('#c11e07') >= 0, 'iconFor pdf 含全彩填充色')
+check(pdfIcon.indexOf('#e53935') >= 0, 'iconFor pdf 含红色瓷砖底色')
 
-// 扩展名精确匹配：png 有独立图标（与 jpg 不同）
-check(T.iconFor('a.png', false) !== T.iconFor('a.jpg', false), 'png/jpg 各自独立全彩图标')
+// 扩展名归并：png/jpg 都走 image 瓷砖（同一种）
+check(T.iconFor('a.png', false) === T.iconFor('a.jpg', false), 'png/jpg 归并为同一 image 瓷砖')
 
-// kind 兜底：rs 不在数据表 → 走 code → js 图标
+// kind 兜底：rs 不在数据表 → 走 code 瓷砖
 const rsIcon = T.iconFor('a.rs', false)
 check(rsIcon.indexOf('type-code') >= 0, 'iconFor rs 兜底 type-code')
 
@@ -95,14 +95,15 @@ const unkIcon = T.iconFor('a.xyzzy', false)
 check(unkIcon.indexOf('type-unknown') >= 0, 'iconFor 未知扩展名 → type-unknown')
 check(unkIcon.indexOf('stroke="currentColor"') >= 0, 'iconFor 未知扩展名 → 线条占位')
 
-// 目录 → 全彩文件夹
+// 目录 → 经典黄色文件夹
 const dirIcon = T.iconFor('我的文档', true)
 check(dirIcon.indexOf('type-folder') >= 0, 'iconFor 目录 → type-folder')
-check(dirIcon.indexOf('viewBox="0 0 100 100"') >= 0, 'iconFor 目录 → 全彩文件夹（100x100）')
+check(dirIcon.indexOf('M10,4H4C') >= 0, 'iconFor 目录 → Material folder 字形')
+check(dirIcon.indexOf('stroke="currentColor"') < 0, 'iconFor 目录 → 全彩文件夹')
 
 // 快捷方式/回收站 → 线条版（保持原样）
 check(T.iconFor('微信.desktop', false).indexOf('type-shortcut') >= 0, 'iconFor .desktop → type-shortcut 线条版')
-check(T.kindSvg('pdf').indexOf('type-pdf') >= 0 && T.kindSvg('pdf').indexOf('stroke="currentColor"') < 0, 'kindSvg pdf 全彩')
+check(T.kindSvg('pdf').indexOf('type-pdf') >= 0 && T.kindSvg('pdf').indexOf('stroke="currentColor"') < 0, 'kindSvg pdf 瓷砖')
 check(T.kindSvg('trash').indexOf('stroke="currentColor"') >= 0, 'kindSvg trash 线条版')
 
 if (failures > 0) { console.error('  [FAIL] type-icons 测试 ' + failures + ' 项失败'); process.exit(1) }

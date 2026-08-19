@@ -292,8 +292,11 @@ App.SnapshotSheet = (function () {
       edgeZone: 56,
       edgeInsetTop: 0,
       edgeInsetBottom: function () {
-        // 底栏 + 安全区（参考 LexiCull：有效边缘内缩到面板底缘之上）
-        return 10 * (window.innerHeight / 100) + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom') || '0')
+        // 有效边缘内缩到列表可视底缘（footer 关闭条 + 安全区）之上：
+        // 手指搭在关闭条上也吃到越界加速（参考 LexiCull 底栏遮挡内缩思路）
+        const footer = document.querySelector('.snapshot-sheet-footer')
+        const footerH = footer ? footer.offsetHeight : 0
+        return footerH + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom') || '0')
       }
     })
   }
@@ -833,6 +836,8 @@ App.SnapshotSheet = (function () {
 
     _panel.addEventListener('touchstart', function (e) {
       if (e.touches.length !== 1) return
+      // 拖拽排序活跃时不参与面板关闭手势
+      if (App.dragSort && App.dragSort.isDragSortActive && App.dragSort.isDragSortActive()) return
       const t = e.touches[0]
       const target = /** @type {HTMLElement} */(e.target)
       activeTouchId = t.identifier
@@ -853,6 +858,11 @@ App.SnapshotSheet = (function () {
 
     _panel.addEventListener('touchmove', function (e) {
       if (!tracking) return
+      // 拖拽排序活跃：面板让权，drag-sort 全权接管（不位移面板、不 preventDefault）
+      if (App.dragSort && App.dragSort.isDragSortActive && App.dragSort.isDragSortActive()) {
+        tracking = false
+        return
+      }
       const t = _findTouch(e.touches, activeTouchId)
       if (!t) return
       const dy = t.clientY - startY

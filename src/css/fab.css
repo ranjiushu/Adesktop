@@ -84,20 +84,8 @@
 [data-mode="selection"] .fab-set-selection { display: contents; }
 [data-mode="snapshot-operation"] .fab-set-operation { display: contents; }
 
-/* 快照面板打开时隐藏 FAB（操作模式除外）：面板内操作不混入桌面 FAB 语义 */
-body.snapshot-sheet-open:not(.snapshot-op-mode) .mode-switch-fab,
-body.snapshot-sheet-open:not(.snapshot-op-mode) .fab-speed-dial {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* 操作模式：FAB 从右下角浮现（Morph 成 ✕ 退出 + 操作按钮） */
-body.snapshot-op-mode .mode-switch-fab {
-  visibility: visible;
-  opacity: 1;
-  pointer-events: auto;
-}
+/* Morph FAB 始终位于最高层级（LexiCull 同款）：快照面板（z-index 650）打开时
+   FAB（1500）仍浮于其上，可见可点；操作模式时 morph 为 ✕ + 操作按钮 */
 
 /* ===== Speed Dial 子按钮 ===== */
 .fab-child {

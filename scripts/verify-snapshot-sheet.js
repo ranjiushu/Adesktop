@@ -46,6 +46,19 @@ async function swipeH(client, x, y, dx, steps = 8, gap = 14) {
   await sleep(TAP_GAP)
 }
 
+// 长按（>500ms 触发操作模式 + startDrag）后垂直拖动：验证排序生效且面板不跟随关闭
+async function longPressDrag(client, x, y, dy, steps = 10, gap = 16) {
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+  await sleep(650)
+  for (let i = 1; i <= steps; i++) {
+    await sleep(gap)
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + dy * i / steps }] })
+  }
+  await sleep(80)
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await sleep(TAP_GAP)
+}
+
 async function main() {
   const browser = await launch()
   try {
@@ -160,8 +173,8 @@ async function main() {
     else fail('列表渲染', 'items=' + lay.items + ' sections=' + lay.groupSections)
     if (lay.homeItems === 1) pass('Home 位高亮 1 项')
     else fail('Home 高亮', String(lay.homeItems))
-    if (!lay.fabVisible) pass('快照面板打开时 FAB 隐藏（操作模式除外）')
-    else fail('FAB 应隐藏')
+    if (lay.fabVisible) pass('快照面板打开时 FAB 仍可见（始终最高层级）')
+    else fail('FAB 应始终可见')
 
     // ── 2. 长按快照行 → 进入操作模式 ──
     const row1 = await page.evaluate(() => {
@@ -258,7 +271,29 @@ async function main() {
     if (!afterMove.opMode) pass('移动后退出操作模式')
     else fail('移动后退出', JSON.stringify(afterMove))
 
-    // ── 6. 再进操作模式 → FAB ✕ 退出 ──
+    // ── 6. 拖拽排序（项目A 2 项）：长按第 1 项向下拖 → 顺序变化 + 面板不跟随关闭 ──
+    const beforeNames = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('#snapshot-list .snapshot-name')).map(n => n.textContent))
+    const dragRow = await page.evaluate(() => {
+      const r = document.querySelector('#snapshot-list .snapshot-item')
+      const b = r.getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    })
+    await longPressDrag(client, dragRow.x, dragRow.y, 140)
+    const afterDrag = await page.evaluate(() => ({
+      names: Array.from(document.querySelectorAll('#snapshot-list .snapshot-name')).map(n => n.textContent),
+      panelTransform: document.querySelector('#snapshot-sheet-panel').style.transform,
+      opMode: App.SnapshotSheet.isOpMode(),
+      fabMode: document.querySelector('#fab-speed-dial').getAttribute('data-mode')
+    }))
+    if (afterDrag.names.length === 2 && afterDrag.names[0] !== beforeNames[0]) pass('长按拖拽 → 分组内排序生效（' + beforeNames[0] + ' → ' + afterDrag.names[0] + '）')
+    else fail('拖拽排序', JSON.stringify({ before: beforeNames, after: afterDrag.names }))
+    if (!afterDrag.panelTransform || afterDrag.panelTransform === 'translateY(0px)' || afterDrag.panelTransform === 'none') pass('拖拽时面板不跟随关闭（transform=' + afterDrag.panelTransform + '）')
+    else fail('面板跟随关闭', afterDrag.panelTransform)
+    if (afterDrag.opMode && afterDrag.fabMode === 'snapshot-operation') pass('拖拽后仍在操作模式（FAB 保持展开）')
+    else fail('拖拽后操作模式', JSON.stringify(afterDrag))
+
+    // ── 7. FAB ✕ 退出操作模式 ──
     const rowB = await page.evaluate(() => {
       const r = document.querySelector('#snapshot-list .snapshot-item')
       const b = r.getBoundingClientRect()
@@ -278,10 +313,10 @@ async function main() {
         return s.visibility === 'visible' && s.pointerEvents !== 'none' && s.opacity !== '0'
       })()
     }))
-    if (!afterExit.opMode && afterExit.fabMode === null && !afterExit.fabVisible) pass('FAB ✕ → 退出操作模式 + FAB 收起隐藏')
+    if (!afterExit.opMode && afterExit.fabMode === null && afterExit.fabVisible) pass('FAB ✕ → 退出操作模式 + FAB 收回（仍可见最高层）')
     else fail('FAB ✕ 退出', JSON.stringify(afterExit))
 
-    // ── 7. 点击 tab 切换仍正常 ──
+    // ── 8. 点击 tab 切换仍正常 ──
     const tab2 = await page.evaluate(() => {
       const t = document.querySelectorAll('.snapshot-tab')[1]
       const b = t.getBoundingClientRect()

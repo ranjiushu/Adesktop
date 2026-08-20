@@ -129,12 +129,9 @@ App.Actions = (function () {
     // saveLayout 写 .adesktop-layout.json 是异步的，refresh 读文件存在竞态
     // （读到旧/无文件 → 不触发 applyCameraForPath → transform 停留旧状态 →
     // 图标按旧 transform 渲染错位「找不见」，2026-08-19 真机反馈）。
-    // 与 toggleRotate 同款：setCamera（内部 commit 应用 transform）+ Viewer 手柄同步。
+    // 与 toggleRotate 同款：setCamera（内部 commit 应用 transform）。
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
       App.DesktopGesture.setCamera(C.camera)
-    }
-    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
-      App.InternalViewer.syncHandles(C.camera)
     }
     // 整理锚点写入**两方向** Home 槽位（同一 x/y/zoom，仅 rotation 字段区分）：
     // 屏幕中心世界点 = (c.x + w/2z, c.y + h/2z) 与 rotation 无关（见 desktop-camera.js），

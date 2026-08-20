@@ -17,12 +17,9 @@ App.DesktopGestureHandlers = (function () {
   const DOUBLE_TAP_MS = 300   // 双击窗口（interaction.md §7）
 
   function handleTap(world) {
-    // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）；
-    // 拖动手柄也视为点击卡片本体（手柄是辅助拖动区，点击语义与卡片一致：仅选中）
-    const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-      ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
-    const hitInst = handleInst || (App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
-      ? App.InternalViewer.topmostAt(world.x, world.y) : null)
+    // Viewer 画布实体：点击 = 单选选中该实例（脆弱/临时，点外部取消）
+    const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
+      ? App.InternalViewer.topmostAt(world.x, world.y) : null
     if (hitInst) {
       if (hitInst.getMode() === 'canvas') {
         App.InternalViewer.selectOnly(hitInst.id)
@@ -145,15 +142,8 @@ App.DesktopGestureHandlers = (function () {
 
   // 命中类型（desktop 空间）：selected=已选中（可直接拿起）/ icon=未选中图标 / empty=空白
   // viewer-selected = 命中的 Viewer 已被选中（可直接拿起移动实体）；viewer = 命中的 Viewer 未选中（长按/框选触发选中）
-  // viewer-handle = 命中 Viewer 的拖动手柄（辅助拖动入口：未选中也直接拿起，按住即选中+拖动）
   // folder 容器：icon=图标（可框选，不拿起）/ empty=空白（滚动），永不 selected（禁止移动）
   function hitTest(world) {
-    // 手柄优先于卡片本身命中（辅助拖动区，不受选中态限制）
-    const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-      ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
-    if (handleInst) {
-      return 'viewer-handle'
-    }
     const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
       ? App.InternalViewer.topmostAt(world.x, world.y) : null
     if (hitInst) {
@@ -193,12 +183,9 @@ App.DesktopGestureHandlers = (function () {
   }
 
   function handleLongPress(world) {
-    // Viewer 画布实体：长按拿起——单选选中该实例再拿（与文件图标语义一致），已选中直接拿；
-    // 拖动手柄命中优先：长按手柄 = 同卡片长按（选中 + 拿起）
-    const handleInst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-      ? App.InternalViewer.handleAt(world.x, world.y, C.camera) : null
-    const hitInst = handleInst || (App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
-      ? App.InternalViewer.topmostAt(world.x, world.y) : null)
+    // Viewer 画布实体：长按拿起——单选选中该实例再拿（与文件图标语义一致），已选中直接拿
+    const hitInst = App.InternalViewer && typeof App.InternalViewer.topmostAt === 'function'
+      ? App.InternalViewer.topmostAt(world.x, world.y) : null
     if (hitInst) {
       if (!hitInst.isSelected()) {
         App.InternalViewer.selectOnly(hitInst.id)
@@ -306,27 +293,11 @@ App.DesktopGestureHandlers = (function () {
 
   // 已选中组上直接拿起（拖动即拿取，不必长按）；folder 容器不拿起（防御，hitTest 已挡）。
   // hitType 由手势层 down 时确定：viewer-selected=已选中 Viewer 拿起移动实体；selected=已选中文件组拿起
-  // startWorld = 按下起点世界点（drag-start 携带，命中基准；拖动基准仍是 world）
-  function handleDragStart(world, hitType, startWorld) {
+  function handleDragStart(world, hitType) {
     if (hitType === 'viewer-selected') {
       const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
         ? App.InternalViewer.selectedInstance() : null
       if (inst) inst.beginDrag(world)
-      return
-    }
-    // 拖动手柄：按住 = 自动选中 + 直接拿起（不受选中态限制的辅助拖动入口）。
-    // 命中基准 = 按下起点 startWorld（down 时 hitTest 已确认命中手柄；拖动起点 world
-    // 已位移超阈值，手柄命中区仅 6px 高，移动后点必然出界——用移动点重新命中会
-    // 拿不起，表现为「手柄点不动/拖不动」。长按拿起（handleLongPress）同样以起点命中）
-    if (hitType === 'viewer-handle') {
-      const p = startWorld || world
-      const inst = App.InternalViewer && typeof App.InternalViewer.handleAt === 'function'
-        ? App.InternalViewer.handleAt(p.x, p.y, C.camera) : null
-      if (inst) {
-        App.InternalViewer.selectOnly(inst.id)
-        App.DesktopRender.syncFab()
-        inst.beginDrag(world)
-      }
       return
     }
     if (C.isFolderView()) return

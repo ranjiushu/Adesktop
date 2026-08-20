@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Viewer 交互模型统一（刀 1：摘手柄 + 静态预览）（2026-08-20）
+
+- **动机**：Viewer 与文件是两套并行选中系统（C.selection vs 实例 selected 标志），
+  靠五处手势特判手动同步；canvas 态内容交互（文本滚动/JSON 折叠/网页 iframe）与
+  实体手势抢同一根手指；拖动手柄是为绕开这两者加的第五条输入路径，自身还带着
+  屏幕层 DOM + 相机每帧同步 + rotation=90 换算的维护成本
+- **拖动手柄整体删除**：拿起语义与文件图标统一后自然成立——已选中直接拖、
+  未选中框选、长按选中+拿起；手柄 DOM/命中（handleAt/handleWorldRect）/
+  相机同步（syncHandles × 4 处调用）/手势命中类型（viewer-handle）/CSS 全移除
+- **canvas 态静态预览**：非音视频模块内容零交互（viewer-card-static：
+  pointer-events:none + overflow:hidden）——Viewer 态 = 图片式预览，
+  内容操作（滚动/阅读/网页）只在全屏预览态；视频/音频保留原生控件（唯一例外）；
+  website 网页 canvas 态静态化（「拖到网页设待上传」走世界坐标命中不受影响）
+- **bundle 瘦身约 10KB**（839977 → 829136）
+- 测试同步：test-handle-drag.js 重写为 test-viewer-drag.js（新模型全链路回归）；
+  test-viewer.js 手柄纯函数段移除（改断言 API 不存在）；viewer-entity-verify /
+  viewer-modules-verify / viewer-folder-verify 同步新模型并修复陈旧断言
+  （授权弹窗吃返回键/锁定角标已删/visualCenter→anchorRect）
+
 ### 画布缩放范围放宽 0.3~3 → 0.1~10（2026-08-20）
 
 - **动机**：0.3~3 对 100×116 网格偏保守——放大端看不了缩略图细节、缩小端看不了稀疏

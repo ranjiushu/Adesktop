@@ -75,13 +75,10 @@ App.DesktopGesture = (function () {
         if (browse && (sg.hitType === 'empty' || sg.hitType === 'icon')) {
           return { sg: Object.assign({}, next, { phase: 'pan' }), effect: { type: 'pan-start' } }
         }
-        // 已选中（文件 selected / Viewer viewer-selected）或命中拖动手柄（viewer-handle）
-        // → 直接拿起移动（不必长按）；其余（未选中图标 icon / 未选中 Viewer viewer / 空白 empty）
-        // → 框选（划过触发选中）
-        if (sg.hitType === 'selected' || sg.hitType === 'viewer-selected' || sg.hitType === 'viewer-handle') {
-          // sx/sy = 按下起点（down 时 hitTest 已确认命中）；拖动起点可能已移出命中区
-          // （如 6px 高的 Viewer 拖动手柄：超过 TAP_THRESHOLD 的位移必然出界），
-          // 拿起判定必须以按下起点为基准重新命中，否则「点得动、拿不起」
+        // 已选中（文件 selected / Viewer viewer-selected）→ 直接拿起移动（不必长按）；
+        // 其余（未选中图标 icon / 未选中 Viewer viewer / 空白 empty）→ 框选（划过触发选中）
+        if (sg.hitType === 'selected' || sg.hitType === 'viewer-selected') {
+          // sx/sy = 按下起点世界点（随事件携带，消费方可作命中基准）
           return { sg: Object.assign({}, next, { phase: 'dragmove' }), effect: { type: 'drag-start', x: x, y: y, sx: sg.startX, sy: sg.startY, hitType: sg.hitType } }
         }
         return { sg: Object.assign({}, next, { phase: 'marquee' }), effect: { type: 'marquee-start', x: sg.startX, y: sg.startY } }

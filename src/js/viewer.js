@@ -15,6 +15,11 @@
  *     同一时刻最多一个实例处于 fullscreen 态（#viewer-fs-page 为单例容器）。
  *     原地展开（2026-08-20 起）：canvas 态卡片左上锚定图标位置（anchor =
  *     C.positions[path]），超视口夹回可视区——文件「变成」Viewer 的视觉兑现。
+ *   静态预览（2026-08-20 刀 1）：canvas 态非音视频模块内容零交互（viewer-card-static：
+ *     pointer-events:none + overflow:hidden，图片式预览）——选中/多选/移动等实体手势
+ *     与文件图标完全一致，内容操作（滚动/阅读/网页）只在全屏预览态；
+ *     视频/音频保留原生控件（唯一例外）。拖动手柄已随交互模型统一删除：
+ *     选中即可直接拖动、未选中长按拿起，与文件图标同一套手势，无需辅助入口。
  * 顶栏文件名 + 全屏态返回按钮；全屏入口在 Morph FAB（Viewer 选中时）。
  * 类型：text/markdown/json/html/svg/image/video/audio；媒体走 URI 流式。
  * anchor 语义：canvas 态传入图标左上世界坐标（原地展开）；null = 沉浸式全屏
@@ -31,68 +36,6 @@ App.InternalViewer = (function () {
   const TOP_GAP = 96
   const MIN_W = 200
   const MIN_H = 160
-  const HANDLE_W = 36       // 拖动手柄屏幕宽度（px，固定屏幕尺寸不随画布缩放）
-  const HANDLE_H = 6        // 拖动手柄屏幕高度（px）
-  const HANDLE_GAP = 14     // 手柄距卡片底部间距（px，屏幕坐标）
-
-  // 世界坐标 → 屏幕坐标的纯函数（固定屏幕尺寸手柄用：卡片底部中心下方悬浮）
-  // 输入卡片世界 rect 与相机，返回手柄屏幕矩形（x/y = 屏幕 px，w/h = 屏幕 px）
-  // rotation=90（画布顺时针转）时卡片视觉底部 = 原右边缘中心；vw/vh = 视口尺寸（旋转中心）
-  function handleScreenRect(cardRect, camera, vw, vh) {
-    if (!cardRect) return null
-    const c = camera || create()
-    const rot = c.rotation === 90
-    // 旋转后卡片视觉底部中心 = 原右边缘中心（顺时针 90°：右→下）
-    const cx = rot ? cardRect.x + cardRect.w : cardRect.x + cardRect.w / 2
-    const bottom = rot ? cardRect.y + cardRect.h / 2 : cardRect.y + cardRect.h
-    const sx0 = (cx - c.x) * c.zoom
-    const sy0 = (bottom - c.y) * c.zoom
-    let sx = sx0
-    let sy = sy0
-    if (rot && vw > 0 && vh > 0) {
-      // 绕视口中心顺时针 90°：(x,y) → (-y, x)
-      const ccx = vw / 2
-      const ccy = vh / 2
-      sx = -(sy0 - ccy) + ccx
-      sy = (sx0 - ccx) + ccy
-    }
-    return { x: sx - HANDLE_W / 2, y: sy + HANDLE_GAP, w: HANDLE_W, h: HANDLE_H }
-  }
-
-  // 手柄世界矩形（命中测试用）：固定屏幕尺寸反算世界尺寸（/zoom），
-  // 中心 = 卡片底部中心世界点，间距 = HANDLE_GAP/zoom（屏幕 14px 恒定）。
-  // 命中测试走世界坐标（手势层 toWorld 后回调），与 handleScreenRect 是同一矩形
-  // 的两种表示（worldToScreen 互逆），纯函数可单测。
-  // rotation=90 时需要 vw/vh 计算旋转中心：先算屏幕矩形，再逆旋转回世界坐标；
-  // 无 vw/vh 时退化为旧逻辑（rotation=0 或调用方未传视口尺寸的防御路径）。
-  function handleWorldRect(cardRect, camera, vw, vh) {
-    if (!cardRect) return null
-    const c = camera || create()
-    const z = c.zoom || 1
-    const rot = c.rotation === 90
-    if (rot && vw > 0 && vh > 0) {
-      // 旋转态：先算屏幕矩形（含旋转），再逆变换回世界坐标
-      const sr = handleScreenRect(cardRect, camera, vw, vh)
-      if (!sr) return null
-      const scx = sr.x + sr.w / 2
-      const scy = sr.y + sr.h / 2
-      const ccx = vw / 2, ccy = vh / 2
-      // screenToWorld 逆旋转：lx = (sy-cy)+cx, ly = -(sx-cx)+cy
-      const lx = (scy - ccy) + ccx
-      const ly = -(scx - ccx) + ccy
-      const wcx = c.x + lx / z
-      const wcy = c.y + ly / z
-      // 屏幕 36×6 → 世界 6/z × 36/z（逆旋转后宽高互换）
-      return { x: wcx - HANDLE_H / (2 * z), y: wcy - HANDLE_W / (2 * z), w: HANDLE_H / z, h: HANDLE_W / z }
-    }
-    // rotation=0：原逻辑（无需视口尺寸）
-    const gap = HANDLE_GAP / z
-    const w = HANDLE_W / z
-    const h = HANDLE_H / z
-    const cx = cardRect.x + cardRect.w / 2
-    const top = cardRect.y + cardRect.h + gap
-    return { x: cx - w / 2, y: top, w: w, h: h }
-  }
 
   // ── 三模块映射（kind → 模块语义）──
   const MODULE_OF = {
@@ -201,7 +144,6 @@ App.InternalViewer = (function () {
   let _fsPage = null
   let _canvas = null
   let _hostsReady = false
-  let _lastCamera = null   // 最近一次同步手柄的相机（卡片移动/媒体自适应时复用）
 
   function ensureHosts() {
     if (_hostsReady) return true
@@ -255,7 +197,6 @@ App.InternalViewer = (function () {
 
     let drag = null
     let reader = { scale: 1, wrap: true }   // 文本完整预览态：字号缩放 + 自动换行
-    let handleEl = null    // 拖动手柄（屏幕层固定尺寸，随相机/卡片位置同步）
     let onMove = null      // 位置变化回调（Desktop 层可注入订阅；传入 = 世界矩形 state.rect——组件解耦，不依赖 Desktop 实例概念）
     let state = {
       open: false, mode: null, fsFrom: null, selected: false,
@@ -283,7 +224,6 @@ App.InternalViewer = (function () {
       }
       body.innerHTML = ''
       detachCard()
-      removeHandle()   // 关闭：移除拖动手柄（全屏/目录切换另有隐藏逻辑）
       if (_fullscreenId === id) {
         _fullscreenId = null
         _fsPage.classList.remove('viewer-fs-page-open', 'viewer-fs-media', 'viewer-fs-doc')
@@ -305,47 +245,6 @@ App.InternalViewer = (function () {
       if (card.parentNode) card.parentNode.removeChild(card)
     }
 
-    // ── 拖动手柄（屏幕层固定尺寸，canvas 态显示、全屏/关闭移除）──
-    function createHandle() {
-      if (handleEl) return
-      if (!_layer) return
-      handleEl = document.createElement('div')
-      handleEl.className = 'viewer-drag-handle'
-      handleEl.setAttribute('aria-hidden', 'true')
-      _layer.appendChild(handleEl)
-    }
-
-    function removeHandle() {
-      if (handleEl) {
-        if (handleEl.parentNode) handleEl.parentNode.removeChild(handleEl)
-        handleEl = null
-      }
-    }
-
-    // 同步手柄屏幕位置：卡片世界 rect 底部中心 → 屏幕坐标 + 固定间距。
-    // 手柄固定屏幕尺寸（HANDLE_W/H），不随画布 zoom 缩放；相机变化由
-    // 管理器 syncHandles(camera) 统一驱动（gesture onUpdate 每帧调用）。
-    // vw/vh = viewer-layer 视口尺寸（rotation=90 时手柄屏幕位置需绕中心旋转）
-    function syncHandle(camera) {
-      if (!handleEl || state.mode !== 'canvas' || !state.rect) return
-      const r = handleScreenRect(state.rect, camera, _layer.clientWidth, _layer.clientHeight)
-      if (!r) return
-      handleEl.style.left = r.x + 'px'
-      handleEl.style.top = r.y + 'px'
-      handleEl.style.width = r.w + 'px'
-      handleEl.style.height = r.h + 'px'
-      handleEl.classList.toggle('viewer-drag-handle-active', state.selected)
-    }
-
-    // 命中判定：世界点 (wx, wy) 是否落在本实例手柄矩形内（手柄优先于卡片本身命中）
-    // vw/vh 透传：rotation=90 时 handleWorldRect 需要视口尺寸计算旋转中心
-    function handleHitTest(wx, wy, camera) {
-      if (!handleEl || state.mode !== 'canvas' || !state.rect) return false
-      const r = handleWorldRect(state.rect, camera, _layer.clientWidth, _layer.clientHeight)
-      if (!r) return false
-      return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h
-    }
-
     function isOpen() { return !!state.open }
     function getMode() { return state.mode }
     // 桌面实体态：canvas 态，或从 canvas 进入的 fullscreen（文件「打开中」，
@@ -362,12 +261,10 @@ App.InternalViewer = (function () {
       return state.rect ? { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h } : null
     }
 
-    // 选中态更新：手柄高亮同步（选中时手柄 accent 色提示可拖）
     function setSelected(on) {
       state.selected = !!on
       if (on) card.classList.add('viewer-card-selected')
       else card.classList.remove('viewer-card-selected')
-      if (handleEl) handleEl.classList.toggle('viewer-drag-handle-active', !!on)
     }
 
     function setLoading() {
@@ -403,8 +300,6 @@ App.InternalViewer = (function () {
         updateTools()
         card.className = canvasCardClass()
         if (_canvas) _canvas.appendChild(card)
-        createHandle()   // canvas 态：显示拖动手柄（屏幕层固定尺寸）
-        syncHandle(_lastCamera)
         // 打开不选中：选中态由点击/框选触发（与文件图标一致的脆弱选中），打开动作不触发选中
       } else {
         enterFullscreenPage()
@@ -418,12 +313,6 @@ App.InternalViewer = (function () {
       card.style.top = rect.y + 'px'
       card.style.width = rect.w + 'px'
       card.style.height = rect.h + 'px'
-      syncHandleAfterMove()
-    }
-
-    // 卡片位置/尺寸变化后同步手柄（相机不变时也用最近一次相机）
-    function syncHandleAfterMove() {
-      if (handleEl && _lastCamera) syncHandle(_lastCamera)
     }
 
     // 媒体自适应：按固有宽高比调整实体尺寸（中心点不变）
@@ -450,11 +339,16 @@ App.InternalViewer = (function () {
       }
     }
 
-    // canvas 态卡片 class：media 类（image/video/svg，按固有比例自适应）额外标记
-    // viewer-card-media → CSS 中文件名栏 absolute 覆盖底部，不占位不改变媒体缩放比例
+    // canvas 态卡片 class：
+    // - media 类（image/video/svg，按固有比例自适应）额外标记 viewer-card-media
+    //   → CSS 中文件名栏 absolute 覆盖底部，不占位不改变媒体缩放比例；
+    // - 非音视频模块（text/parsed/image/svg 等）标记 viewer-card-static
+    //   → CSS 中内容区 pointer-events:none + overflow:hidden（图片式静态预览，
+    //   实体手势与文件图标一致，内容操作只在全屏态）；视频/音频保留原生控件不标记。
     function canvasCardClass() {
       let cls = 'viewer-card viewer-card-canvas'
       if (state.kind && MEDIA_KINDS[state.kind] && state.kind !== 'audio') cls += ' viewer-card-media'
+      if (state.kind !== 'video' && state.kind !== 'audio') cls += ' viewer-card-static'
       return cls
     }
 
@@ -463,7 +357,6 @@ App.InternalViewer = (function () {
       state.mode = 'fullscreen'
       state.rect = { x: 0, y: 0, w: _layer.clientWidth, h: _layer.clientHeight }
       detachCard()
-      removeHandle()   // 全屏态：移除拖动手柄（返回 canvas 态时重建）
       card.style.left = ''
       card.style.top = ''
       card.style.width = ''
@@ -499,8 +392,6 @@ App.InternalViewer = (function () {
         updateTools()
         if (_canvas) _canvas.appendChild(card)
         applyCanvasRect(state.canvasRect || state.rect)
-        createHandle()   // 回到 canvas 态：重建拖动手柄
-        syncHandle(_lastCamera)
         setSelected(state.selected)
       } else {
         close()
@@ -545,7 +436,6 @@ App.InternalViewer = (function () {
     function cancelDrag() {
       if (!drag) return
       applyCanvasRect(drag.startRect)
-      syncHandleAfterMove()
       drag = null
       card.classList.remove('viewer-card-dragging')
       if (onMove) onMove(state.rect)
@@ -839,14 +729,6 @@ App.InternalViewer = (function () {
       return true
     }
 
-    // 手柄显示/隐藏（目录切换用；隐藏保留 DOM，显示恢复）
-    function _hideHandle() {
-      if (handleEl) handleEl.style.display = 'none'
-    }
-    function _showHandle() {
-      if (handleEl) handleEl.style.display = ''
-    }
-
     return {
       id: id,
       _card: card,
@@ -870,13 +752,7 @@ App.InternalViewer = (function () {
       _setOnMove: _setOnMove,
       getRect: getRect,
       hitTestWorld: hitTestWorld,
-      rectHitWorld: rectHitWorld,
-      handleHitTest: handleHitTest,
-      syncHandle: syncHandle,
-      handleScreenRect: handleScreenRect,
-      handleWorldRect: handleWorldRect,
-      _hideHandle: _hideHandle,
-      _showHandle: _showHandle
+      rectHitWorld: rectHitWorld
     }
   }
 
@@ -997,33 +873,6 @@ App.InternalViewer = (function () {
     return null
   }
 
-  // 拖动手柄命中：世界坐标点 → 命中最上层手柄的实例；无命中返回 null
-  // 手柄在屏幕层（不随画布 transform），命中用世界坐标（gesture onHitTest 回调世界点，
-  // 手柄世界矩形由 handleWorldRect 按相机反算——与屏幕渲染是同一矩形两种表示）
-  function handleAt(wx, wy, camera) {
-    for (let i = _instances.length - 1; i >= 0; i--) {
-      if (_instances[i].handleHitTest && _instances[i].handleHitTest(wx, wy, camera || _lastCamera)) return _instances[i]
-    }
-    return null
-  }
-
-  // 同步所有 canvas 态实例的拖动手柄（相机变化时由 gesture onUpdate 驱动）
-  function syncHandles(camera) {
-    _lastCamera = camera || _lastCamera
-    _instances.forEach(function (inst) {
-      if (inst.syncHandle) inst.syncHandle(_lastCamera)
-    })
-  }
-
-  // 显示/隐藏所有手柄（目录切换 suspend/resume 配套）
-  function showHandles() {
-    _instances.forEach(function (inst) { if (inst._showHandle) inst._showHandle() })
-    if (_lastCamera) syncHandles(_lastCamera)
-  }
-  function hideHandles() {
-    _instances.forEach(function (inst) { if (inst._hideHandle) inst._hideHandle() })
-  }
-
   // 框选命中最上层 canvas 态实例；无命中返回 null
   function rectHit(rect) {
     for (let i = _instances.length - 1; i >= 0; i--) {
@@ -1074,7 +923,6 @@ App.InternalViewer = (function () {
       if (inst.isOpen() && inst.getMode() === 'canvas') {
         const c = inst._card
         if (c && c.parentNode) c.parentNode.removeChild(c)
-        inst._hideHandle && inst._hideHandle()
       }
     })
   }
@@ -1086,8 +934,6 @@ App.InternalViewer = (function () {
       if (inst.isOpen() && inst.getMode() === 'canvas') {
         const c = inst._card
         if (c && !c.parentNode) _canvas.appendChild(c)
-        inst._showHandle && inst._showHandle()
-        if (_lastCamera) inst.syncHandle(_lastCamera)
       }
     })
   }
@@ -1116,12 +962,6 @@ App.InternalViewer = (function () {
     deselectAll: deselectAll,
     suspendCanvas: suspendCanvas,
     resumeCanvas: resumeCanvas,
-    handleAt: handleAt,
-    syncHandles: syncHandles,
-    showHandles: showHandles,
-    hideHandles: hideHandles,
-    handleScreenRect: handleScreenRect,
-    handleWorldRect: handleWorldRect,
     worldRect: worldRect,
     anchorRect: anchorRect,
     cardSize: cardSize,

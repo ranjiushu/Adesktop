@@ -175,16 +175,31 @@ App.DesktopViewerLink = (function () {
     }
   }
 
-  // 关闭「选中的」Viewer（唯一出口：FAB 关闭预览）。关闭链：inst.close →
-  // onClose(handleViewerClosed 落位) → persist 监听集合 diff → 网格重渲染。
+  // 关闭 C.selection 中的 Viewer（批量关闭：FAB「关闭预览」操作 C.selection 内的 viewer 路径）。
+  // 关闭链：inst.close → onClose(handleViewerClosed 落位) → persist 监听集合 diff → 网格重渲染。
+  // 关闭后 viewer 路径从 C.selection 移除；保留文件路径（文件仍选中）。
   // 目录切换走 applyCameraForPath → suspendCanvas/resumeCanvas（跨目录保留），不经此处。
   /** @returns {void} */
   function closeViewer() {
-    const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
-      ? App.InternalViewer.selectedInstance() : null
-    if (!inst) return
-    App.InternalViewer.closeById(inst.id)
-    App.DesktopRender.syncFab()
+    if (!App.InternalViewer || typeof App.InternalViewer.getByPath !== 'function') return
+    const toClose = Array.from(C.selection).filter(function (p) {
+      return App.InternalViewer.hasPath(p)
+    })
+    if (!toClose.length) return
+    // 先记录要关闭的 viewer 路径，再关闭实例（关闭后 hasPath 返回 false，不能事后查询）
+    const closedSet = new Set(toClose)
+    toClose.forEach(function (p) {
+      const inst = App.InternalViewer.getByPath(p)
+      if (inst) App.InternalViewer.closeById(inst.id)
+    })
+    // viewer 路径从 C.selection 移除（closeById 触发实体 diff → 图标落位重现）
+    C.selection = new Set(Array.from(C.selection).filter(function (p) {
+      return !closedSet.has(p)
+    }))
+    if (App.DesktopRender) {
+      App.DesktopRender.applySelection()
+      App.DesktopRender.syncFab()
+    }
   }
 
   // 文件「打开」态判定（actions/move-target 的禁改检查用）：

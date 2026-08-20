@@ -170,25 +170,33 @@ App.DesktopRender = (function () {
     })
   }
 
-  // ── 选中态同步：图标 class + FAB 操作栏路由 ──
-  // FAB 展开条件 = 文件选中 或 Viewer 实体选中（二者其一，互斥出现）
+  // ── 选中态同步：图标 class + Viewer 实体视觉 + FAB 操作栏路由 ──
+  // 统一选中模型（2026-08-20 刀 2）：Viewer 路径并入 C.selection，选中视觉由
+  // applySelection 统一驱动——文件图标 toggle .selected，Viewer 实例 toggle
+  // .viewer-card-selected。取消 InternalViewer.selectOnly/deselectAll/anySelected
+  // 并行状态，消除一类同步 bug。
   function applySelection() {
     Object.keys(C.iconEls).forEach(function (key) {
       if (C.selection.has(key)) C.iconEls[key].classList.add('selected')
       else C.iconEls[key].classList.remove('selected')
     })
+    // 同步 Viewer 实体选中视觉（viewer-card-selected）：C.selection 包含 viewer 路径
+    if (App.InternalViewer && typeof App.InternalViewer.list === 'function') {
+      App.InternalViewer.list().forEach(function (inst) {
+        inst.setSelected(C.selection.has(inst.getPath()))
+      })
+    }
     syncFab()
   }
 
+  // FAB 展开条件 = C.selection 非空（文件或 Viewer 路径均可）
   function syncFab() {
     if (App.fabSpeedDial && typeof App.fabSpeedDial.setSelection === 'function') {
-      const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
-        App.InternalViewer.anySelected()
-      App.fabSpeedDial.setSelection(C.selection.size > 0 || viewerSel)
+      App.fabSpeedDial.setSelection(C.selection.size > 0)
     }
   }
 
-  // 取消文件选中（Viewer 保持打开、文件保持锁定——选中与查看解绑）
+  // 取消全部选中（文件 + Viewer 实体统一：C.selection 清空 → applySelection 同步视觉）
   function clearSelection() {
     C.selection = new Set()
     applySelection()

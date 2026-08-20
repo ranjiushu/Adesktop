@@ -90,7 +90,7 @@ async function main() {
   await page.waitForFunction(function () { return document.querySelector('.viewer-pre') }, { timeout: 5000 })
   await page.evaluate(function () {
     const hit = App.InternalViewer.topmostAt(200, 400)
-    if (hit) { App.InternalViewer.selectOnly(hit.id); hit.toFullscreen() }
+    if (hit) { App.DesktopCore.selection = App.DesktopSelection.selectOnly(hit.getPath()); App.DesktopRender.applySelection(); hit.toFullscreen() }
   })
   await page.waitForFunction(function () { return document.querySelector('.viewer-card-fullscreen .viewer-pre') }, { timeout: 5000 })
   const r3 = await page.evaluate(function () {
@@ -151,7 +151,7 @@ async function main() {
     const cardBefore = { w: parseFloat(card.style.width), h: parseFloat(card.style.height) }
     const imgBefore = { w: img.getBoundingClientRect().width, h: img.getBoundingClientRect().height }
     const headerBefore = getComputedStyle(header).display
-    App.InternalViewer.selectOnly(inst.id)
+    App.DesktopCore.selection = App.DesktopSelection.selectOnly(inst.getPath()); App.DesktopRender.applySelection()
     const hs = getComputedStyle(header)
     const hr = header.getBoundingClientRect()
     const br = body.getBoundingClientRect()
@@ -188,7 +188,7 @@ async function main() {
     const card = inst._card
     const header = card.querySelector('.viewer-header')
     const body = card.querySelector('.viewer-body')
-    App.InternalViewer.selectOnly(inst.id)
+    App.DesktopCore.selection = App.DesktopSelection.selectOnly(inst.getPath()); App.DesktopRender.applySelection()
     const hs = getComputedStyle(header)
     const hr = header.getBoundingClientRect()
     const br = body.getBoundingClientRect()
@@ -213,7 +213,7 @@ async function main() {
     const b = document.querySelector('.viewer-card-canvas').getBoundingClientRect()
     return { left: b.left, top: b.top, w: b.width, h: b.height, right: b.right }
   })
-  const before = await page.evaluate(function () { return App.InternalViewer.anySelected() })
+  const before = await page.evaluate(function () { return App.DesktopCore.selection.size > 0 })
   const client = await page.target().createCDPSession()
   const sy = card.top + card.h / 2
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: Math.max(0, card.left - 40), y: sy, id: 1 }] })
@@ -221,7 +221,7 @@ async function main() {
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: card.right + 40, y: sy, id: 1 }] })
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await new Promise(function (res) { setTimeout(res, 200) })
-  const after = await page.evaluate(function () { return App.InternalViewer.anySelected() })
+  const after = await page.evaluate(function () { return App.DesktopCore.selection.size > 0 })
   check(!before && after, '框选划过未选中 Viewer → 触发选中（' + before + ' → ' + after + '）')
 
   console.log('═══ 7. 纯函数三模块映射 ═══')

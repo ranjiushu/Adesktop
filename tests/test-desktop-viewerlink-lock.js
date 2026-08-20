@@ -130,15 +130,12 @@ sandbox.App.DesktopGesture = { init: function () {}, setCamera: function () {} }
 sandbox.App.ViewerStore = { load: function () { return { version: 1, viewers: [] } }, save: function () { return true } }
 sandbox.App.InternalViewer = {
   setPersistListener: function (fn) { persistListenerFn = fn },
-  selectedInstance: function () {
-    if (selectedViewerId === null) return null
-    return viewerInstances.find(function (inst) { return inst.id === selectedViewerId }) || null
+  getByPath: function (p) {
+    return viewerInstances.find(function (inst) { return inst.isOpen() && inst.getPath() === p }) || null
   },
-  anySelected: function () { return selectedViewerId !== null },
   closeById: function (id) {
     closedIds.push(id)
     viewerInstances = viewerInstances.filter(function (i) { return i.id !== id })
-    if (selectedViewerId === id) selectedViewerId = null
   },
   list: function () { return viewerInstances.slice() },
   hasPath: function (p) {
@@ -150,7 +147,7 @@ sandbox.App.InternalViewer = {
   desktopEntityPaths: function () {
     return viewerInstances.filter(function (i) { return i.isDesktopEntity() }).map(function (i) { return i.getPath() })
   },
-  closeAll: function () { viewerInstances.forEach(function (i) { closedIds.push(i.id) }); viewerInstances = []; selectedViewerId = null }
+  closeAll: function () { viewerInstances.forEach(function (i) { closedIds.push(i.id) }); viewerInstances = [] }
 }
 
 vm.createContext(sandbox)
@@ -208,19 +205,19 @@ sandbox.App.DesktopRender.render = function () { renderCalls++; return origRende
   check(VL.isDesktopEntityPath('c.txt') === false, '未打开 → isDesktopEntityPath = false')
   viewerInstances = []
 
-  // ── 3. closeViewer 无选中 Viewer 时 no-op ──
-  selectedViewerId = null
+  // ── 3. closeViewer 无选中 Viewer 时 no-op（统一选中模型：C.selection 无 viewer 路径）──
+  C.selection = new Set()
   closedIds.length = 0
   VL.closeViewer()
   check(closedIds.length === 0, 'closeViewer 无选中 Viewer 时不调用 closeById')
 
-  // ── 4. closeViewer 关闭选中 Viewer（落位/重渲染经 onClose + persist diff 链）──
+  // ── 4. closeViewer 关闭选中 Viewer（统一选中模型：C.selection 含 viewer 路径）──
   viewerInstances = [makeInst(4, 'a.txt', true)]
-  selectedViewerId = 4
+  C.selection = new Set(['a.txt'])
   closedIds.length = 0
   VL.closeViewer()
   check(closedIds.length === 1 && closedIds[0] === 4, 'closeViewer 调用 closeById(4)')
-  check(selectedViewerId === null, 'closeViewer 后 selectedViewerId 清空')
+  check(!C.selection.has('a.txt'), 'closeViewer 后 viewer 路径从 C.selection 移除')
   check(VL.isLockedPath('a.txt') === false, '关闭后锁定自动解除（实例消失）')
   viewerInstances = []
 

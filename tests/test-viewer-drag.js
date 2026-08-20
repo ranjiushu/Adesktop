@@ -124,30 +124,36 @@ const stubInst = {
   selected: false,
   dragging: false,
   getMode: function () { return 'canvas' },
-  isSelected: function () { return this.selected },
+  getPath: function () { return 'a.txt' },
+  isOpen: function () { return true },
+  setSelected: function (on) { stubInst.selected = on },
+  isSelected: function () { return stubInst.selected },
   beginDrag: function (w) { beginDragCalls.push(w); this.dragging = true; return true },
   moveBy: function (w) { moveByCalls.push(w) },
   endDrag: function () { endDragCalls.push(true); this.dragging = false },
   cancelDrag: function () { this.dragging = false },
-  isDragging: function () { return this.dragging }
+  isDragging: function () { return this.dragging },
+  getRect: function () { return { x: cardRect.x, y: cardRect.y, w: cardRect.w, h: cardRect.h } },
+  rectHitWorld: function (rect) {
+    var r = cardRect
+    return !(r.x + r.w < rect.x || rect.x + rect.w < r.x || r.y + r.h < rect.y || rect.y + rect.h < r.y)
+  }
 }
 function pointInCard(wx, wy) {
   return wx >= cardRect.x && wx <= cardRect.x + cardRect.w && wy >= cardRect.y && wy <= cardRect.y + cardRect.h
 }
 sandbox.App.InternalViewer = {
+  setSelected: function (inst, on) { /* stub: visual sync handled by applySelection */ },
   topmostAt: function (wx, wy) { return pointInCard(wx, wy) ? stubInst : null },
   rectHit: function (rect) {
     const r = cardRect
     const hit = !(r.x + r.w < rect.x || rect.x + rect.w < r.x || r.y + r.h < rect.y || rect.y + rect.h < r.y)
     return hit ? stubInst : null
   },
-  selectOnly: function (id) { selectOnlyCalls.push(id); stubInst.selected = true },
-  anySelected: function () { return stubInst.selected },
-  deselectAll: function () { stubInst.selected = false },
-  selectedInstance: function () { return stubInst.selected ? stubInst : null },
-  draggingInstance: function () { return stubInst.dragging ? stubInst : null },
+  list: function () { return [stubInst] },
+  hasPath: function (p) { return p === 'a.txt' },
+  getByPath: function (p) { return p === 'a.txt' ? stubInst : null },
   setPersistListener: function () {},
-  list: function () { return [] },
   open: function () {},
   closeById: function () {}
 }
@@ -178,8 +184,11 @@ function sleep(ms) { return new Promise(function (res) { setTimeout(res, ms) }) 
 
   const cardCenter = { x: cardRect.x + cardRect.w / 2, y: cardRect.y + cardRect.h / 2 }
 
+  // 统一选中模型：通过 C.selection 设置 Viewer 路径选中（替代旧 per-instance selected 标志）
+  const C = sandbox.App.DesktopCore
+
   // ── 场景 1：已选中 Viewer → 按下位移 7px（超 TAP_THRESHOLD=6）→ 直接拿起 ──
-  stubInst.selected = true
+  C.selection = new Set(['a.txt'])
   let p = screen(cardCenter.x, cardCenter.y)
   viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, p.x, p.y)]))
   viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, p.x, p.y + 7)]))
@@ -190,7 +199,7 @@ function sleep(ms) { return new Promise(function (res) { setTimeout(res, ms) }) 
   check(endDragCalls.length === 1 && !stubInst.dragging, '抬起 → endDrag 收尾')
 
   // ── 场景 2：未选中 Viewer → 按下拖动 = 框选（不拿起）；框选结束命中 → 选中 ──
-  stubInst.selected = false
+  C.selection = new Set()
   beginDragCalls.length = 0
   selectOnlyCalls.length = 0
   p = screen(cardCenter.x, cardCenter.y)
@@ -198,18 +207,18 @@ function sleep(ms) { return new Promise(function (res) { setTimeout(res, ms) }) 
   viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, p.x + 60, p.y + 60)]))
   check(beginDragCalls.length === 0, '未选中 Viewer + 拖动 → 框选（不直接拿起，与文件图标一致）')
   viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, p.x + 60, p.y + 60)]))
-  check(selectOnlyCalls.length === 1 && selectOnlyCalls[0] === 'v1', '框选结束命中 Viewer → 选中该实例')
+  check(C.selection.has('a.txt'), '框选结束命中 Viewer → a.txt 进入 C.selection')
 
   // ── 场景 3：未选中 Viewer → 长按 = 选中 + 拿起（与文件图标一致）──
-  stubInst.selected = false
+  C.selection = new Set()
   beginDragCalls.length = 0
   selectOnlyCalls.length = 0
   endDragCalls.length = 0
   p = screen(cardCenter.x, cardCenter.y)
   viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, p.x, p.y)]))
   await sleep(600)   // LONGPRESS_MS = 500
-  check(selectOnlyCalls.length === 1 && stubInst.selected, '长按未选中 Viewer → 先选中')
-  check(beginDragCalls.length === 1, '长按未选中 Viewer → 拿起（beginDrag）')
+  check(C.selection.has('a.txt'), '长按未选中 Viewer → a.txt 进入 C.selection（先选中）')
+  check(beginDragCalls.length === 1, '长按未选中 Viewer → 拿起（beginDrag via startGroupDrag）')
   viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, p.x + 30, p.y + 30)]))
   viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, p.x + 30, p.y + 30)]))
   check(endDragCalls.length === 1, '长按拖动抬起 → endDrag 收尾')

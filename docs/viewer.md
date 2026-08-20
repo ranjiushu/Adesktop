@@ -114,12 +114,13 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
   **整理桌面**：打开态文件不是网格成员——不参与整理、不留占位格（原格子是普通
   空格，整理自然填掉）；其它文件拖动/避让无需特殊处理（打开态文件无图标无边界，
   不参与网格碰撞）。
-- **框选遮挡**：被 Viewer 覆盖的文件图标不参与框选（Viewer 遮挡语义）。
+- **框选遮挡+混合多选**：被 Viewer 覆盖的文件图标不参与框选（Viewer 遮挡语义）；Viewer 世界矩形与框选矩形相交 → 加入 `C.selection`（支持框选同时选中多个 Viewer + 文件）。
 - **桌面手指依旧有效**：不拦截触摸——单指拖动/框选/双击/双指缩放照常作用于画布，
   不在 Viewer 内部创作独立交互模型；Viewer 只是遮挡其背后的文件。
 - **文件名栏在内容区下方**（canvas 态：底部信息条，无任何按钮，仅文件名）；全屏入口在
-  Morph FAB（Viewer 选中时展开 全屏预览 / 关闭预览，文件操作隐藏）。打开未选中时 FAB
-  收起，点击 Viewer 选中后 FAB 才展开预览操作。
+  Morph FAB（`C.selection` 含 Viewer 路径时展开 关闭预览 / 恰好单选 Viewer 时 显示全屏预览）。
+  **混合选中 FAB**：`C.selection` 同时含文件+Viewer 时，文件操作作用于未锁定成员、锁定项跳过并
+  toast 提示；关闭预览批量关闭 `C.selection` 中的 Viewer。点击 Viewer 外部 = 清空 `C.selection`（FAB 收起）。
 - **未选中隐藏文件名栏**：canvas 态 Viewer 未选中时整条文件名栏隐藏（含边框/背景），
   内容区占满整卡；选中（点击/框选/长按）时显示。拖动必然已选中，文件名栏拖动全程可见
   （命中判定基于世界坐标 rect，含整卡区域，显隐不影响手势）。
@@ -167,11 +168,11 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 - **Morph FAB（Viewer 实体选中时）**：显示「全屏预览」「关闭预览」两项
   （文件操作隐藏，预览焦点模式）；文件选中时恢复 打开/复制/剪切/重命名（取消选择已移除——
   FAB 展开 ⇔ 选中一致：关闭 Morph FAB 即取消选中）。
-- **关闭预览** = 关闭「选中的」Viewer：实例关闭 → onClose（`handleViewerClosed`）
+- **关闭预览** = 批量关闭 `C.selection` 中的 Viewer：实例关闭 → onClose（`handleViewerClosed`）
   按窗口位置吸附落位回网格 + 落位动画 → 实体集合 diff 触发图标重现（`Desktop.closeViewer` 出口）。
-- **取消选中 ≠ 关闭**：点 Viewer 外部取消 Viewer 选中（脆弱/临时），Viewer 与锁定保持。
-- **返回键**：`App.handleSystemBack` 优先级——全屏态 Viewer → 退出全屏；有选中
-  （Viewer 或文件）→ 取消选中；Drawer → 面板 → 文件导航后退。**返回键不关闭 Viewer**
+- **取消选中 ≠ 关闭**：点 Viewer 外部清空 `C.selection`（文件+Viewer 统一），Viewer 与锁定保持。
+- **返回键**：`App.handleSystemBack` 优先级——全屏态 Viewer → 退出全屏；`C.selection`
+  非空 → 清空选中（文件+Viewer 统一）；Drawer → 面板 → 文件导航后退。**返回键不关闭 Viewer**
   （Viewer 是画布实体，关闭走 FAB「关闭」，删除语义）。
 
 ## 状态与测试

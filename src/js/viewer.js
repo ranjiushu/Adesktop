@@ -252,7 +252,7 @@ App.InternalViewer = (function () {
     function isDesktopEntity() {
       return state.open && (state.mode === 'canvas' || state.fsFrom === 'canvas')
     }
-    function isSelected() { return state.selected }
+    function isSelected() { return card.classList.contains('viewer-card-selected') }
     function getPath() { return state.path }
     function getName() { return state.name }
     function getKind() { return state.kind }
@@ -881,40 +881,14 @@ App.InternalViewer = (function () {
     return null
   }
 
-  // 任一实例选中（供 FAB / 返回键判断）
-  function anySelected() {
+  // 按路径查找 canvas 态实例（统一选中模型：外部通过 C.selection 管理选中，此处按路径定位）
+  /** @param {string} path @returns {any | null} */
+  function getByPath(path) {
+    if (!path) return null
     for (let i = 0; i < _instances.length; i++) {
-      if (_instances[i].isSelected()) return true
-    }
-    return false
-  }
-
-  // 选中的实例（单选语义：最多一个；返回 null 若无）
-  function selectedInstance() {
-    for (let i = 0; i < _instances.length; i++) {
-      if (_instances[i].isSelected()) return _instances[i]
+      if (_instances[i].isOpen() && _instances[i].getPath() === path) return _instances[i]
     }
     return null
-  }
-
-  // 正在拖动的实例（同时最多一个）；无则 null
-  function draggingInstance() {
-    for (let i = 0; i < _instances.length; i++) {
-      if (_instances[i].isDragging()) return _instances[i]
-    }
-    return null
-  }
-
-  // 单选：选中指定实例，其余取消
-  function selectOnly(id) {
-    _instances.forEach(function (inst) {
-      inst.setSelected(inst.id === id)
-    })
-  }
-
-  // 取消所有实例选中
-  function deselectAll() {
-    _instances.forEach(function (inst) { inst.setSelected(false) })
   }
 
   // 目录切换时：隐藏所有 canvas 态实例（保留状态，退回根目录恢复）；全屏态不处理（由调用方先退出）
@@ -955,11 +929,7 @@ App.InternalViewer = (function () {
     fullscreenInstance: fullscreenInstance,
     topmostAt: topmostAt,
     rectHit: rectHit,
-    anySelected: anySelected,
-    selectedInstance: selectedInstance,
-    draggingInstance: draggingInstance,
-    selectOnly: selectOnly,
-    deselectAll: deselectAll,
+    getByPath: getByPath,
     suspendCanvas: suspendCanvas,
     resumeCanvas: resumeCanvas,
     worldRect: worldRect,

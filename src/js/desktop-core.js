@@ -54,6 +54,7 @@ App.DesktopCore = (function () {
   C.selection = /** @type {Set<string>} */ (new Set())
   C.iconEls = {}     // fullPath → DOM 元素
   C.dragTargets = []        // 移动的图标 fullPath 列表（组移动）
+  C.dragViewerTargets = []  // 移动的 Viewer 实例路径（混合组拖动：viewer 用独立拖动管道）
   C.dragStartWorld = null   // 手指起始世界坐标
   C.dragStartPositions = {} // fullPath → 起始世界坐标（保持组内相对位置）
   // 文件「打开」态（Viewer 即文件）是派生态：InternalViewer 存在该路径实例即锁定

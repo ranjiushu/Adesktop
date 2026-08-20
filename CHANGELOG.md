@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Viewer 重构为文件的「打开」状态（2026-08-20）
+
+- **语义**：Viewer 不再是独立窗口实体，而是文件的「打开」状态——双击文件 =
+  在原地变成 Viewer（图标退出网格，原格子释放为普通空格）；拖动 Viewer =
+  拖动文件本身（无第二套坐标）；关闭 = 按窗口位置吸附最近网格格落位（被占
+  自动避让），图标带 260ms 落位动画飞回格位
+- **删除的协调代码**：图标→窗口单向锚定（syncRectForPath）、会话恢复贴窗对齐、
+  锁定集合 `_lockedPaths` + 🔒 角标、整理桌面「钉子户」占位避让——它们的共同
+  前提（图标与窗口并存）已不存在；锁定改为派生态（InternalViewer 存在该路径
+  实例即锁定），无状态可失步
+- **整理桌面**：打开态文件不是网格成员——不参与、不留占位格（用户拍板方案），
+  关闭时按窗口位置重新落位
+- **原地展开**：text/parsed/website 打开不再弹到屏幕视觉中心 + 级联错位，
+  改为卡片左上锚定图标位置，超视口自动夹回可视区（anchorRect 纯函数）
+- **folder 容器不变**：全屏预览保持原样（不退出网格、不持久化）
+- **website 快捷方式**：打开期间图标同样退出网格（顺带移除旧「预览中允许删除
+  .desktop」的 MVP 妥协）
+- 测试：重写 test-viewer-lock-sync / test-desktop-viewerlink-lock（打开态生命周期），
+  test-viewer.js 锚点断言 → anchorRect 夹取，viewer E2E 断言改「图标退出网格」；
+  verify.sh 16 项门禁全绿
+
 ### 类型图标升级为 Material 彩色瓷砖（MT 管理器风格，2026-08-19）
 
 - **图标源**：Material Design Icons（Apache-2.0，Pictogrammers）官方字形 + 彩色圆角方块，

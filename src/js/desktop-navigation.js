@@ -36,19 +36,16 @@ App.DesktopNavigation = (function () {
       App.DesktopRender.clearSelection()
       enterFolder(full)
     } else if (App.FileOpener && typeof App.FileOpener.open === 'function') {
-      // Windows 式锁定：文件被 Viewer 打开 = 锁定（禁复制/剪切/移动/删除/重命名，
-      // 拖动摆放仍可）；文件不进入选中集——Viewer 实体自身有独立选中态（脆弱/临时）。
-      // 多实例：每个打开的 Viewer 各自锁定其文件。
-      // FileOpener.open 返回实例 id（数字）→ 锁定；true（外部/快捷方式）→ 只清选中不锁定。
-      const result = App.FileOpener.open({ name: item.name, path: full }, C.isFolderView() ? null : (C.positions[full] || null), C.camera, function onClose(path) {
-        if (path) C._lockedPaths.delete(path)
-        App.DesktopRender.updateLockedVisual()
-      })
-      if (typeof result === 'number') {
-        C._lockedPaths.add(full)
-        App.DesktopRender.clearSelection()
-        App.DesktopRender.updateLockedVisual()
-      } else if (result) {
+      // Viewer = 文件的「打开」状态：打开成功 → 图标退出网格（重渲染由
+      // viewer-link 的实体集合 diff 自动触发）；关闭 → handleViewerClosed
+      // 按窗口位置吸附落位回网格。文件不进入选中集——Viewer 实体自身有
+      // 独立选中态（脆弱/临时）。
+      // FileOpener.open 返回实例 id（数字）= 进入打开态；true（外部应用/
+      // 快捷方式）= 不进入打开态，只清选中。
+      const result = App.FileOpener.open({ name: item.name, path: full }, C.isFolderView() ? null : (C.positions[full] || null), C.camera,
+        App.DesktopViewerLink && typeof App.DesktopViewerLink.handleViewerClosed === 'function'
+          ? App.DesktopViewerLink.handleViewerClosed : null)
+      if (result) {
         App.DesktopRender.clearSelection()
       }
     } else if (App.toast) {
@@ -73,8 +70,9 @@ App.DesktopNavigation = (function () {
     // 目录切换：先退出全屏态 Viewer（folder 打开的全屏预览），保留 canvas 态 Viewer（跨目录保留）
     const fs = App.InternalViewer && App.InternalViewer.fullscreenInstance ? App.InternalViewer.fullscreenInstance() : null
     if (fs) {
-      fs.exitFullscreen()   // folder 打开的全屏：退出 = close（见 exitFullscreen 的 from='folder' 分支）
-      if (fs.getPath && C._lockedPaths.has(fs.getPath())) C._lockedPaths.delete(fs.getPath())
+      // folder 打开的全屏：退出 = close（见 exitFullscreen 的 from='folder' 分支）；
+      // 打开态随实例关闭自动结束（派生态，无需手动解锁）
+      fs.exitFullscreen()
     }
     if (C.isFolderView()) {
       // 进入 folder：隐藏 canvas 态 Viewer（保留状态，退回根目录恢复）

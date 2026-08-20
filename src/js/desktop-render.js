@@ -1,9 +1,11 @@
 /* desktop-render.js：桌面渲染与选中同步（App.DesktopRender）。
  * 拆分自 desktop.js 的渲染域：自动排布（layout）+ 图标网格渲染（render）+
  * 选中态视觉同步（applySelection/syncFab/clearSelection/hasSelection）+
- * 锁定视觉（updateLockedVisual）+ 选中查询（getSelectionNames/getSelectionEntries）。
+ * 选中查询（getSelectionNames/getSelectionEntries）。
+ * 「打开」态文件（Viewer 即文件）在 layout 阶段退出网格渲染，原格子释放为
+ * 普通空格（desktop-viewer-link.isDesktopEntityPath 判定）。
  * 只读写 App.DesktopCore 状态，不持有业务编排；Viewer 联动模块经
- * App.DesktopRender.syncFab/updateLockedVisual 复用本模块。
+ * App.DesktopRender.syncFab 复用本模块。
  * 依赖: namespace.js, desktop-core.js, desktop-grid.js, folder-sort.js,
  *       folder-layout.js, type-icons.js, thumbnail.js, shortcut.js, clipboard.js
  * 导出: App.DesktopRender
@@ -59,16 +61,22 @@ App.DesktopRender = (function () {
       }
     }
     let cols = Math.max(3, Math.min(8, Math.floor(C.viewportWidth() / App.DesktopGrid.GRID_W)))
-    return items.map(function (item, i) {
+    const out = []
+    items.forEach(function (item, i) {
       // 虚拟回收站 key = trashName（'.trash'，相对桥层根）；其余 = 当前目录 + 名
       const isVirtualTrash = C.state.mode === 'all-files' && item.name === C.state.trashName
       const key = isVirtualTrash ? C.state.trashName : C.fullPath(item.name)
+      // 文件「打开」态（Viewer 即文件）：图标退出网格，原格子释放为普通空格
+      // （不预留、不占位——整理自然填掉，关闭时按 Viewer 窗口位置重新落位）
+      if (App.DesktopViewerLink && typeof App.DesktopViewerLink.isDesktopEntityPath === 'function' &&
+          App.DesktopViewerLink.isDesktopEntityPath(key)) return
       let pos = C.positions[key]
       if (!pos) {
         pos = App.DesktopGrid.cellToWorld(i % cols, Math.floor(i / cols))
       }
-      return { item: item, key: key, x: pos.x, y: pos.y }
+      out.push({ item: item, key: key, x: pos.x, y: pos.y })
     })
+    return out
   }
 
   function render() {
@@ -160,8 +168,6 @@ App.DesktopRender = (function () {
       C.bounds[key].w = node.offsetWidth || ICON_W
       C.bounds[key].h = node.offsetHeight || ICON_H
     })
-    // 渲染后恢复锁定视觉（网格重建会丢失 class）
-    updateLockedVisual()
   }
 
   // ── 选中态同步：图标 class + FAB 操作栏路由 ──
@@ -191,16 +197,6 @@ App.DesktopRender = (function () {
   // 是否有文件选中（返回键取消选中用）
   function hasSelection() { return C.selection.size > 0 }
 
-  // 锁定视觉：被 Viewer 打开的文件图标加锁标记
-  function updateLockedVisual() {
-    Object.keys(C.iconEls).forEach(function (key) {
-      const node = C.iconEls[key]
-      if (!node) return
-      if (C._lockedPaths.has(key)) node.classList.add('desktop-icon-locked')
-      else node.classList.remove('desktop-icon-locked')
-    })
-  }
-
   // 当前选中完整路径列表（复制/剪切/重命名用）
   function getSelectionNames() {
     return Array.from(C.selection)
@@ -226,7 +222,6 @@ App.DesktopRender = (function () {
     syncFab: syncFab,
     clearSelection: clearSelection,
     hasSelection: hasSelection,
-    updateLockedVisual: updateLockedVisual,
     getSelectionNames: getSelectionNames,
     getSelectionEntries: getSelectionEntries
   }

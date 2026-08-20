@@ -315,7 +315,6 @@ interface DesktopCore {
   dragTargets: string[]
   dragStartWorld: WorldPoint | null
   dragStartPositions: Record<string, Position2D>
-  _lockedPaths: Set<string>
   _advancedBrowse: boolean
   _tempNormalMode: boolean
   _emptyTapTime: number
@@ -478,8 +477,10 @@ interface DesktopViewerLink {
   init(): void
   restoreViewers(): void
   closeViewer(): void
+  handleViewerClosed(path: string, rect?: { x: number; y: number; w: number; h: number } | null): void
   isLockedPath(path: string): boolean
   getLockedPaths(): Array<string>
+  isDesktopEntityPath(path: string): boolean
   applyRename(oldPath: string, newPath: string): void
   applyMoves(moves: Array<{ src: string; dst: string }> | null): void
 }

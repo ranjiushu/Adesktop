@@ -454,21 +454,6 @@
   background: var(--hover-dim);
 }
 
-/* ── 文件锁定标记（Windows 式：被 Viewer 打开的文件，禁复制/剪切/移动/删除/重命名） ──
- * 注意：.desktop-icon 是 position: absolute（世界坐标定位，left/top 由 JS 直接设置）。
- * 此处若设 position: relative 会以同特异性覆盖 absolute，使锁定图标退化为 in-flow
- * 元素（left/top 变成相对静态位置的偏移）→ 图标视觉下移一格与下方文件重合、
- * 长按原处才能拖动。absolute 元素本身即是 ::after 的 containing block，
- * 角标定位不依赖 relative，故锁定类不带任何定位声明。 */
-.desktop-icon-locked::after {
-  content: '\1F512';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 14px;
-  line-height: 1;
-}
-
 /* ── 相册式全屏（#viewer-fs-page）：媒体黑底 contain 居中；文档浅色阅读 ── */
 
 /* 媒体类（图片/视频/音频/SVG）：沉浸黑底 + 内容居中自适应 */

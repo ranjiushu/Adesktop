@@ -6,7 +6,7 @@
 //       file:// 下 evaluateOnNewDocument 早期读 localStorage 偶发为空，
 //       幂等 seed 会重复注入（历史踩坑，勿改回）
 //    1. 画布态 Viewer 打开状态 + 世界坐标位置持久化：seed 后 reload → 自动恢复
-//       （卡片 world 矩形 = 持久化矩形，文件锁定）
+//       （卡片 world 矩形 = 持久化矩形，文件处「打开」态 → 图标退出网格）
 //    2. 拖动结束 → 位置变化落盘（ViewerStore 更新）
 //    3. 手动关闭 → 状态清空；reload 后不再恢复（Viewer 只能通过手动关闭）
 //    4. 文件已删除的陈旧记录 → 跳过恢复（不出现幽灵 Viewer）
@@ -97,7 +97,8 @@ async function main() {
         left: card.style.left, top: card.style.top, w: card.style.width, h: card.style.height,
         title: (card.querySelector('.viewer-title') || {}).textContent,
         locked: App.DesktopViewerLink.isLockedPath('a.txt'),
-        lockIcon: document.querySelectorAll('.desktop-icon-locked').length,
+        iconGone: !document.querySelector('.desktop-icon[data-path="a.txt"]'),
+        otherIcon: !!document.querySelector('.desktop-icon[data-path="b.png"]'),
         count: App.InternalViewer.count(),
         storeCount: App.ViewerStore.load('mock-root').viewers.length
       }
@@ -108,8 +109,8 @@ async function main() {
     else fail('启动恢复位置', JSON.stringify(restored))
     if (restored && restored.title === 'a.txt' && restored.count === 1) pass('恢复单实例 + 标题正确')
     else fail('恢复实例', JSON.stringify(restored))
-    if (restored && restored.locked && restored.lockIcon >= 1) pass('恢复后文件锁定（🔒 图标出现）')
-    else fail('恢复锁定', JSON.stringify(restored))
+    if (restored && restored.locked && restored.iconGone && restored.otherIcon) pass('恢复后文件处于打开态（a.txt 图标退出网格，b.png 不受影响）')
+    else fail('恢复打开态', JSON.stringify(restored))
     if (restored && restored.storeCount === 1) pass('恢复过程不重复落盘（store 仍 1 条）')
     else fail('恢复幂等', JSON.stringify(restored))
 

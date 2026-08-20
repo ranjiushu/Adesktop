@@ -32,16 +32,16 @@ const C = sandbox.App.DesktopCamera
 
 // ── clampZoom ──
 check(C.clampZoom(1) === 1, 'clampZoom(1) = 1')
-check(C.clampZoom(0.3) === 0.3, 'clampZoom 下限 0.3 不截断')
-check(C.clampZoom(0.1) === 0.3, 'clampZoom 0.1 → 0.3（下限）')
-check(C.clampZoom(3) === 3, 'clampZoom 上限 3 不截断')
-check(C.clampZoom(9) === 3, 'clampZoom 9 → 3（上限）')
+check(C.clampZoom(0.1) === 0.1, 'clampZoom 下限 0.1 不截断')
+check(C.clampZoom(0.05) === 0.1, 'clampZoom 0.05 → 0.1（下限）')
+check(C.clampZoom(10) === 10, 'clampZoom 上限 10 不截断')
+check(C.clampZoom(20) === 10, 'clampZoom 20 → 10（上限）')
 check(C.clampZoom(NaN) === 1, 'clampZoom NaN → 1')
-check(C.clampZoom(Infinity) === 3, 'clampZoom Infinity → 3（上限）')
+check(C.clampZoom(Infinity) === 10, 'clampZoom Infinity → 10（上限）')
 
 // ── create ──
 check(C.create().zoom === 1 && C.create().x === 0 && C.create().y === 0, 'create() 默认 {0,0,1}')
-check(C.create(5, 6, 0.1).zoom === 0.3, 'create 越界 zoom 被 clamp')
+check(C.create(5, 6, 0.01).zoom === 0.1, 'create 越界 zoom 被 clamp')
 
 // ── screenToWorld / worldToScreen 互逆 ──
 const cam = C.create(10, 20, 2)
@@ -81,9 +81,9 @@ check(approx(awb2.x, awa2.x) && approx(awb2.y, awa2.y), 'pinchBy 缩小锚点世
 
 // ── pinchBy clamp 边界 ──
 const pinchMax = C.pinchBy(C.create(0, 0, 2), 100, 1000, 0, 0)
-check(pinchMax.zoom === 3, 'pinchBy 放大越界 → clamp 3')
+check(pinchMax.zoom === 10, 'pinchBy 放大越界 → clamp 10')
 const pinchMin = C.pinchBy(C.create(0, 0, 0.5), 100, 1, 0, 0)
-check(pinchMin.zoom === 0.3, 'pinchBy 缩小越界 → clamp 0.3')
+check(pinchMin.zoom === 0.1, 'pinchBy 缩小越界 → clamp 0.1')
 
 // pinchBy 非法指距 → 相机不变
 const pinchBad = C.pinchBy(C.create(5, 6, 1), 0, 100, 50, 50)
@@ -243,6 +243,63 @@ check(lcU1.maxOverAvg <= 3.5, '放大飞行位移均匀（峰值/平均 ' + lcU1
 check(lcU1.lastOverAvg <= 0.5, '放大飞行收尾平滑（末帧/平均 ' + lcU1.lastOverAvg.toFixed(2) + ' ≤ 0.5，无震感）')
 check(lcU2.maxOverAvg <= 3.5 && lcU2.lastOverAvg <= 0.5,
   '缩小飞行均匀且收尾平滑（峰值/平均 ' + lcU2.maxOverAvg.toFixed(2) + '，末帧/平均 ' + lcU2.lastOverAvg.toFixed(2) + '）')
+
+// ── 放宽缩放范围后的极端飞行（0.1→10，2026-08-20）──
+// 缩放范围从 [0.3, 3] 放宽到 [0.1, 10] 后，Home 飞行可能出现 100x 的 zoom 比。
+// 风险：flightPath 的 cosh/tanh 在极端 zoom 比下 r0/r1 截断（sq<1e-15 → -18）、
+// S 弧长参数异常、中间帧溢出/NaN。扫描验证：中心点轨迹线性、端点精确、全程有限、无急冲。
+const LC_WF = C.create(0, 0, 0.1)        // 屏幕中心世界点 W0 = (1800, 3200)
+const LC_WT = C.create(2282, 2868, 10)   // W1 = W0 + (500, -300)
+let lcWideNaN = false
+let lcWideMaxDev = 0
+for (let i = 0; i <= 200; i++) {
+  const c = C.lerpCentered(LC_WF, LC_WT, i / 200, LC_VW, LC_VH)
+  if (!isFinite(c.x) || !isFinite(c.y) || !isFinite(c.zoom)) { lcWideNaN = true; break }
+  const w = centerWorld(c)
+  lcWideMaxDev = Math.max(lcWideMaxDev, pointLineDist(w.x, w.y, 1800, 3200, 2300, 2900))
+}
+check(!lcWideNaN, '极端飞行（0.1→10）全程有限（无 NaN/Infinity）')
+check(lcWideMaxDev < 1e-6, '极端飞行中心点轨迹线性（最大偏差 ' + lcWideMaxDev.toExponential(1) + '）')
+const lcWideEnd = C.lerpCentered(LC_WF, LC_WT, 1, LC_VW, LC_VH)
+check(approx(lcWideEnd.x, LC_WT.x) && approx(lcWideEnd.y, LC_WT.y) && approx(lcWideEnd.zoom, LC_WT.zoom),
+  '极端飞行 k=1 → 精确落点')
+// 均匀性改测屏幕空间速度（真感知指标）：世界空间指标在极端 zoom 比下失真——
+// 低 zoom 段 1 屏幕像素 = 10 世界单位，同一平滑屏幕轨迹读成巨大世界位移
+// （实测 0.1→10 世界空间 峰值/平均 5.26 超标，但图标屏幕速度 2.07、zoom 增量 2.09 均达标）。
+function lcScreenSpeeds(P, from, to) {
+  const speeds = []
+  let prev = null
+  for (let i = 0; i <= 200; i++) {
+    const o = lcScreenPos(P, from, to, i / 200)
+    if (prev) speeds.push(Math.hypot(o.x - prev.x, o.y - prev.y))
+    prev = o
+  }
+  return speeds
+}
+function lcScreenUniformity(P, from, to) {
+  const s = lcScreenSpeeds(P, from, to)
+  const avg = s.reduce(function (a, b) { return a + b }, 0) / s.length
+  return { maxOverAvg: Math.max.apply(null, s) / avg, lastOverAvg: s[s.length - 1] / avg }
+}
+const lcWideU = lcScreenUniformity({ x: 1800, y: 3200 }, LC_WF, LC_WT)
+check(lcWideU.maxOverAvg <= 3.5, '极端飞行屏幕速度均匀（峰值/平均 ' + lcWideU.maxOverAvg.toFixed(2) + ' ≤ 3.5）')
+check(lcWideU.lastOverAvg <= 0.5, '极端飞行收尾平滑（末帧/平均 ' + lcWideU.lastOverAvg.toFixed(2) + ' ≤ 0.5）')
+// 反向极端飞行（10→0.1，W 移 -500,+300）
+const LC_WR = C.create(2282, 2868, 10)
+const LC_WRT = C.create(0, 0, 0.1)
+let lcRevNaN = false
+let lcRevMaxDev = 0
+for (let i = 0; i <= 200; i++) {
+  const c = C.lerpCentered(LC_WR, LC_WRT, i / 200, LC_VW, LC_VH)
+  if (!isFinite(c.x) || !isFinite(c.y) || !isFinite(c.zoom)) { lcRevNaN = true; break }
+  const w = centerWorld(c)
+  lcRevMaxDev = Math.max(lcRevMaxDev, pointLineDist(w.x, w.y, 2300, 2900, 1800, 3200))
+}
+check(!lcRevNaN, '反向极端飞行（10→0.1）全程有限（无 NaN/Infinity）')
+check(lcRevMaxDev < 1e-6, '反向极端飞行中心点轨迹线性（最大偏差 ' + lcRevMaxDev.toExponential(1) + '）')
+const lcRevU = lcScreenUniformity({ x: 2300, y: 2900 }, LC_WR, LC_WRT)
+check(lcRevU.maxOverAvg <= 3.5 && lcRevU.lastOverAvg <= 0.5,
+  '反向极端飞行屏幕速度均匀且收尾平滑（峰值/平均 ' + lcRevU.maxOverAvg.toFixed(2) + '，末帧/平均 ' + lcRevU.lastOverAvg.toFixed(2) + '）')
 
 // ── clampToBounds（folder 容器有限画布）──// 世界 416x600，视口 400x500，zoom=1：可动范围 x∈[0,16] y∈[0,100]
 let cb = C.clampToBounds(C.create(8, 50, 1), 416, 600, 400, 500)

@@ -1,7 +1,8 @@
 // 一览模式纯函数测试（2026-08-19）：fit-bounds——全部图标包围盒中心 + 当前方向最大可见 zoom。
 // 1. 竖屏/横屏：fit 后全部图标经真实 worldToScreen 落在视口内 + zoom 最大化（再大一点就出屏）
 // 2. 中心对齐：内容包围盒中心 = 屏幕中心世界点（两方向同式）
-// 3. 边界：单文件 zoom 钳到 max；大范围内容钳到 min；空/非法输入 → null
+// 3. 边界：单文件 zoom = 恰好放下的 raw 值（max 10 只作安全网，真实视口不触发）；
+//    大范围内容钳到 min（0.1）；空/非法输入 → null
 // 用法: node test-desktop-fit.js [项目路径]   （由 run-tests.sh 调用）
 'use strict'
 
@@ -20,6 +21,9 @@ function check(cond, msg) {
     console.error('  [fail] ' + msg)
     failures++
   }
+}
+function approx(a, b, eps) {
+  return Math.abs(a - b) <= (eps || 1e-9)
 }
 
 const sandbox = { App: {}, console: console }
@@ -117,16 +121,18 @@ const cs = F.fitCamera(spread, VW, VH, 90)
 allInViewport(spread, cs, '[横屏-分散]')
 centerAligned(cs, spread, '[横屏-分散]')
 
-// ── 4. 单文件：zoom 钳到 max（3）──
+// ── 4. 单文件：zoom = raw 值不被钳制（3.55 < max 10，max 只作安全网）──
 const single = F.fitCamera([{ x: 0, y: 0 }], VW, VH, 0)
-check(single.zoom === 3, '单文件 zoom 钳到 max=3（实际 ' + single.zoom + '）')
+const singleExpect = Math.min(VW / (F.ICON_W + 2 * F.PAD), VH / (F.ICON_H + 2 * F.PAD))
+check(approx(single.zoom, singleExpect), '单文件 zoom = 恰好放下 ' + singleExpect.toFixed(3) + '（不再被 3 卡住，实际 ' + single.zoom + '）')
 allInViewport([{ x: 0, y: 0 }], single, '[单文件]')
+zoomMaximal(single, [{ x: 0, y: 0 }], VW, VH, '[单文件]')
 
-// ── 5. 超大范围内容：zoom 钳到 min（0.3，物理限制尽量显示）──
+// ── 5. 超大范围内容：zoom 钳到 min（0.1，物理限制尽量显示）──
 const huge = []
 for (let i = 0; i < 5; i++) huge.push({ x: i * 2000, y: 0 })
 const ch = F.fitCamera(huge, VW, VH, 0)
-check(ch.zoom === 0.3, '超大范围 zoom 钳到 min=0.3（实际 ' + ch.zoom + '）')
+check(ch.zoom === 0.1, '超大范围 zoom 钳到 min=0.1（实际 ' + ch.zoom + '）')
 
 // ── 6. 空/非法输入安全 ──
 check(F.fitCamera([], VW, VH, 0) === null, '空列表 → null')

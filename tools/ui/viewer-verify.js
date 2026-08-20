@@ -66,6 +66,10 @@ async function main() {
   await page.waitForFunction(function () {
     return window.App && App.Desktop && document.querySelectorAll('.desktop-icon').length > 0
   }, { timeout: 10000 })
+  // 桩环境首启弹「授权手机存储」对话框——overlay 吃触摸且占用返回键优先级，先关掉
+  await page.evaluate(function () {
+    if (App.Dialog && typeof App.Dialog.close === 'function') App.Dialog.close('all-files-dialog-overlay')
+  })
 
   console.log('═══ 1. 打开 → 画布实体（世界坐标）═══')
   await page.evaluate(function () {
@@ -83,14 +87,14 @@ async function main() {
       left: parseFloat(card.style.left), top: parseFloat(card.style.top),
       w: parseFloat(card.style.width), h: parseFloat(card.style.height),
       locked: App.Desktop.isLockedPath('readme.md'),
-      lockIcon: document.querySelector('.desktop-icon-locked') !== null,
-      viewerSelected: App.InternalViewer.anySelected(),
+      iconExited: !document.querySelector('.desktop-icon[data-name="readme.md"]'),
+      viewerSelected: App.DesktopCore.selection.size > 0,
       fsBtnGone: !document.querySelector('.viewer-fs-btn'),
       h1: md.querySelector('h1') && md.querySelector('h1').textContent
     }
   })
   check(r.inCanvas, '卡片宿主 = #desktop-canvas（画布实体）')
-  check(r.locked && r.lockIcon, '打开后文件锁定（Windows 式：禁文件操作）')
+  check(r.locked && r.iconExited, '打开后文件锁定 + 图标退出网格（Viewer 即文件的打开态）')
   check(!r.viewerSelected, '打开后 Viewer 未选中（选中由点击/框选触发）')
   check(r.w > 300 && r.h > 500, '世界尺寸接近屏幕尺度（' + r.w.toFixed(0) + '×' + r.h.toFixed(0) + '）')
   check(r.fsBtnGone, '全屏按钮已收纳进 Morph FAB（顶栏无按钮）')
@@ -130,7 +134,7 @@ async function main() {
   const tapCheck = await page.evaluate(function () {
     // 世界坐标命中 Viewer 实体矩形（打开未选中，命中测试不改变选中态）
     const hit = App.InternalViewer.topmostAt(200, 400) !== null
-    return { hit: hit, selected: App.InternalViewer.anySelected() }
+    return { hit: hit, selected: App.DesktopCore.selection.size > 0 }
   })
   check(tapCheck.hit, '世界点命中 Viewer 实体矩形')
   check(!tapCheck.selected, '打开未选中 → 命中测试不触发选中（需真实点击）')
@@ -139,7 +143,7 @@ async function main() {
   await page.evaluate(function () {
     // 全屏需要先选中实例（FAB「全屏预览」作用于选中实例）
     const hit = App.InternalViewer.topmostAt(200, 400)
-    if (hit) { App.InternalViewer.selectOnly(hit.id); hit.toFullscreen() }
+    if (hit) { App.DesktopCore.selection = App.DesktopSelection.selectOnly(hit.getPath()); App.DesktopRender.applySelection(); hit.toFullscreen() }
   })
   const fs = await page.evaluate(function () {
     const page = document.getElementById('viewer-fs-page')
@@ -168,7 +172,7 @@ async function main() {
   await page.evaluate(function () {
     // 选中实例后点 FAB 关闭
     const hit = App.InternalViewer.topmostAt(200, 400)
-    if (hit) App.InternalViewer.selectOnly(hit.id)
+    if (hit) App.DesktopCore.selection = App.DesktopSelection.selectOnly(hit.getPath()); App.DesktopRender.applySelection()
   })
   const closed2 = await page.evaluate(function () {
     const btn = document.querySelector('[data-action="close-preview"]')
@@ -190,9 +194,9 @@ async function main() {
   const back = await page.evaluate(function () {
     // 先选中 Viewer，返回键应取消选中而非关闭
     const hit = App.InternalViewer.topmostAt(200, 400)
-    if (hit) App.InternalViewer.selectOnly(hit.id)
+    if (hit) App.DesktopCore.selection = App.DesktopSelection.selectOnly(hit.getPath()); App.DesktopRender.applySelection()
     const handled = App.handleSystemBack()
-    return { handled: handled, selected: App.InternalViewer.anySelected(), open: App.InternalViewer.isAnyOpen() }
+    return { handled: handled, selected: App.DesktopCore.selection.size > 0, open: App.InternalViewer.isAnyOpen() }
   })
   check(back.handled === true && back.selected === false && back.open === true,
     '返回键取消 Viewer 选中（不关闭 Viewer，Viewer 保持打开）')

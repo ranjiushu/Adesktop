@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Viewer 选中模型统一（刀 2：Viewer 合入 C.selection，与文件同一套交互）（2026-08-20）
+
+- **动机**：刀 1 摘掉了手柄，但 Viewer 仍用独立选中状态（per-instance `selected` 标志 + `selectOnly/deselectAll/anySelected/selectedInstance` 并行 API），与文件的 `C.selection` Set 各管各的——框选只能单选 Viewer、混合拖动不支持、FAB 特判 `viewerSel` 靠五处手势回调手动同步，仍是一类同步 bug 温床
+- **Viewer 合入 `C.selection`**：选中视觉由 `applySelection` 统一驱动，并行管理器方法全部删除
+- **手势全面统一**：hitTest 的 Viewer 命中归入 `selected`/`icon`（与文件同类型）；handleTap Viewer 点击/延迟反选与文件同一逻辑；marqueeEnd 混合多选（文件+Viewer 合并进同一 `C.selection`）；长按/直接拿起走 `startGroupDrag`（双轨：文件→网格拖、Viewer→实例拖）
+- **混合组拖动**：`C.dragViewerTargets` 新增属性；`startGroupDrag` 分派文件+Viewer 双轨拖动；`handleDrag/handleDrop/handleSingleCancel` 并行处理两轨；落点：文件吸附+避让、Viewer 自由定位（各自 `endDrag` 持久化）
+- **双击 Viewer = 全屏预览**（与「双击文件 = 打开」对称：已打开的文件再「打开」= 完整视图）
+- **FAB 混合选中语义**：`C.selection` 含 Viewer 路径时显示「关闭预览」；恰好单选 Viewer 且无文件选中时显示「全屏预览」；文件操作作用于未锁定成员；关闭预览批量关闭选中 Viewer
+- **`closeViewer` 改为批量关闭**（`C.selection` 中的 Viewer 路径，关闭后路径从 `C.selection` 移除，保留文件选中；`closedSet` 预快照避免关闭后 `hasPath` 返回 false 导致路径过滤条件反转）
+- 测试同步：test-viewer-drag（统一选中模型全链路：C.selection.has 代替 per-instance selected）、test-desktop-viewerlink-lock（closeViewer 用 C.selection 代替 selectedViewerId）、三个 UI 验证批量替换已删除 API（anySelected/selectOnly/deselectAll → C.selection + applySelection/clearSelection + DesktopSelection.selectOnly）
+
 ### Viewer 交互模型统一（刀 1：摘手柄 + 静态预览）（2026-08-20）
 
 - **动机**：Viewer 与文件是两套并行选中系统（C.selection vs 实例 selected 标志），

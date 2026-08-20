@@ -56,7 +56,7 @@ async function main() {
     return {
       locked: App.Desktop.isLockedPath('readme.md'),
       iconExited: !document.querySelector('.desktop-icon[data-name="readme.md"]'),
-      viewerSelected: App.InternalViewer.anySelected(),
+      viewerSelected: App.DesktopCore.selection.size > 0,
       selectedClass: document.querySelector('.viewer-card-canvas').classList.contains('viewer-card-selected'),
       fileNotSelected: document.querySelectorAll('.desktop-icon.selected').length === 0,
       fsBtnGone: !document.querySelector('.viewer-fs-btn'),
@@ -92,7 +92,7 @@ async function main() {
     const h = header.getBoundingClientRect()
     const b = body.getBoundingClientRect()
     return {
-      selected: App.InternalViewer.anySelected(),
+      selected: App.DesktopCore.selection.size > 0,
       selectedClass: document.querySelector('.viewer-card-canvas').classList.contains('viewer-card-selected'),
       stillOpen: App.InternalViewer.isAnyOpen(),
       stillLocked: App.Desktop.isLockedPath('readme.md'),
@@ -112,7 +112,7 @@ async function main() {
   const r3 = await page.evaluate(function () {
     const header = document.querySelector('.viewer-card-canvas .viewer-header')
     return {
-      selected: App.InternalViewer.anySelected(),
+      selected: App.DesktopCore.selection.size > 0,
       stillOpen: App.InternalViewer.isAnyOpen(),
       stillLocked: App.Desktop.isLockedPath('readme.md'),
       headerHidden: header && getComputedStyle(header).display === 'none'
@@ -139,13 +139,13 @@ async function main() {
     // 选中实例后拖动
     const hit = App.InternalViewer.topmostAt(180, 320)
     if (!hit) return { ok: false }
-    App.InternalViewer.selectOnly(hit.id)
+    App.DesktopCore.selection = App.DesktopSelection.selectOnly(hit.getPath()); App.DesktopRender.applySelection()
     hit.beginDrag({ x: 180, y: 320 })
     hit.moveBy({ x: 280, y: 420 })
     const pos = { x: parseFloat(document.querySelector('.viewer-card-canvas').style.left),
                   y: parseFloat(document.querySelector('.viewer-card-canvas').style.top) }
     hit.endDrag()
-    return { ok: true, pos: pos, dragging: App.InternalViewer.draggingInstance() !== null }
+    return { ok: true, pos: pos, dragging: App.InternalViewer.list().some(function(i){return i.isDragging()}) }
   })
   check(moved.ok && !moved.dragging && Math.abs(moved.pos.x - (posBefore.x + 100)) < 1 && Math.abs(moved.pos.y - (posBefore.y + 100)) < 1,
     '拖动 (100,100) → 实体世界坐标同步位移')
@@ -153,13 +153,13 @@ async function main() {
   console.log('═══ 5b. 无手柄新模型：选中即可直接拖动（viewer-selected 命中 → beginDrag） ═══')
   // 拖动手柄已删除（刀 1）：拿起语义与文件图标统一——已选中直接拖、未选中长按拿起。
   // 未选中拖动 = 框选、长按选中+拿起的全链路回归见 tests/test-viewer-drag.js。
-  await page.evaluate(function () { App.InternalViewer.deselectAll() })
+  await page.evaluate(function () { App.DesktopRender.clearSelection() })
   const directDrag = await page.evaluate(function () {
     const card = document.querySelector('.viewer-card-canvas')
     const before = { x: parseFloat(card.style.left), y: parseFloat(card.style.top) }
     const inst = App.InternalViewer.topmostAt(before.x + 10, before.y + 10)
     if (!inst) return { ok: false }
-    App.InternalViewer.selectOnly(inst.id)   // 已选中
+    App.DesktopCore.selection = App.DesktopSelection.selectOnly(inst.getPath()); App.DesktopRender.applySelection()   // 已选中
     const dragOk = inst.beginDrag({ x: before.x + 10, y: before.y + 10 })
     inst.moveBy({ x: before.x + 10 + 60, y: before.y + 10 + 40 })
     const pos = { x: parseFloat(card.style.left), y: parseFloat(card.style.top) }
@@ -174,7 +174,7 @@ async function main() {
   console.log('═══ 6. 全屏 = 相册式新页面 ═══')
   await page.evaluate(function () {
     const hit = App.InternalViewer.topmostAt(200, 400)
-    if (hit) { App.InternalViewer.selectOnly(hit.id); hit.toFullscreen() }
+    if (hit) { App.DesktopCore.selection = App.DesktopSelection.selectOnly(hit.getPath()); App.DesktopRender.applySelection(); hit.toFullscreen() }
   })
   const fs = await page.evaluate(function () {
     const page = document.getElementById('viewer-fs-page')
@@ -205,7 +205,7 @@ async function main() {
   console.log('═══ 7. 关闭预览 = 解除锁定 ═══')
   await page.evaluate(function () {
     const hit = App.InternalViewer.topmostAt(200, 400)
-    if (hit) App.InternalViewer.selectOnly(hit.id)
+    if (hit) App.DesktopCore.selection = App.DesktopSelection.selectOnly(hit.getPath()); App.DesktopRender.applySelection()
   })
   const closed = await page.evaluate(function () {
     App.Desktop.closeViewer()

@@ -75,9 +75,22 @@ check(V.cardIsPortrait('text') && V.cardIsPortrait('markdown') && V.cardIsPortra
 check(!V.cardIsPortrait('image') && !V.cardIsPortrait('video') && !V.cardIsPortrait('svg'), 'cardIsPortrait: 图/视频/svg → 原始比例')
 check(!V.cardIsPortrait('website'), 'cardIsPortrait: website → 宽卡片（接近全屏，非 3:4）')
 
-// ── Viewer 态锚点：center = 视觉中心（text/parsed）；file = 文件位置（媒体）──
-check(V.anchorIsCenter('text') && V.anchorIsCenter('markdown') && V.anchorIsCenter('json') && V.anchorIsCenter('html') && V.anchorIsCenter('website'), 'anchorIsCenter: 文本/解析/网站 → 视觉中心')
-check(!V.anchorIsCenter('image') && !V.anchorIsCenter('video') && !V.anchorIsCenter('audio') && !V.anchorIsCenter('svg'), 'anchorIsCenter: 媒体 → 文件位置')
+// ── 原地展开 anchorRect：卡片左上 = 图标位置，超视口夹回可视区 ──
+// 相机 (0,0,1)、视口 412×915、卡片 240×320：图标在视口内 → 原位（左上对齐图标）
+let ar1 = V.anchorRect({ x: 100, y: 200 }, 240, 320, { x: 0, y: 0, zoom: 1 }, 412, 915)
+check(ar1 && ar1.x === 100 && ar1.y === 200, 'anchorRect: 图标在视口内 → 卡片左上 = 图标位置（原地展开）')
+// 图标在屏幕右下角 → 卡片夹回视口（右/下边距 16px，顶部栏预留 96px）
+let ar2 = V.anchorRect({ x: 400, y: 800 }, 240, 320, { x: 0, y: 0, zoom: 1 }, 412, 915)
+check(ar2 && ar2.x === 156 && ar2.y === 579,
+  'anchorRect: 卡片超视口 → 夹回 (156,579)，实际 (' + (ar2 && ar2.x) + ',' + (ar2 && ar2.y) + ')')
+// 图标在左上角 → 卡片被顶部栏预留压到 y=96（x 保持 16 边距内原样）
+let ar3 = V.anchorRect({ x: 16, y: 16 }, 240, 320, { x: 0, y: 0, zoom: 1 }, 412, 915)
+check(ar3 && ar3.x === 16 && ar3.y === 96, 'anchorRect: 顶部图标 → y 夹到 96（顶部栏预留），x 不动')
+// zoom=2：世界距离 = 屏幕 px/2，夹取边界随之缩放；卡片宽超可视区 → 贴最小边
+let ar4 = V.anchorRect({ x: 300, y: 500 }, 240, 320, { x: 0, y: 0, zoom: 2 }, 412, 915)
+check(ar4 && ar4.x === 8 && approx(ar4.y, 129.5),
+  'anchorRect: zoom=2 卡片超宽贴 x=8、y 夹到 129.5，实际 (' + (ar4 && ar4.x) + ',' + (ar4 && ar4.y) + ')')
+check(V.anchorRect(null, 240, 320, { x: 0, y: 0, zoom: 1 }, 412, 915) === null, 'anchorRect: anchor 缺失 → null')
 
 // ── cardSize34：3:4 竖版卡片（约束视口内，中心不变）──
 let s34 = V.cardSize34(412, 915)
@@ -85,11 +98,6 @@ check(Math.abs(s34.w / s34.h - 3 / 4) < 0.01, 'cardSize34 保持 3:4 比例')
 check(s34.w <= 412 - 32 + 1 && s34.h <= 915 - 96 + 1, 'cardSize34 约束在视口内')
 s34 = V.cardSize34(100, 100)
 check(s34.w >= 200 && s34.h >= 160, 'cardSize34 下限钳制（MIN_W/MIN_H）')
-
-// ── visualCenter：相机视觉中心世界坐标 ──
-let vc = V.visualCenter({ x: 100, y: 50, zoom: 2 }, 412, 915)
-check(approx(vc.x, 100 + 412 / 4) && approx(vc.y, 50 + 915 / 4), 'visualCenter = 相机左上角 + 视口/(2·zoom)')
-check(V.visualCenter(null, 412, 915) === null, 'visualCenter 相机缺失 → null 降级')
 
 // ── 拖动手柄：handleScreenRect（屏幕坐标，固定尺寸不随 zoom）──
 // 卡片世界 rect {x:100,y:200,w:200,h:100}，相机 (0,0,1)：手柄屏幕矩形位于卡片底部中心下方

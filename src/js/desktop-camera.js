@@ -12,8 +12,12 @@
 'use strict'
 
 App.DesktopCamera = (function () {
-  const ZOOM_MIN = 0.3
-  const ZOOM_MAX = 3
+  // 缩放范围 [0.1, 10]（2026-08-20 放宽，原 [0.3, 3]）：根目录桌面空间的手感边界。
+  // 下限 0.1 保数值安全（panBy 位移 = dx/zoom，zoom→0 时世界坐标会顶穿浮点精度）；
+  // 上限 10 保像素精度（translate3d 超大值丢精度）与缩略图清晰度（位图放大 >4-5x 发糊）。
+  // 真无穷不可行：CSS transform 与 double 都撑不住，必须留安全兜底。
+  const ZOOM_MIN = 0.1
+  const ZOOM_MAX = 10
   const ROT_0 = 0
   const ROT_90 = 90
 

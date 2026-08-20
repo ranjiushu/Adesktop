@@ -45,10 +45,6 @@ App.Desktop = (function () {
       /** @param {DesktopCameraState} c @returns {void} */
       onUpdate: function (c) {
         C.camera = c
-        // 相机变化 → 同步 Viewer 拖动手柄屏幕位置（平移/缩放/Home 动画每帧）
-        if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
-          App.InternalViewer.syncHandles(c)
-        }
       },
       // 手势开始 → 打断进行中的 Home 平滑过渡（手势直控优先）
       onGestureStart: N.cancelCameraAnim,
@@ -65,10 +61,6 @@ App.Desktop = (function () {
     })
     // 同步手势层相机 + 模式标志 + 菜单可用态（根目录初始 = desktop 空间）
     N.applyCameraForPath()
-    // 同步 Viewer 拖动手柄（相机初始化后手柄屏幕位置才可计算）
-    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
-      App.InternalViewer.syncHandles(C.camera)
-    }
     // 同步高级浏览模式到手势层（initLayout 已从 ViewStore 加载偏好）
     B.syncBrowseMode()
   }
@@ -84,7 +76,7 @@ App.Desktop = (function () {
   // 槽位是历史残留位置，与整理区域脱节 → 旋转后视野整体漂移，用户找不到文件）。
   // Home 键（goHome）才按当前方向读槽位——整理锚已写入两方向槽位（同一中心），
   // 旋转后点 Home 恒回到整理区域。
-  // 旋转后同步手势层/Viewer 手柄/Home 高亮。
+  // 旋转后同步手势层/Home 高亮。
   /** @returns {boolean} */
   function toggleRotate() {
     if (C.isFolderView()) return false
@@ -97,9 +89,6 @@ App.Desktop = (function () {
     C.camera = App.DesktopCamera.create(cam.x, cam.y, cam.zoom, next)
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
       App.DesktopGesture.setCamera(C.camera)
-    }
-    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
-      App.InternalViewer.syncHandles(C.camera)
     }
     if (App.BottomBar && typeof App.BottomBar.updateHomeState === 'function') {
       App.BottomBar.updateHomeState()

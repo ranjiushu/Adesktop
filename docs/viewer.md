@@ -127,13 +127,16 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
   覆盖在卡片底部——不参与 flex 占位，**不改变媒体缩放比例**（fitAspectRect 结果不动），
   盖住底部少量内容可接受。audio 例外（3:4 封面卡片底部是原生播放控制条，保持占位式
   不遮挡）。
-- **拖动手柄（辅助拖动入口）**：每个 canvas 态 Viewer 卡片底部中心下方悬浮一条
-  36×6px 小横条（屏幕层固定尺寸，不随画布 zoom 缩放，间距 14px）。**按住手柄 = 自动
-  选中 + 直接拖动**（不必先点击选中/长按），拖动结束选中保持、点外部取消——与现有
-  脆弱选中模型一致；轻点手柄 = 仅选中（与点击卡片语义一致，手柄只是辅助拖动区）。
-  手柄始终可见（含未选中），选中时变 accent 色。命中基于世界坐标反算
-  （`handleWorldRect`），元素本身 pointer-events 穿透不拦桌面手势；相机变化由
-  `syncHandles` 跟随（gesture onUpdate 驱动），目录切换/全屏进出时同步隐藏/恢复。
+- **静态预览（2026-08-20 交互模型统一）**：canvas 态**非音视频模块内容零交互**
+  （`viewer-card-static`：内容区 `pointer-events:none` + `overflow:hidden`）——
+  Viewer 态就是「图片式预览」，选中/多选/移动等实体手势与文件图标完全一致；
+  内容操作（滚动/阅读/网页交互）只在全屏预览态。**视频/音频保留原生控件**
+  （唯一例外，不标记 static）。website 网页 canvas 态同样静态化（海报），
+  「拖文件到网页设待上传」走世界坐标命中、不受影响。
+- **拖动手柄已删除（2026-08-20）**：手柄原是「两套选中模型」的补丁（未选中 Viewer
+  拖动 = 框选，需辅助入口直接拿起）。交互模型与文件图标统一后拿起语义自然成立——
+  **已选中直接拖、未选中长按拿起**，与文件图标同一套手势，手柄及其基础设施
+  （屏幕层 DOM/相机每帧同步/rotation=90 换算/手势命中分支）整体移除。
 
 ## 完整预览 = 相册式独立新页面（#viewer-fs-page）
 
@@ -177,13 +180,14 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
   `InternalViewer.moduleFor/cardIsPortrait/anchorRect/cardSize34/
   visibleRatio/fitAspectRect/jsonToNodes/rectHitWorld`
 - 单元测试：`tests/test-markdown.js` / `tests/test-file-opener.js` / `tests/test-viewer.js` /
+  `tests/test-viewer-drag.js`（无手柄新模型全链路：选中直接拖/未选中框选/长按拿起）/
   `tests/test-desktop-viewerlink-lock.js`（打开态生命周期：派生锁定/落位/集合 diff 渲染/落位动画）/
   `tests/test-viewer-lock-sync.js`（打开态集成：双击打开图标退场/整理不参与/关闭落位避让）
 - 无头 UI 验证（注入模拟 FileBridge）：
   - `tools/ui/viewer-verify.js`：画布实体定位/transform 跟随/点击不反选/全屏新页面/
     FAB 关闭/返回键/HTML 隔离/各类型渲染
   - `tools/ui/viewer-entity-verify.js`：实体交互性质——点击选中/拖动位移/取消还原/
-    全屏进出/位置保留/选中态绑定关闭
+    全屏进出/位置保留/选中态绑定关闭/静态预览（canvas 零交互 ⇄ 全屏可交互）
   - `tools/ui/viewer-folder-verify.js`：folder 全屏新页面 + 返回键退出关闭 + 目录保持
   - `tools/ui/viewer-modules-verify.js`：三模块 × 两状态——3:4 卡片/原地展开锚点/
     reader 工具条（缩放+换行）/音频封面卡片/框选触发选中/模块映射
@@ -198,4 +202,5 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 - 音频封面为占位图标（不解码内嵌封面，符合「不自行实现媒体解码器」原则）
 - 文本自动换行为主流单词边界换行（`overflow-wrap: break-word` + `word-break: normal`），
   长单词不拆散、超长行在容器边缘断开
-- 画布实体在低 zoom 下内容随实体缩小（实体行为）；需要阅读时点「全屏预览」
+- 画布实体在低 zoom 下内容随实体缩小（实体行为）；canvas 态内容不滚动不交互
+  （静态预览）——阅读/滚动/网页操作一律进「全屏预览」

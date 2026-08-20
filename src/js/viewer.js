@@ -248,10 +248,15 @@ App.InternalViewer = (function () {
     }
 
     // ── 关闭本实例（不触碰其他实例）──
+    // onClose 回调携带路径 + 关闭时世界矩形：桌面层据此把文件落位回网格
+    // （Viewer = 文件的打开状态，关闭 = 变回图标，落点 = 窗口吸附位置）。
     function close() {
       if (!state.open) { detachCard(); return }
       const savedPath = state.path
       const savedOnClose = state.onClose
+      const savedRect = state.rect
+        ? { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h }
+        : null
       const v = card.querySelector('video')
       if (v) { try { v.pause() } catch (e) { /* 忽略 */ } }
       const a = card.querySelector('audio')
@@ -275,8 +280,8 @@ App.InternalViewer = (function () {
       // 从管理器实例集合移除自己（exitFullscreen 的 from='folder' 分支也走这里，保证 isAnyOpen 正确）
       const i = indexOf(id)
       if (i >= 0) _instances.splice(i, 1)
-      // 通知调用方：文件已关闭（用于桌面层解除锁定）
-      if (typeof savedOnClose === 'function') savedOnClose(savedPath)
+      // 通知调用方：文件已关闭（桌面层落位回网格；锁定是派生态，随实例消失自动解除）
+      if (typeof savedOnClose === 'function') savedOnClose(savedPath, savedRect)
       _notifyPersist()
     }
 
@@ -327,6 +332,11 @@ App.InternalViewer = (function () {
 
     function isOpen() { return !!state.open }
     function getMode() { return state.mode }
+    // 桌面实体态：canvas 态，或从 canvas 进入的 fullscreen（文件「打开中」，
+    // 桌面层据此让图标退出网格；folder 全屏预览 fsFrom='folder' 不算桌面实体）
+    function isDesktopEntity() {
+      return state.open && (state.mode === 'canvas' || state.fsFrom === 'canvas')
+    }
     function isSelected() { return state.selected }
     function getPath() { return state.path }
     function getName() { return state.name }
@@ -532,16 +542,6 @@ App.InternalViewer = (function () {
     }
 
     function isDragging() { return !!drag }
-
-    // 图标拖动同步：Viewer 卡片左上角贴图标位置（锁定文件的图标是位置真相锚点）。
-    // 不触发 onMove——图标 → Viewer 方向同步由调用方（手势层图标拖动）驱动，
-    // 避免 图标→Viewer→图标 循环同步。
-    /** @param {number} x @param {number} y @returns {boolean} */
-    function setRectFromIcon(x, y) {
-      if (!state.open || state.mode !== 'canvas' || !state.rect) return false
-      applyCanvasRect({ x: x, y: y, w: state.rect.w, h: state.rect.h })
-      return true
-    }
 
     /** @param {((rect: {x: number, y: number, w: number, h: number}) => void) | null} fn */
     function _setOnMove(fn) {
@@ -851,6 +851,7 @@ App.InternalViewer = (function () {
       getKind: getKind,
       isSelected: isSelected,
       setSelected: setSelected,
+      isDesktopEntity: isDesktopEntity,
       toFullscreen: toFullscreen,
       exitFullscreen: exitFullscreen,
       beginDrag: beginDrag,
@@ -858,7 +859,6 @@ App.InternalViewer = (function () {
       endDrag: endDrag,
       cancelDrag: cancelDrag,
       isDragging: isDragging,
-      setRectFromIcon: setRectFromIcon,
       _setOnMove: _setOnMove,
       getRect: getRect,
       hitTestWorld: hitTestWorld,
@@ -913,18 +913,35 @@ App.InternalViewer = (function () {
     _moveListener = typeof fn === 'function' ? fn : null
   }
 
-  // 图标拖动同步：把 path 对应 Viewer 卡片左上角贴到 (x, y)（图标位置 → 预览窗口位置）。
-  // 命中 canvas 态实例且移动成功返回 true；无对应实例/非 canvas 态返回 false。
-  /** @param {string} path @param {number} x @param {number} y @returns {boolean} */
-  function syncRectForPath(path, x, y) {
+  // 路径是否被任一打开实例持有（文件「打开」态判定——锁定/禁改是派生态，无独立集合）
+  /** @param {string} path @returns {boolean} */
+  function hasPath(path) {
+    if (!path) return false
+    for (let i = 0; i < _instances.length; i++) {
+      if (_instances[i].isOpen() && _instances[i].getPath() === path) return true
+    }
+    return false
+  }
+
+  // 路径是否为桌面实体态（canvas / canvas 转全屏）：渲染层据此让图标退出网格
+  /** @param {string} path @returns {boolean} */
+  function isDesktopEntityPath(path) {
     if (!path) return false
     for (let i = 0; i < _instances.length; i++) {
       const inst = _instances[i]
-      if (inst.getPath && inst.getPath() === path) {
-        if (inst.setRectFromIcon(x, y)) return true
-      }
+      if (inst.isDesktopEntity && inst.isDesktopEntity() && inst.getPath() === path) return true
     }
     return false
+  }
+
+  // 全部桌面实体态实例的路径（渲染 diff 用）
+  /** @returns {Array<string>} */
+  function desktopEntityPaths() {
+    const out = []
+    _instances.forEach(function (inst) {
+      if (inst.isDesktopEntity && inst.isDesktopEntity()) out.push(inst.getPath())
+    })
+    return out
   }
 
   // 关闭指定实例（实例 close 内部会从集合移除自己）
@@ -1071,7 +1088,9 @@ App.InternalViewer = (function () {
     open: open,
     setPersistListener: setPersistListener,
     setMoveListener: setMoveListener,
-    syncRectForPath: syncRectForPath,
+    hasPath: hasPath,
+    isDesktopEntityPath: isDesktopEntityPath,
+    desktopEntityPaths: desktopEntityPaths,
     closeById: closeById,
     closeAll: closeAll,
     getById: getById,

@@ -95,28 +95,22 @@ App.Actions = (function () {
     anchor.zoom = (C.camera && C.camera.zoom) || 1
     // 布局数据文件（.adesktop-layout.json）不参与整理（渲染时同样过滤——否则它被排进
     // 网格（json 组恰在 html/md 之间）但不可见 → 网格留空位，2026-08-19 真机反馈）
-    // 锁定文件（正在预览）不参与整理：图标与 Viewer 预览窗口单向锚定（图标是网格
-    // 真相锚点，窗口自由浮动；整理挪图标会与窗口分家，故跳过）
-    // 排走图标 = 与窗口分家/重叠；锁定文件保持原位，其余文件排布跳过其占位格子
-    /** @type {Array<{x: number, y: number}>} */
-    const lockedPoints = []
+    // 「打开」态文件（Viewer 即文件）不是网格成员：不参与整理、不留占位格——
+    // 其原格子是普通空格，整理自然填掉；关闭时按 Viewer 窗口位置重新落位
+    // （desktop-viewer-link.handleViewerClosed）
     const entries = C.state.items
       .filter(function (it) {
         if (it.name === C.LAYOUT_FILE) return false
         const key = (it.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())
           ? C.state.trashName : C.fullPath(it.name)
-        if (C._lockedPaths && C._lockedPaths.has(key)) {
-          const p = C.positions[key]
-          if (p) lockedPoints.push({ x: p.x, y: p.y })
-          return false
-        }
-        return true
+        return !(App.DesktopViewerLink && typeof App.DesktopViewerLink.isDesktopEntityPath === 'function' &&
+          App.DesktopViewerLink.isDesktopEntityPath(key))
       })
       .map(function (it) {
         return { name: it.name, isDir: it.isDir }
       })
     const placed = App.DesktopOrganize.organize(
-      entries, C.viewportWidth(), C.viewportHeight(), anchor, lockedPoints)
+      entries, C.viewportWidth(), C.viewportHeight(), anchor)
     placed.forEach(function (p) {
       // key：虚拟回收站 = trashName（桥层根固定串）；其余 = 完整相对路径
       const key = (p.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())

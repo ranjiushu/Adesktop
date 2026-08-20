@@ -286,10 +286,6 @@ App.DesktopGestureHandlers = (function () {
         node.style.left = x + 'px'
         node.style.top = y + 'px'
       }
-      // 锁定文件图标拖动 → Viewer 预览窗口实时跟随（单向锚定：图标是网格真相锚点，窗口贴图标）
-      if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
-        App.InternalViewer.syncRectForPath(n, x, y)
-      }
     })
     if (App.Loading && typeof App.Loading.showTag === 'function') {
       const hitWebsite = websiteHitAt(world)
@@ -359,10 +355,6 @@ App.DesktopGestureHandlers = (function () {
           node.style.left = back.x + 'px'
           node.style.top = back.y + 'px'
         }
-        // 锁定文件：Viewer 预览窗口同步还原（拖动中已实时跟随，取消须一同退回）
-        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
-          App.InternalViewer.syncRectForPath(n, back.x, back.y)
-        }
       }
     })
   }
@@ -375,26 +367,14 @@ App.DesktopGestureHandlers = (function () {
       return
     }
     if (!C.dragTargets.length) return
-    // Windows 式锁定：被 Viewer 打开的文件禁止移动（拖入文件夹），但拖动摆放（改布局位置）仍可
-    function lockedMoveBlocked() {
-      return C.dragTargets.some(function (n) { return C._lockedPaths.has(n) })
-    }
+    // 「打开」态文件（Viewer 即文件）没有图标，不可能出现在拖拽组里——
+    // 旧「锁定文件禁移入文件夹」检查随之删除（不可达状态，派生态无需防御）
     // folder 容器：移入文件夹语义——命中文件夹 → moveIntoFolder；
     // 未命中 → 还原起始位（folder 位置自动排布，不吸附不落盘）
     if (C.isFolderView()) {
       if (moved) {
         const hit = folderHitAt(world)
         if (hit) {
-          if (lockedMoveBlocked()) {
-            C.dragTargets.forEach(function (n) { setPickedUp(n, false) })
-            C.dragTargets = []
-            C.dragStartWorld = null
-            C.dragStartPositions = {}
-            if (App.toast && typeof App.toast.show === 'function') {
-              App.toast.show('文件正在预览（锁定），不可移动')
-            }
-            return
-          }
           if (App.Loading && typeof App.Loading.hideTag === 'function') {
             App.Loading.hideTag()
           }
@@ -420,10 +400,6 @@ App.DesktopGestureHandlers = (function () {
               if (node) {
                 node.style.left = back.x + 'px'
                 node.style.top = back.y + 'px'
-              }
-              // 锁定文件：Viewer 预览窗口同步还原
-              if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
-                App.InternalViewer.syncRectForPath(n, back.x, back.y)
               }
             }
           })
@@ -461,17 +437,6 @@ App.DesktopGestureHandlers = (function () {
       const hit = folderHitAt(world)
       // 回收站不可移入其他文件夹（锚定根目录）；命中文件夹时仍按重定位处理（不 moveIntoFolder）
       if (hit && !C.dragIncludesTrash()) {
-        // 锁定文件（正在预览）禁止移动
-        if (lockedMoveBlocked()) {
-          C.dragTargets.forEach(function (n) { setPickedUp(n, false) })
-          C.dragTargets = []
-          C.dragStartWorld = null
-          C.dragStartPositions = {}
-          if (App.toast && typeof App.toast.show === 'function') {
-            App.toast.show('文件正在预览（锁定），不可移动')
-          }
-          return
-        }
         // 清标签 + 执行移动（copy+del 源，目标名自动加序号）
         if (App.Loading && typeof App.Loading.hideTag === 'function') {
           App.Loading.hideTag()
@@ -515,12 +480,8 @@ App.DesktopGestureHandlers = (function () {
         return { name: n, x: C.positions[n].x, y: C.positions[n].y }
       })
       // 3. 避让解析：移动组放期望位，冲突的静止图标让位到最近空位。
-      //    锁定文件（正在预览）为钉子户：不可让位——其它文件拖动不能顶开它，
-      //    冲突时移动组让位（否则图标与 Viewer 预览窗口分家/重叠）
-      const lockedStatics = statics.filter(function (s) {
-        return C._lockedPaths.has(s.name)
-      }).map(function (s) { return s.name })
-      const resolved = App.DesktopGrid.resolvePlacement(moving, statics, lockedStatics)
+      //    「打开」态文件没有图标（不是网格成员），天然不参与避让
+      const resolved = App.DesktopGrid.resolvePlacement(moving, statics)
       Object.keys(resolved).forEach(function (n) {
         C.positions[n] = resolved[n]
         C.bounds[n] = { x: resolved[n].x, y: resolved[n].y, w: C.bounds[n].w, h: C.bounds[n].h }
@@ -528,11 +489,6 @@ App.DesktopGestureHandlers = (function () {
         if (node) {
           node.style.left = resolved[n].x + 'px'
           node.style.top = resolved[n].y + 'px'
-        }
-        // 锁定文件：最终落位（网格吸附后）同步 Viewer——拖动中跟随的是未吸附位置，
-        // 吸附变化若不回传则图标与 Viewer 窗口错位（分家）
-        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
-          App.InternalViewer.syncRectForPath(n, resolved[n].x, resolved[n].y)
         }
       })
       // Windows 原则：选中态是临时/脆弱状态——移动完成即失效（清空选中 + 收起 FAB 操作栏）
@@ -568,10 +524,6 @@ App.DesktopGestureHandlers = (function () {
         if (node) {
           node.style.left = back.x + 'px'
           node.style.top = back.y + 'px'
-        }
-        // 锁定文件：Viewer 预览窗口同步还原（拖动中已实时跟随，取消须一同退回）
-        if (C._lockedPaths.has(n) && App.InternalViewer && typeof App.InternalViewer.syncRectForPath === 'function') {
-          App.InternalViewer.syncRectForPath(n, back.x, back.y)
         }
       }
       setPickedUp(n, false)

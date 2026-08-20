@@ -267,6 +267,26 @@ sandbox.App.DesktopRender.render = function () { renderCalls++; return origRende
   check(renderCalls === 2, '实体集合变化（关闭）→ 重渲染一次')
   check(createdIcons.length === 2, '关闭后 a.txt 图标回到网格')
 
+  // ── 8b. 关闭落位动画：图标从 Viewer 位置飞入网格格（transform + landing class）──
+  // 先打开（diff 基线 = {a.txt}）→ 关闭时 handleViewerClosed 记录起点 → diff 渲染后播放
+  viewerInstances = [makeInst(6, 'a.txt', true)]
+  persistListenerFn([{ path: 'a.txt', name: 'a.txt', kind: 'text', rect: { x: 0, y: 0, w: 200, h: 280 } }])
+  check(createdIcons.length === 1, '动画前置：a.txt 再次打开（图标退出）')
+  // 清掉前面场景残留的 bounds（b.txt 占用 (0,0)），保证落位落在 (16,16)
+  C.bounds = {}
+  C.positions = {}
+  VL.handleViewerClosed('a.txt', { x: 20, y: 30, w: 200, h: 280 })   // 落位 (16,16) + 记录动画起点
+  viewerInstances = []
+  persistListenerFn([])
+  const landNode = C.iconEls['a.txt']
+  check(!!landNode && landNode.classList.contains('desktop-icon-landing'),
+    '关闭渲染后图标带 landing class')
+  check(!!landNode && landNode.style.transform === 'translate(4px,14px)',
+    '图标初始 transform = 从 Viewer 位置 (20,30) 到格位 (16,16) 的位移')
+  await new Promise(function (res) { setTimeout(res, 420) })
+  check(!landNode.classList.contains('desktop-icon-landing'),
+    '动画结束后 landing class 清理（不残留 transition）')
+
   // ── 9. applyRename 布局 key 迁移 ──
   C.positions = { 'a.txt': { x: 100, y: 100 }, 'b.txt': { x: 200, y: 200 }, 'c.txt': { x: 300, y: 300 } }
   C.bounds = { 'a.txt': { x: 100, y: 100, w: 84, h: 76 }, 'b.txt': { x: 200, y: 200, w: 84, h: 76 }, 'c.txt': { x: 300, y: 300, w: 84, h: 76 } }

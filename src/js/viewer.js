@@ -1,11 +1,11 @@
 /* InternalViewer：通用文件查看器组件（三模块 × 两状态，多实例）。
  *   三模块（按文件语义分组，策略对象驱动，见 MODULES）：
- *     - text   纯文本（txt/log/csv…）：Viewer 态 3:4 竖版卡片 + 视觉中心展开；
+ *     - text   纯文本（txt/log/csv…）：Viewer 态 3:4 竖版卡片 + 原地展开；
  *              完整预览态 = reader（字号缩放 + 自动换行）。
- *     - parsed 文本解析渲染（md/json/html）：Viewer 态同 text（3:4 + 视觉中心）；
+ *     - parsed 文本解析渲染（md/json/html）：Viewer 态同 text（3:4 + 原地展开）；
  *              完整预览态 = doc（成熟滚动渲染：md 排版 / json 折叠树 / html iframe）。
  *     - media  Web 友好媒体（图/视频/音频/svg）：Viewer 态图/视频/svg 按原始比例、
- *              音频 3:4 封面卡片；完整预览态 = 黑底 contain 全屏。
+ *              音频 3:4 封面卡片，均原地展开；完整预览态 = 黑底 contain 全屏。
  *   两状态：
  *     1. Viewer 态（canvas，anchor 非 null，Desktop 空间）：画布实体——随画布
  *        transform 平移/缩放；点击选中（脆弱/临时）、拖动移动；手势照常作用于画布。
@@ -13,9 +13,13 @@
  *        返回键/页头返回退出回到原状态。
  *   多实例：open() 每次创建独立实例（各自 DOM/状态/拖动），互不干扰；
  *     同一时刻最多一个实例处于 fullscreen 态（#viewer-fs-page 为单例容器）。
- *     级联错位：视觉中心锚点类（text/parsed）每次打开右下偏移，自然错开。
+ *     原地展开（2026-08-20 起）：canvas 态卡片左上锚定图标位置（anchor =
+ *     C.positions[path]），超视口夹回可视区——文件「变成」Viewer 的视觉兑现。
  * 顶栏文件名 + 全屏态返回按钮；全屏入口在 Morph FAB（Viewer 选中时）。
  * 类型：text/markdown/json/html/svg/image/video/audio；媒体走 URI 流式。
+ * anchor 语义：canvas 态传入图标左上世界坐标（原地展开）；null = 沉浸式全屏
+ * （folder 容器）。此前 text/parsed 曾锚定视觉中心 + 级联错位（窗口凭空出现
+ * 时代的产物），已随「Viewer 即文件」重构删除。
  * HTML 安全：iframe srcdoc + sandbox="allow-scripts"（隔离 Java 桥）。
  * 依赖: namespace.js, file-api.js, markdown.js
  * 导出: App.InternalViewer（管理器 + 纯函数）
@@ -27,8 +31,6 @@ App.InternalViewer = (function () {
   const TOP_GAP = 96
   const MIN_W = 200
   const MIN_H = 160
-  const MIN_VISIBLE = 0.3
-  const CASCADE_STEP = 24   // 级联错位步进（世界坐标，右下）
   const HANDLE_W = 36       // 拖动手柄屏幕宽度（px，固定屏幕尺寸不随画布缩放）
   const HANDLE_H = 6        // 拖动手柄屏幕高度（px）
   const HANDLE_GAP = 14     // 手柄距卡片底部间距（px，屏幕坐标）
@@ -100,17 +102,37 @@ App.InternalViewer = (function () {
   }
   // Viewer 态用 3:4 竖版卡片的 kind（text/parsed 全部 + media 的音频）
   const PORTRAIT_KINDS = { text: true, markdown: true, json: true, html: true, audio: true }
-  // Viewer 态锚点 = 视觉中心（相机中心世界坐标）的 kind（text/parsed；媒体保持文件位置）
-  // website 不在 PORTRAIT_KINDS（用接近全屏的宽卡片 cardSize），但锚点取视觉中心（级联错位）
-  const CENTER_KINDS = { text: true, markdown: true, json: true, html: true, website: true }
 
   function moduleFor(kind) { return MODULE_OF[kind] || null }
   function cardIsPortrait(kind) { return !!PORTRAIT_KINDS[kind] }
-  function anchorIsCenter(kind) { return !!CENTER_KINDS[kind] }
 
   // ── 纯函数 ──
   function worldRect(anchor, w, h) {
     return { x: anchor.x - w / 2, y: anchor.y - h / 2, w: w, h: h }
+  }
+  // 原地展开矩形：卡片左上 = 图标位置（anchor 为图标左上世界坐标）。
+  // 卡片超出可视区 → 夹回视口（16px 边距 + 顶部栏预留 TOP_GAP，屏幕 px / zoom 换算
+  // 世界距离）；卡片比可视区还大 → 贴最小边。rotation=90（画布旋转）方向关系
+  // 复杂，跳过夹取保持原样；anchor/相机缺失 → null（调用方兜底）。
+  /** @param {WorldPoint | null} anchor @param {number} w @param {number} h
+   *  @param {DesktopCameraState | null} camera @param {number} vw @param {number} vh
+   *  @returns {{x: number, y: number, w: number, h: number} | null} */
+  function anchorRect(anchor, w, h, camera, vw, vh) {
+    if (!anchor) return null
+    let x = anchor.x
+    let y = anchor.y
+    if (camera && camera.rotation !== 90 && vw > 0 && vh > 0) {
+      const z = camera.zoom || 1
+      const minX = camera.x + VIEWPORT_EDGE / z
+      const minY = camera.y + TOP_GAP / z
+      const maxX = camera.x + (vw - VIEWPORT_EDGE) / z - w
+      const maxY = camera.y + (vh - VIEWPORT_EDGE) / z - h
+      if (w <= (vw - VIEWPORT_EDGE * 2) / z) x = Math.min(Math.max(x, minX), maxX)
+      else x = minX
+      if (h <= (vh - TOP_GAP - VIEWPORT_EDGE) / z) y = Math.min(Math.max(y, minY), maxY)
+      else y = minY
+    }
+    return { x: x, y: y, w: w, h: h }
   }
   function cardSize(vw, vh) {
     return { w: Math.max(MIN_W, vw - VIEWPORT_EDGE * 2), h: Math.max(MIN_H, vh - TOP_GAP) }
@@ -121,11 +143,6 @@ App.InternalViewer = (function () {
     const maxH = Math.max(MIN_H, vh - TOP_GAP)
     const scale = Math.min(maxW / 3, maxH / 4)
     return { w: Math.max(MIN_W, Math.round(3 * scale)), h: Math.max(MIN_H, Math.round(4 * scale)) }
-  }
-  // 相机视觉中心（屏幕中心）对应的世界坐标；相机缺失 → null
-  function visualCenter(camera, vw, vh) {
-    if (!camera || !camera.zoom) return null
-    return { x: camera.x + vw / (2 * camera.zoom), y: camera.y + vh / (2 * camera.zoom) }
   }
   function visibleRatio(rect, vw, vh) {
     const ix = Math.max(0, Math.min(rect.x + rect.w, vw) - Math.max(rect.x, 0))
@@ -211,7 +228,6 @@ App.InternalViewer = (function () {
   // ── 实例集合 ──
   const _instances = []   // 实例对象（打开顺序）
   let _nextId = 1
-  let _cascade = 0        // 级联错位计数（视觉中心锚点类）
   let _fullscreenId = null  // 当前全屏实例 id（同时最多一个）
   /** @type {((viewers: Array<ViewerRecord>) => void) | null} 持久化监听（Desktop 层注入，画布态变化时回调） */
   let _persistListener = null
@@ -377,16 +393,10 @@ App.InternalViewer = (function () {
         // 恢复场景：state.rect 已在 open() 预置，直接应用持久化矩形
         let rect = state.rect ? { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h } : null
         if (!rect) {
-          let anchor = state.anchor
-          if (anchorIsCenter(state.kind)) {
-            anchor = visualCenter(state.camera, vw, vh) || anchor
-            if (anchor) anchor = { x: anchor.x + _cascade * CASCADE_STEP, y: anchor.y + _cascade * CASCADE_STEP }
-          }
-          rect = worldRect(anchor, size.w, size.h)
-          if (!anchorIsCenter(state.kind) && visibleRatio(rect, vw, vh) < MIN_VISIBLE && state.camera) {
-            const c = visualCenter(state.camera, vw, vh)
-            if (c) rect = worldRect(c, size.w, size.h)
-          }
+          // 原地展开（2026-08-20 起）：文件在图标位置「变成」Viewer——卡片左上锚定
+          // 图标左上（anchor = C.positions[path]），超视口则夹回可视区（16px 边距 +
+          // 顶部栏预留 TOP_GAP；rotation=90 方向复杂，跳过夹取保持原样）
+          rect = anchorRect(state.anchor, size.w, size.h, state.camera, vw, vh)
         }
         applyCanvasRect(rect)
         backBtn.style.display = 'none'
@@ -812,7 +822,7 @@ App.InternalViewer = (function () {
         canvasRect: null
       }
       if (!state.path) return false
-      // 恢复场景：直接使用持久化的世界矩形（跳过锚点推导/级联错位）
+      // 恢复场景：直接使用持久化的世界矩形（跳过锚点推导）
       if (state.mode === 'canvas' && opts.rect &&
           typeof opts.rect.x === 'number' && isFinite(opts.rect.x) &&
           typeof opts.rect.y === 'number' && isFinite(opts.rect.y) &&
@@ -820,8 +830,6 @@ App.InternalViewer = (function () {
           typeof opts.rect.h === 'number' && opts.rect.h > 0) {
         state.rect = { x: opts.rect.x, y: opts.rect.y, w: opts.rect.w, h: opts.rect.h }
         state.canvasRect = { x: state.rect.x, y: state.rect.y, w: state.rect.w, h: state.rect.h }
-      } else if (state.mode === 'canvas' && anchorIsCenter(state.kind)) {
-        _cascade++
       }
       title.textContent = state.name
       card.className = canvasCardClass()
@@ -1115,12 +1123,11 @@ App.InternalViewer = (function () {
     handleScreenRect: handleScreenRect,
     handleWorldRect: handleWorldRect,
     worldRect: worldRect,
+    anchorRect: anchorRect,
     cardSize: cardSize,
     cardSize34: cardSize34,
-    visualCenter: visualCenter,
     moduleFor: moduleFor,
     cardIsPortrait: cardIsPortrait,
-    anchorIsCenter: anchorIsCenter,
     visibleRatio: visibleRatio,
     shiftRect: shiftRect,
     fitAspectRect: fitAspectRect,

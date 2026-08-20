@@ -33,6 +33,9 @@ App.DesktopViewerLink = (function () {
   // 最近一次 diff 的桌面实体路径集（_syncEntityRender 用）
   /** @type {Record<string, boolean>} */
   let _lastEntityPaths = {}
+  // 待播放的关闭落位动画（handleViewerClosed 记录 → 渲染后播放）
+  /** @type {{path: string, x: number, y: number} | null} */
+  let _pendingLand = null
 
   // 注入 InternalViewer 持久化监听：画布态变化（打开/关闭/拖动结束/媒体自适应）
   // → ViewerStore.save（localStorage + 隐藏文件，文件即真相）。rootId 未就绪跳过落盘。
@@ -75,7 +78,35 @@ App.DesktopViewerLink = (function () {
     _lastEntityPaths = next
     if (changed && App.DesktopRender && typeof App.DesktopRender.render === 'function') {
       App.DesktopRender.render()
+      _animateLanding()
     }
+  }
+
+  // 关闭吸附动画：图标以「Viewer 关闭时的位置」为起点、网格格位为终点，
+  // 经 CSS transition 平滑飞入（260ms）。render 已把图标画在格位——
+  // 立即施加 translate(起点-终点) 使视觉上从 Viewer 位置开始，下一帧清除
+  // transform → 过渡到 0 即飞入格位。原位关闭（位移 < 1px）跳过。
+  /** @returns {void} */
+  function _animateLanding() {
+    const land = _pendingLand
+    _pendingLand = null
+    if (!land) return
+    const node = C.iconEls[land.path]
+    const p = C.positions[land.path]
+    if (!node || !p) return
+    const dx = land.x - p.x
+    const dy = land.y - p.y
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return
+    node.classList.add('desktop-icon-landing')
+    node.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'
+    // 下一帧清除 transform → transition 飞入格位；动画结束后清理 class（防
+    // 残留 transition 拖慢后续 picked-up 缩放）
+    C._raf(function () {
+      node.style.transform = ''
+    })
+    setTimeout(function () {
+      node.classList.remove('desktop-icon-landing')
+    }, 320)
   }
 
   // 恢复上次会话的画布态 Viewer（仅桌面空间；由 desktop-persist refresh 列表加载后调用）。
@@ -137,6 +168,8 @@ App.DesktopViewerLink = (function () {
     const sc = App.DesktopGrid.worldToCell(snapped.x, snapped.y)
     const free = App.DesktopGrid.findFreeCell(sc.cx, sc.cy, taken)
     C.positions[path] = App.DesktopGrid.cellToWorld(free.cx, free.cy)
+    // 记录落位动画起点（Viewer 关闭时的窗口位置）；渲染后由 _animateLanding 播放
+    _pendingLand = { path: path, x: rect.x, y: rect.y }
     if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
       App.DesktopPersist.saveLayout()
     }

@@ -454,6 +454,13 @@
   background: var(--hover-dim);
 }
 
+/* 关闭落位动画：图标从 Viewer 窗口位置飞入网格格位（transform 由
+ * desktop-viewer-link 设置/清除；class 动画结束后清理，不残留 transition） */
+.desktop-icon.desktop-icon-landing {
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 5;
+}
+
 /* ── 相册式全屏（#viewer-fs-page）：媒体黑底 contain 居中；文档浅色阅读 ── */
 
 /* 媒体类（图片/视频/音频/SVG）：沉浸黑底 + 内容居中自适应 */

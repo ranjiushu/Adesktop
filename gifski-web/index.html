@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>Gifski · 高质量 GIF 转换器</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/gifski-wasm@2.0.2/dist/gifski-wasm.esm.js">
+    <style>
+        /* 设计 token：复用 Adesktop 设计系统 */
+        :root {
+            --color-bg: #f5f6f8;
+            --color-surface: #ffffff;
+            --color-text: #1a1d21;
+            --color-text-secondary: #6b7280;
+            --color-accent: #3b82f6;
+            --color-accent-dim: #2563eb;
+            --color-border: #e5e7eb;
+            --color-success: #10b981;
+            --color-error: #ef4444;
+            --color-warning: #f59e0b;
+            
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            
+            --font-size-xs: 12px;
+            --font-size-sm: 13px;
+            --font-size-md: 16px;
+            --font-size-lg: 20px;
+            --font-size-xl: 24px;
+            
+            --header-height: 56px;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            
+            /* LexiCull 兼容变量 */
+            --text-primary: var(--color-text);
+            --text-secondary: var(--color-text-secondary);
+            --bg-page: var(--color-bg);
+            --bg-card: var(--color-surface);
+            --border-color: var(--color-border);
+            --accent-blue: var(--color-accent);
+        }
+        
+        /* 基础重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            background: var(--color-bg);
+            color: var(--color-text);
+            font-size: var(--font-size-md);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.5;
+        }
+        
+        /* 应用壳 */
+        .app-shell {
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 头部 */
+        .app-header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            height: calc(var(--header-height) + var(--safe-top));
+            display: flex;
+            align-items: center;
+            padding: var(--safe-top) var(--space-md) 0;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+        }
+        
+        .header-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .header-title {
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+            color: var(--color-text);
+            letter-spacing: -0.3px;
+        }
+        
+        .header-subtitle {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+            margin-left: var(--space-sm);
+        }
+        
+        /* 主内容区 */
+        .app-content {
+            flex: 1;
+            padding: var(--space-lg) var(--space-md);
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        /* 卡片容器 */
+        .card {
+            background: var(--color-surface);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+        }
+        
+        .card-title {
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+            color: var(--color-text);
+            margin-bottom: var(--space-md);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+        
+        .card-icon {
+            font-size: 1.2em;
+        }
+        
+        /* 文件选择区域 */
+        .file-drop-zone {
+            border: 2px dashed var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-xl);
+            text-align: center;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            background: var(--color-bg);
+        }
+        
+        .file-drop-zone:hover,
+        .file-drop-zone.drag-over {
+            border-color: var(--color-accent);
+            background: rgba(59, 130, 246, 0.04);
+        }
+        
+        .file-drop-zone.has-files {
+            border-color: var(--color-success);
+            background: rgba(16, 185, 129, 0.04);
+        }
+        
+        .drop-icon {
+            font-size: 48px;
+            margin-bottom: var(--space-md);
+            color: var(--color-text-secondary);
+        }
+        
+        .drop-text {
+            font-size: var(--font-size-md);
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-sm);
+        }
+        
+        .drop-hint {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        /* 文件列表 */
+        .file-list {
+            margin-top: var(--space-md);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg);
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--space-xs);
+            font-size: var(--font-size-sm);
+        }
+        
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: var(--space-sm);
+        }
+        
+        .file-size {
+            color: var(--color-text-secondary);
+            font-size: var(--font-size-xs);
+            flex-shrink: 0;
+        }
+        
+        .file-remove {
+            background: none;
+            border: none;
+            color: var(--color-error);
+            cursor: pointer;
+            padding: var(--space-xs);
+            margin-left: var(--space-sm);
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        
+        .file-remove:hover {
+            opacity: 1;
+        }
+        
+        /* 设置区域 */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--space-lg);
+        }
+        
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+        
+        .setting-label {
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            color: var(--color-text-secondary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .setting-value {
+            font-weight: 600;
+            color: var(--color-text);
+            font-size: var(--font-size-md);
+        }
+        
+        /* 滑块样式 */
+        .slider-container {
+            position: relative;
+            height: 36px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: var(--color-border);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--color-accent);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 3px 8px rgba(59, 130, 246, 0.4);
+        }
+        
+        .slider::-webkit-slider-thumb:active {
+            transform: scale(0.95);
+        }
+        
+        /* 按钮 */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            padding: var(--space-md) var(--space-lg);
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+            width: 100%;
+        }
+        
+        .btn-primary {
+            background: var(--color-accent);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: var(--color-accent-dim);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        
+        .btn-secondary {
+            background: var(--color-bg);
+            color: var(--color-text-secondary);
+            border: 1px solid var(--color-border);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--color-border);
+        }
+        
+        /* 进度区域 */
+        .progress-section {
+            margin-top: var(--space-lg);
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-sm);
+        }
+        
+        .progress-text {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+        
+        .progress-percentage {
+            font-weight: 600;
+            color: var(--color-accent);
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: var(--color-border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--color-accent), var(--color-accent-dim));
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-fill.complete {
+            background: linear-gradient(90deg, var(--color-success), #059669);
+        }
+        
+        /* 预览区域 */
+        .preview-section {
+            margin-top: var(--space-lg);
+            text-align: center;
+        }
+        
+        .preview-container {
+            background: var(--color-bg);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            border: 1px solid var(--color-border);
+            display: inline-block;
+            max-width: 100%;
+        }
+        
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .preview-actions {
+            margin-top: var(--space-md);
+            display: flex;
+            gap: var(--space-sm);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn-download {
+            background: var(--color-success);
+            color: white;
+            padding: var(--space-sm) var(--space-lg);
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: var(--font-size-md);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+        
+        .btn-download:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+        
+        /* 状态消息 */
+        .status-message {
+            text-align: center;
+            padding: var(--space-md);
+            border-radius: var(--radius-sm);
+            margin-top: var(--space-md);
+            font-size: var(--font-size-sm);
+        }
+        
+        .status-ready {
+            background: rgba(16, 185, 129, 0.08);
+            color: var(--color-success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        
+        .status-processing {
+            background: rgba(59, 130, 246, 0.08);
+            color: var(--color-accent);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        
+        .status-error {
+            background: rgba(239, 68, 68, 0.08);
+            color: var(--color-error);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        
+        /* 底部信息 */
+        .footer {
+            text-align: center;
+            padding: var(--space-lg) var(--space-md);
+            color: var(--color-text-secondary);
+            font-size: var(--font-size-xs);
+            border-top: 1px solid var(--color-border);
+            margin-top: auto;
+        }
+        
+        .footer a {
+            color: var(--color-accent);
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 480px) {
+            .app-content {
+                padding: var(--space-md) var(--space-sm);
+            }
+            
+            .card {
+                padding: var(--space-md);
+            }
+            
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .file-drop-zone {
+                padding: var(--space-lg);
+            }
+        }
+        
+        /* 深色模式支持（可选） */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-bg: #111827;
+                --color-surface: #1f2937;
+                --color-text: #f9fafb;
+                --color-text-secondary: #9ca3af;
+                --color-accent: #60a5fa;
+                --color-accent-dim: #3b82f6;
+                --color-border: #374151;
+            }
+            
+            .file-drop-zone {
+                background: rgba(17, 24, 39, 0.5);
+            }
+            
+            .file-drop-zone:hover,
+            .file-drop-zone.drag-over {
+                background: rgba(96, 165, 250, 0.08);
+            }
+            
+            .file-drop-zone.has-files {
+                background: rgba(16, 185, 129, 0.08);
+            }
+            
+            .slider::-webkit-slider-thumb {
+                box-shadow: 0 2px 6px rgba(96, 165, 250, 0.4);
+            }
+        }
+        
+        /* 加载动画 */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .loading {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        /* 成功动画 */
+        @keyframes success-pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .success-pop {
+            animation: success-pop 0.4s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <!-- 头部 -->
+        <header class="app-header">
+            <div class="header-content">
+                <div>
+                    <h1 class="header-title">Gifski</h1>
+                    <span class="header-subtitle">高质量 GIF 转换器</span>
+                </div>
+            </div>
+        </header>
+        
+        <!-- 主内容 -->
+        <main class="app-content">
+            <!-- 引擎状态 -->
+            <div id="statusMessage" class="status-message status-processing">
+                <span class="loading">⏳</span> 正在初始化 gifski 引擎...
+            </div>
+            
+            <!-- 文件选择卡片 -->
+            <div class="card">
+                <h2 class="card-title">
+                    <span class="card-icon">📁</span>
+                    选择文件
+                </h2>
+                
+                <div class="file-drop-zone" id="dropZone">
+                    <div class="drop-icon">🎬</div>
+                    <div class="drop-text">拖放视频或图片到这里</div>
+                    <div class="drop-hint">或点击选择文件 · 支持 MP4, MOV, GIF, PNG, JPG 等格式</div>
+                    <input type="file" id="fileInput" class="file-input" multiple accept="video/*,image/*">
+                </div>
+                
+                <div class="file-list" id="fileList"></div>
+            </div>
+            
+            <!-- 设置卡片 -->
+            <div class="card">
+                <h2 class="card-title">
+                    <span class="card-icon">⚙️</span>
+                    转换设置
+                </h2>
+                
+                <div class="settings-grid">
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span>输出质量</span>
+                            <span class="setting-value" id="qualityValue">90%</span>
+                        </div>
+                        <div class="slider-container">
+                            <input type="range" id="qualitySlider" class="slider" min="1" max="100" value="90">
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span>输出宽度</span>
+                            <span class="setting-value" id="widthValue">480px</span>
+                        </div>
+                        <div class="slider-container">
+                            <input type="range" id="widthSlider" class="slider" min="128" max="1920" value="480" step="8">
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span>帧率</span>
+                            <span class="setting-value" id="fpsValue">20 FPS</span>
+                        </div>
+                        <div class="slider-container">
+                            <input type="range" id="fpsSlider" class="slider" min="1" max="60" value="20">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <button class="btn btn-primary" id="convertBtn" disabled>
+                <span>🚀</span>
+                <span>开始转换</span>
+            </button>
+            
+            <!-- 进度区域 -->
+            <div class="card progress-section" id="progressSection" style="display: none;">
+                <h2 class="card-title">
+                    <span class="card-icon">📊</span>
+                    转换进度
+                </h2>
+                
+                <div class="progress-header">
+                    <span class="progress-text" id="progressText">准备中...</span>
+                    <span class="progress-percentage" id="progressPercentage">0%</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+            
+            <!-- 预览区域 -->
+            <div class="card preview-section" id="previewSection" style="display: none;">
+                <h2 class="card-title">
+                    <span class="card-icon">🖼️</span>
+                    转换结果
+                </h2>
+                
+                <div class="preview-container">
+                    <img id="previewImage" class="preview-image" alt="GIF 预览">
+                </div>
+                
+                <div class="preview-actions">
+                    <a id="downloadLink" class="btn-download" download="gifski-output.gif">
+                        <span>💾</span>
+                        <span>下载 GIF</span>
+                    </a>
+                    
+                    <button class="btn btn-secondary" id="resetBtn">
+                        <span>🔄</span>
+                        <span>重新转换</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+        
+        <!-- 底部 -->
+        <footer class="footer">
+            <p>由 <a href="https://gif.ski" target="_blank" rel="noopener">Gifski</a> 引擎驱动 · 高质量 GIF 编码器</p>
+            <p style="margin-top: var(--space-xs);">基于 <a href="https://github.com/jamsinclair/gifski-wasm" target="_blank" rel="noopener">gifski-wasm</a> · WebAssembly 技术</p>
+        </footer>
+    </div>
+
+    <script type="module">
+        // 导入 gifski-wasm
+        import { init, encode } from 'https://cdn.jsdelivr.net/npm/gifski-wasm@2.0.2/dist/gifski-wasm.esm.js';
+        
+        // DOM 元素
+        const elements = {
+            statusMessage: document.getElementById('statusMessage'),
+            dropZone: document.getElementById('dropZone'),
+            fileInput: document.getElementById('fileInput'),
+            fileList: document.getElementById('fileList'),
+            qualitySlider: document.getElementById('qualitySlider'),
+            qualityValue: document.getElementById('qualityValue'),
+            widthSlider: document.getElementById('widthSlider'),
+            widthValue: document.getElementById('widthValue'),
+            fpsSlider: document.getElementById('fpsSlider'),
+            fpsValue: document.getElementById('fpsValue'),
+            convertBtn: document.getElementById('convertBtn'),
+            progressSection: document.getElementById('progressSection'),
+            progressText: document.getElementById('progressText'),
+            progressPercentage: document.getElementById('progressPercentage'),
+            progressFill: document.getElementById('progressFill'),
+            previewSection: document.getElementById('previewSection'),
+            previewImage: document.getElementById('previewImage'),
+            downloadLink: document.getElementById('downloadLink'),
+            resetBtn: document.getElementById('resetBtn')
+        };
+        
+        // 应用状态
+        let gifskiReady = false;
+        let selectedFiles = [];
+        let isConverting = false;
+        
+        // 初始化 gifski-wasm
+        async function initGifski() {
+            try {
+                await init();
+                gifskiReady = true;
+                updateStatus('✅ gifski 引擎就绪', 'ready');
+                updateConvertButton();
+                console.log('gifski-wasm 初始化成功');
+            } catch (error) {
+                console.error('gifski-wasm 初始化失败:', error);
+                updateStatus('❌ 引擎初始化失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 更新状态显示
+        function updateStatus(message, type = 'processing') {
+            elements.statusMessage.textContent = message;
+            elements.statusMessage.className = `status-message status-${type}`;
+        }
+        
+        // 更新转换按钮状态
+        function updateConvertButton() {
+            elements.convertBtn.disabled = !gifskiReady || selectedFiles.length === 0 || isConverting;
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // 渲染文件列表
+        function renderFileList() {
+            elements.fileList.innerHTML = '';
+            
+            if (selectedFiles.length === 0) {
+                elements.dropZone.classList.remove('has-files');
+                return;
+            }
+            
+            elements.dropZone.classList.add('has-files');
+            
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <span class="file-name" title="${file.name}">${file.name}</span>
+                    <span class="file-size">${formatFileSize(file.size)}</span>
+                    <button class="file-remove" data-index="${index}" title="移除文件">✕</button>
+                `;
+                elements.fileList.appendChild(fileItem);
+            });
+            
+            // 绑定移除事件
+            document.querySelectorAll('.file-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    selectedFiles.splice(index, 1);
+                    renderFileList();
+                    updateConvertButton();
+                });
+            });
+        }
+        
+        // 处理文件选择
+        function handleFiles(files) {
+            const newFiles = Array.from(files).filter(file => {
+                // 过滤支持的格式
+                return file.type.startsWith('video/') || 
+                       file.type.startsWith('image/') ||
+                       file.name.match(/\.(mp4|mov|avi|mkv|gif|png|jpg|jpeg|webp)$/i);
+            });
+            
+            if (newFiles.length > 0) {
+                selectedFiles = [...selectedFiles, ...newFiles];
+                renderFileList();
+                updateConvertButton();
+            }
+        }
+        
+        // 初始化事件监听
+        function initEventListeners() {
+            // 文件拖放
+            elements.dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                elements.dropZone.classList.add('drag-over');
+            });
+            
+            elements.dropZone.addEventListener('dragleave', () => {
+                elements.dropZone.classList.remove('drag-over');
+            });
+            
+            elements.dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                elements.dropZone.classList.remove('drag-over');
+                handleFiles(e.dataTransfer.files);
+            });
+            
+            // 点击选择文件
+            elements.dropZone.addEventListener('click', () => {
+                elements.fileInput.click();
+            });
+            
+            elements.fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+                elements.fileInput.value = ''; // 重置以允许重复选择
+            });
+            
+            // 滑块更新
+            elements.qualitySlider.addEventListener('input', (e) => {
+                elements.qualityValue.textContent = `${e.target.value}%`;
+            });
+            
+            elements.widthSlider.addEventListener('input', (e) => {
+                elements.widthValue.textContent = `${e.target.value}px`;
+            });
+            
+            elements.fpsSlider.addEventListener('input', (e) => {
+                elements.fpsValue.textContent = `${e.target.value} FPS`;
+            });
+            
+            // 转换按钮
+            elements.convertBtn.addEventListener('click', startConversion);
+            
+            // 重置按钮
+            elements.resetBtn.addEventListener('click', resetApp);
+        }
+        
+        // 开始转换
+        async function startConversion() {
+            if (!gifskiReady || selectedFiles.length === 0 || isConverting) return;
+            
+            isConverting = true;
+            updateConvertButton();
+            
+            // 显示进度区域
+            elements.progressSection.style.display = 'block';
+            elements.previewSection.style.display = 'none';
+            
+            const quality = parseInt(elements.qualitySlider.value);
+            const width = parseInt(elements.widthSlider.value);
+            const fps = parseInt(elements.fpsSlider.value);
+            
+            try {
+                updateStatus('🔄 正在转换...', 'processing');
+                elements.progressText.textContent = '正在读取文件...';
+                elements.progressPercentage.textContent = '0%';
+                elements.progressFill.style.width = '0%';
+                
+                // 读取所有文件为 ArrayBuffer
+                const frames = [];
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    const buffer = await file.arrayBuffer();
+                    frames.push(new Uint8Array(buffer));
+                    
+                    // 更新进度（读取阶段占 20%）
+                    const readProgress = ((i + 1) / selectedFiles.length) * 20;
+                    elements.progressFill.style.width = `${readProgress}%`;
+                    elements.progressPercentage.textContent = `${Math.round(readProgress)}%`;
+                    elements.progressText.textContent = `正在读取文件 (${i + 1}/${selectedFiles.length})...`;
+                }
+                
+                elements.progressText.textContent = '正在编码 GIF...';
+                
+                // 调用 gifski 编码
+                const gif = await encode({
+                    frames: frames,
+                    fps: fps,
+                    width: width,
+                    quality: quality,
+                    onProgress: (progress) => {
+                        // 编码阶段占 80%
+                        const totalProgress = 20 + (progress * 80);
+                        elements.progressFill.style.width = `${totalProgress}%`;
+                        elements.progressPercentage.textContent = `${Math.round(totalProgress)}%`;
+                    }
+                });
+                
+                // 创建下载链接
+                const blob = new Blob([gif], { type: 'image/gif' });
+                const url = URL.createObjectURL(blob);
+                
+                // 显示预览
+                elements.previewImage.src = url;
+                elements.previewSection.style.display = 'block';
+                elements.previewSection.classList.add('success-pop');
+                
+                // 设置下载链接
+                elements.downloadLink.href = url;
+                
+                // 完成状态
+                elements.progressFill.style.width = '100%';
+                elements.progressFill.classList.add('complete');
+                elements.progressPercentage.textContent = '100%';
+                elements.progressText.textContent = '转换完成！';
+                
+                updateStatus('✅ 转换完成！', 'ready');
+                
+                // 滚动到预览区域
+                elements.previewSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+            } catch (error) {
+                console.error('转换失败:', error);
+                updateStatus('❌ 转换失败: ' + error.message, 'error');
+                elements.progressText.textContent = '转换失败';
+                elements.progressFill.style.background = 'var(--color-error)';
+            } finally {
+                isConverting = false;
+                updateConvertButton();
+            }
+        }
+        
+        // 重置应用
+        function resetApp() {
+            selectedFiles = [];
+            renderFileList();
+            
+            elements.progressSection.style.display = 'none';
+            elements.previewSection.style.display = 'none';
+            elements.previewSection.classList.remove('success-pop');
+            
+            elements.progressFill.style.width = '0%';
+            elements.progressFill.classList.remove('complete');
+            elements.progressFill.style.background = '';
+            
+            updateConvertButton();
+            updateStatus('✅ gifski 引擎就绪', 'ready');
+            
+            // 滚动到顶部
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // 初始化应用
+        async function initApp() {
+            initEventListeners();
+            await initGifski();
+        }
+        
+        // 启动应用
+        initApp();
+    </script>
+</body>
+</html>

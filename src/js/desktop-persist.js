@@ -18,6 +18,9 @@ App.DesktopPersist = (function () {
   // 布局数据文件：位于**桌面空间目录**内的隐藏文件（文件即真相，localStorage 降级为缓存）。
   // 切到某目录（设为桌面根）→ 读该目录的数据文件；布局随目录文件存在，不因 rootId 变化丢失。
   const LAYOUT_FILE = C.LAYOUT_FILE || '.adesktop-layout.json'
+  // 启动快照缓存 key（localStorage）：最近一次成功刷新的**桌面空间**快照（mode/curPath/items 等）。
+  // 仅作首屏先行渲染（进入桌面秒出图标）；真实数据仍走 refresh 拉文件系统——文件即真相不破。
+  const STARTUP_CACHE_KEY = 'desktop.startup-cache.v1'
 
   /** 校验桌面根：允许 ''（全盘根）；拒绝绝对路径 / 空段 / .. 逃逸 */
   /** @param {string} dir @returns {boolean} */
@@ -75,7 +78,11 @@ App.DesktopPersist = (function () {
   // 避免「先切视图再变目录」的空白/错位感。
   function refresh() {
     const seq = ++C._refreshSeq
-    if (App.Loading && typeof App.Loading.show === 'function') {
+    // 首屏已用缓存渲染（C._bootstrapShown=true）→ 本次 refresh 是后台对齐，不弹 loading 转圈
+    // （避免「图标已出又转圈」的撕裂感）；仅首屏这一次，之后刷新照常弹（标志已重置）。
+    const isFirstAlign = C._bootstrapShown
+    if (isFirstAlign) C._bootstrapShown = false
+    if (!isFirstAlign && App.Loading && typeof App.Loading.show === 'function') {
       App.Loading.show({ title: '加载中' })   // 不确定进度：无 total → 条纹滑动
     }
     return App.FileAPI.rootInfo()
@@ -183,6 +190,20 @@ App.DesktopPersist = (function () {
           })
         }
         App.DesktopRender.render()
+        //（桌面空间）写最新启动快照：下次启动首屏秒出用；文件夹视图不缓存，避免启动错进子目录。
+        if (!C.isFolderView()) {
+          _saveStartupCache({
+            version: 1,
+            mode: C.state.mode,
+            curPath: C.state.curPath,
+            desktopRoot: C.state.desktopRoot,
+            trashName: C.state.trashName,
+            rootId: C.state.rootId,
+            rootName: C.state.rootName,
+            displayPath: C.state.curPath ? C.state.rootName + '/' + C.state.curPath : C.state.rootName,
+            items: items
+          })
+        }
         // 恢复上次会话的 Viewer（桌面空间；幂等，文件已删/已打开自动跳过）
         if (!C.isFolderView() && App.DesktopViewerLink &&
             typeof App.DesktopViewerLink.restoreViewers === 'function') {
@@ -250,6 +271,61 @@ App.DesktopPersist = (function () {
     if (App.DesktopNavigation && typeof App.DesktopNavigation.applyCameraForPath === 'function') {
       App.DesktopNavigation.applyCameraForPath()
     }
+  }
+
+  // ── 启动快照缓存（首屏先行渲染用）────────────────────────
+  // 仅在桌面空间（!isFolderView）缓存/读取；文件夹视图不缓存，避免启动错进子目录。
+  // 快照 = 最近一次成功刷新看到的桌面 items + 当时的 state 上下文（mode/curPath/rootId/...）。
+  // 缓存只是首屏投影，真实数据以 refresh 的 rootInfo/list 为准（文件即真相不破）。
+  /** @returns {StartupSnapshot | null} */
+  function _loadStartupCache() {
+    try {
+      const raw = localStorage.getItem(STARTUP_CACHE_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      if (!data || typeof data !== 'object' || !Array.isArray(data.items)) return null
+      return data
+    } catch (e) {
+      return null
+    }
+  }
+
+  /** @param {StartupSnapshot} snap @returns {void} */
+  function _saveStartupCache(snap) {
+    try {
+      localStorage.setItem(STARTUP_CACHE_KEY, JSON.stringify(snap))
+    } catch (e) { /* 缓存失败不阻断：非真相数据，可重建 */ }
+  }
+
+  // 首屏缓存先行渲染：App.boot 的 refresh 之前调用，用启动快照还原桌面状态并渲染图标，
+  // 实现「进入桌面秒出」，随后真实 refresh 后台对齐。不弹 loading 转圈。
+  // 有缓存可用时返回 true（首屏已渲染出图标）；无缓存/空 → 返回 false，refresh 照常弹 loading。
+  /** @returns {boolean} */
+  function renderFromCache() {
+    if (C._bootstrapShown) return true          // 已首渲过（幂等，重复调用不再渲染）
+    const snap = _loadStartupCache()
+    if (!snap || !snap.items || !snap.items.length) return false   // 无快照/空 → 走正常加载
+    // 用快照 rootId 加载对应根目录的布局（位置+相机）：initLayout 尚无 rootId（读旧 key），
+    // 此处用快照 rootId 恢复真实摆放，首屏即落在用户上次的位置（避免自动排布→真实位置跳动）
+    if (snap.rootId && snap.rootId !== C.state.rootId) {
+      C.state.rootId = snap.rootId
+      _loadLayoutAndCamera()
+      if (C.rootCamera) C.rootCamera = C.camera
+    }
+    // 还原桌面状态上下文（首屏渲染需正确判定 isFolderView / trash 渲染 / 桌面根）
+    C.state.mode = snap.mode
+    C.state.curPath = snap.curPath
+    C.state.desktopRoot = snap.desktopRoot
+    C.state.trashName = snap.trashName || ''
+    C.state.rootName = snap.rootName || ''
+    C.state.items = snap.items
+    C._bootstrapShown = true
+    // 应用相机到 DOM（initLayout 已恢复 Home/布局相机，这里落到 canvas transform）
+    if (App.DesktopNavigation && typeof App.DesktopNavigation.applyCameraForPath === 'function') {
+      App.DesktopNavigation.applyCameraForPath()
+    }
+    App.DesktopRender.render()
+    return true
   }
 
   // 启动布局加载（位置 + 相机视角）+ 视图偏好，无数据/损坏回退默认
@@ -336,6 +412,7 @@ App.DesktopPersist = (function () {
   return {
     refresh: refresh,
     initLayout: initLayout,
+    renderFromCache: renderFromCache,
     applyViewPrefs: applyViewPrefs,
     getViewPrefs: getViewPrefs,
     saveLayout: saveLayout,

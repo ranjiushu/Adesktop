@@ -106,6 +106,7 @@ App.Desktop = (function () {
     refresh: P.refresh,
     render: R.render,
     initGesture: initGesture,
+    renderFromCache: P.renderFromCache,
     clearSelection: R.clearSelection,
     hasSelection: R.hasSelection,
     getSelectionNames: R.getSelectionNames,

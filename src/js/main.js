@@ -91,6 +91,8 @@ App.boot = function boot() {
   // 桌面：启动无限画布手势（双指 pan/zoom）+ 以文件系统为数据源渲染
   if (App.Desktop) {
     if (typeof App.Desktop.initGesture === 'function') App.Desktop.initGesture()
+    // 首屏缓存先行：有启动快照则立即用缓存 items 渲染图标（秒出），随后 refresh 后台对齐
+    if (typeof App.Desktop.renderFromCache === 'function') App.Desktop.renderFromCache()
     if (typeof App.Desktop.refresh === 'function') App.Desktop.refresh()
   }
   return true

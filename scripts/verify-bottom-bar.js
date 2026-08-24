@@ -1,15 +1,13 @@
 // 底部工具栏 E2E 门禁：CDP 真实触摸序列验证
 // ═══════════════════════════════════════════════════════════════
 //  场景：无头 Chromium（注入 FileBridge 内存桩）：
-//    1. 底栏渲染：5 个按钮、高度 = 屏高 1/10（10vh）、加号居中
-//    2. 点加号 → 新建对话框打开（遮罩 + 输入框聚焦）
-//    3. 输入名称 + 选文件/文件夹 + 确定 → 创建成功（toast）+ 对话框关闭
-//    4. 点遮罩空白 → 对话框关闭
-//    5. 底栏右划 → Drawer 跟手拉出（中途 inline transform 跟手）→ 打开
-//    6. Drawer 左滑 → 跟手关闭
-//    7. 底栏小幅慢滑（<30%）→ 弹回不打开
-//    8. Drawer 打开后点遮罩 → 收起（原路径回归）
-//    9. 全程零 pageerror
+//    1. 底栏渲染：5 个按钮、高度 = 屏高 1/10（10vh）、Home 按钮居中、快照按钮存在（无加号）
+//    2. Home / 快照（相机）按钮存在且在根目录可用；新建（加号）已由 Morph FAB 承担，底栏不再有
+//    3. 底栏右划 → Drawer 跟手拉出（中途 inline transform 跟手）→ 打开
+//    4. Drawer 左滑 → 跟手关闭
+//    5. 底栏小幅慢滑（<30%）→ 弹回不打开
+//    6. Drawer 打开后点遮罩 → 收起（原路径回归）
+//    7. 全程零 pageerror
 //
 //  用法: DESKTOP_BUNDLE=dist/adesktop.bundle.min.html node scripts/verify-bottom-bar.js
 //  退出码: 0 通过 / 1 失败 / 2 无可用 Chromium
@@ -62,42 +60,38 @@ async function main() {
   await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 1, hasTouch: true, isMobile: true })
   const pageErrors = []
   page.on('pageerror', e => pageErrors.push(e.message))
-  await page.goto('file://' + BUNDLE)
-  await sleep(1000)
-  const client = await page.createCDPSession()
-
-  // 注入 FileBridge 内存桩：list 空目录，mkdir/write 成功（file-api 运行时检查 window.FileBridge）
-  // __calls 记录创建参数，用于断言「用户输入什么就创建什么」
-  await page.evaluate(() => {
-    window.__calls = { write: [], mkdir: [] }
+  // 预注入 FileBridge 内存桩：boot refresh 即成功，Home/快照按钮才被 updateNavButtons 启用
+  //（drawer 场景需 rootInfo/list；evaluateOnNewDocument 在导航前注入，与 verify-home/rotate 同款）
+  await page.evaluateOnNewDocument(() => {
     window.FileBridge = {
       rootInfo: function (cb) {
         window.__fbResolve(cb, { ok: true, data: { rootName: 'mock', displayPath: '/mock', mode: 'mock' } })
       },
-      list: function (p, cb) { window.__fbResolve(cb, { ok: true, data: [] }) },
-      mkdir: function (p, cb) { window.__calls.mkdir.push(p); window.__fbResolve(cb, { ok: true, data: true }) },
-      write: function (p, c, cb) { window.__calls.write.push(p); window.__fbResolve(cb, { ok: true, data: true }) }
+      list: function (p, cb) { window.__fbResolve(cb, { ok: true, data: [] }) }
     }
   })
-  await sleep(200)
+  await page.goto('file://' + BUNDLE)
+  await sleep(1000)
+  const client = await page.createCDPSession()
 
-  // ── 1. 底栏渲染 ──
+  // ── 1. 底栏渲染：5 按钮、高度 1/10、Home 居中、快照存在、无加号 ──
   const bar = await page.evaluate(() => {
     const b = document.getElementById('bottom-bar')
     const btns = document.querySelectorAll('.bottom-bar-btn')
+    const home = document.getElementById('bb-btn-home')
+    const snap = document.getElementById('bb-btn-snapshot')
     const add = document.getElementById('bb-btn-add')
     if (!b) return null
     const r = b.getBoundingClientRect()
-    let addInfo = null
-    if (add) {
-      const ar = add.getBoundingClientRect()
-      addInfo = { x: ar.left + ar.width / 2, y: ar.top + ar.height / 2 }
-    }
+    const homeInfo = home ? (() => { const hr = home.getBoundingClientRect(); return { x: hr.left + hr.width / 2, y: hr.top + hr.height / 2 } })() : null
     return {
       visible: r.width > 0 && r.height > 0,
       height: r.height,
       btnCount: btns.length,
-      addInfo: addInfo
+      homeInfo: homeInfo,
+      hasHome: !!home,
+      hasSnap: !!snap,
+      hasAdd: !!add
     }
   })
   if (!bar || !bar.visible) { fail('底栏渲染可见'); process.exit(1) }
@@ -107,125 +101,28 @@ async function main() {
   const expectH = Math.round(915 / 10)
   if (Math.abs(Math.round(bar.height) - expectH) <= 2) pass('底栏高度 ≈ 屏高 1/10 (' + expectH + 'px, 实测 ' + Math.round(bar.height) + ')')
   else fail('底栏高度 ' + Math.round(bar.height) + 'px，期望 ≈' + expectH)
-  if (bar.addInfo && Math.abs(bar.addInfo.x - 206) <= 30) pass('加号居中 (x=' + Math.round(bar.addInfo.x) + ')')
-  else fail('加号未居中 x=' + (bar.addInfo && Math.round(bar.addInfo.x)))
+  if (bar.hasHome && bar.homeInfo && Math.abs(bar.homeInfo.x - 206) <= 30) pass('Home 按钮居中 (x=' + Math.round(bar.homeInfo.x) + ')')
+  else fail('Home 按钮未居中 x=' + (bar.homeInfo && Math.round(bar.homeInfo.x)))
+  if (bar.hasSnap) pass('快照（相机）按钮存在')
+  else fail('快照按钮缺失')
+  if (!bar.hasAdd) pass('加号已移除（新建由 Morph FAB 承担）')
+  else fail('加号仍存在（应移除）')
 
-  // ── 2. 点加号 → 对话框打开 ──
-  await tap(client, bar.addInfo.x, bar.addInfo.y, 60)
-  const dlgOpen = await page.evaluate(() => {
-    const o = document.getElementById('create-dialog-overlay')
-    const input = document.getElementById('create-name')
-    return !!(o && o.classList.contains('dialog-overlay-visible') &&
-      o.getAttribute('aria-hidden') === 'false' &&
-      document.activeElement === input)
-  })
-  if (dlgOpen) pass('加号点击 → 对话框打开且输入框聚焦')
-  else fail('加号点击未打开对话框')
-
-  // ── 2b. open() 同步聚焦（不经延时，防异步聚焦回归——真机依赖手势上下文弹键盘） ──
-  const syncFocus = await page.evaluate(() => {
-    App.CreateDialog.close()
-    App.CreateDialog.open()
-    const focused = document.activeElement === document.getElementById('create-name')
-    App.CreateDialog.close()
-    return focused
-  })
-  if (syncFocus) pass('open() 同步聚焦输入框')
-  else fail('open() 未同步聚焦输入框')
-
-  // ── 3. 输入名称「报告.md」+ 点「文件」→ 名称原样创建（不补后缀） ──
-  // 2b 的同步聚焦断言已关闭对话框，重新打开
-  await tap(client, bar.addInfo.x, bar.addInfo.y, 60)
-  await page.evaluate(() => {
-    document.getElementById('create-name').value = '报告.md'
-  })
-  const fileBtn = await page.evaluate(() => {
-    const b = document.getElementById('create-file')
-    const r = b.getBoundingClientRect()
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
-  })
-  await tap(client, fileBtn.x, fileBtn.y, 60)
-  await sleep(2000)  // 等 toast 轮播
-  const fileResult = await page.evaluate(() => {
-    const o = document.getElementById('create-dialog-overlay')
-    const t = document.querySelector('.toast')
+  // ── 2. Home / 快照按钮在根目录可用 ──
+  const btnState = await page.evaluate(() => {
+    const home = document.getElementById('bb-btn-home')
+    const snap = document.getElementById('bb-btn-snapshot')
     return {
-      closed: !o.classList.contains('dialog-overlay-visible'),
-      toast: t ? t.textContent : '',
-      written: window.__calls.write[0] || null
+      homeDisabled: home ? home.disabled : true,
+      snapDisabled: snap ? snap.disabled : true
     }
   })
-  if (fileResult.closed) pass('点「文件」后对话框关闭')
-  else fail('点「文件」后对话框未关闭')
-  if (fileResult.toast === '已创建文件: 报告.md') pass('创建文件 toast 含实际名: "' + fileResult.toast + '"')
-  else fail('创建文件 toast 异常: "' + fileResult.toast + '"')
-  if (fileResult.written === '报告.md') pass('文件名原样使用: "' + fileResult.written + '"（无自动后缀）')
-  else fail('文件名被改写: "' + fileResult.written + '"')
-  // 创建后输入框应失焦（收起软键盘）
-  const blurAfterCreate = await page.evaluate(() => {
-    const a = document.activeElement
-    return !a || a.id !== 'create-name'
-  })
-  if (blurAfterCreate) pass('创建后输入框失焦（键盘收起）')
-  else fail('创建后输入框仍聚焦（键盘未收起）')
+  if (!btnState.homeDisabled) pass('Home 按钮根目录可用')
+  else fail('Home 按钮根目录应可用（实际 disabled）')
+  if (!btnState.snapDisabled) pass('快照按钮根目录可用')
+  else fail('快照按钮根目录应可用（实际 disabled）')
 
-  // ── 3b. 空输入点「文件」→ 默认名「新建文件」（无 .txt） ──
-  await tap(client, bar.addInfo.x, bar.addInfo.y, 60)
-  const fileBtn2 = await page.evaluate(() => {
-    const b = document.getElementById('create-file')
-    const r = b.getBoundingClientRect()
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
-  })
-  await tap(client, fileBtn2.x, fileBtn2.y, 60)
-  await sleep(2000)
-  const defaultResult = await page.evaluate(() => ({
-    closed: !document.getElementById('create-dialog-overlay').classList.contains('dialog-overlay-visible'),
-    written: window.__calls.write[1] || null
-  }))
-  if (defaultResult.closed) pass('空输入点「文件」对话框关闭')
-  else fail('空输入点「文件」未关闭对话框')
-  if (defaultResult.written === '新建文件') pass('空输入默认名 = "新建文件"（无自动 .txt）')
-  else fail('空输入默认名异常: "' + defaultResult.written + '"')
-
-  // ── 3c. 输入名称 + 点「文件夹」→ 按文件夹类型创建 ──
-  await tap(client, bar.addInfo.x, bar.addInfo.y, 60)
-  await page.evaluate(() => {
-    document.getElementById('create-name').value = '我的文件夹'
-  })
-  const folderBtn = await page.evaluate(() => {
-    const b = document.getElementById('create-folder')
-    const r = b.getBoundingClientRect()
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
-  })
-  await tap(client, folderBtn.x, folderBtn.y, 60)
-  await sleep(2000)
-  const folderResult = await page.evaluate(() => {
-    const o = document.getElementById('create-dialog-overlay')
-    const t = document.querySelector('.toast')
-    return {
-      closed: !o.classList.contains('dialog-overlay-visible'),
-      toast: t ? t.textContent : '',
-      mkdir: window.__calls.mkdir[0] || null
-    }
-  })
-  if (folderResult.closed) pass('点「文件夹」后对话框关闭')
-  else fail('点「文件夹」后对话框未关闭')
-  if (folderResult.toast === '已创建文件夹: 我的文件夹') pass('创建文件夹 toast 含实际名: "' + folderResult.toast + '"')
-  else fail('创建文件夹 toast 异常: "' + folderResult.toast + '"')
-  if (folderResult.mkdir === '我的文件夹') pass('文件夹名原样使用: "' + folderResult.mkdir + '"')
-  else fail('文件夹名被改写: "' + folderResult.mkdir + '"')
-
-  // ── 4. 点遮罩空白 → 对话框关闭 ──
-  await tap(client, bar.addInfo.x, bar.addInfo.y, 60)
-  await tap(client, 10, 300, 60)
-  const dlgClosed = await page.evaluate(() => {
-    const o = document.getElementById('create-dialog-overlay')
-    return !o.classList.contains('dialog-overlay-visible')
-  })
-  if (dlgClosed) pass('点遮罩空白 → 对话框关闭')
-  else fail('点遮罩空白未关闭对话框')
-
-  // ── 5. 底栏右划 → Drawer 跟手拉出并打开 ──
+  // ── 3. 底栏右划 → Drawer 跟手拉出并打开 ──
   const bbY = Math.round(915 - expectH / 2)
   let midTransform = null
   await swipe(client, 40, bbY, 340, bbY, 12, 12, async () => {
@@ -246,9 +143,7 @@ async function main() {
   if (revealed) pass('底栏右划 → Drawer 打开')
   else fail('底栏右划未打开 Drawer')
 
-  // ── 6. Drawer 左滑 → 跟手关闭 ──
-  // 起点避开 drawer 操作项区域（y=520 为 item 之下的空白区；drawer-swipe 设计上
-  // 触摸按钮不启动关闭手势，6 个操作项占满 y=165..441，y=450 已是按钮区）
+  // ── 4. Drawer 左滑 → 跟手关闭 ──
   await swipe(client, 250, 520, 80, 520, 12, 12)
   await sleep(450)
   const swipedClosed = await page.evaluate(() => {
@@ -258,7 +153,7 @@ async function main() {
   if (swipedClosed) pass('Drawer 左滑 → 跟手关闭')
   else fail('Drawer 左滑未关闭')
 
-  // ── 7. 底栏小幅慢滑（<30% 且低速）→ 弹回不打开 ──
+  // ── 5. 底栏小幅慢滑（<30% 且低速）→ 弹回不打开 ──
   await swipe(client, 40, bbY, 100, bbY, 12, 40)
   await sleep(450)
   const bounced = await page.evaluate(() => {
@@ -268,7 +163,7 @@ async function main() {
   if (bounced) pass('小幅慢滑 → 弹回不打开')
   else fail('小幅慢滑误打开 Drawer')
 
-  // ── 8. 右划打开后点遮罩 → 收起（原路径回归） ──
+  // ── 6. 右划打开后点遮罩 → 收起（原路径回归） ──
   await swipe(client, 40, bbY, 340, bbY, 12, 12)
   await sleep(450)
   await tap(client, 390, 500, 60)
@@ -279,7 +174,7 @@ async function main() {
   if (tapClosed) pass('右划打开后点遮罩 → 收起')
   else fail('点遮罩未收起 Drawer')
 
-  // ── 9. 零 pageerror ──
+  // ── 7. 零 pageerror ──
   if (pageErrors.length === 0) pass('全程零 pageerror')
   else fail('存在 pageerror: ' + pageErrors.join(' | '))
 

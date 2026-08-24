@@ -1,7 +1,7 @@
 /* desktop-navigation.js：目录导航 + Home 空间锚点 + 相机平滑过渡（App.DesktopNavigation）。
  * 拆分自 desktop.js 的导航域：打开（openItem/enterFolder）、目录切换相机策略
  * （applyCameraForPath）、历史导航（goUp/goBack/goForward/canGo 系列/getCurPath）、
- * Home 空间锚点（captureHome/captureDefaultView/goHome）、相机平滑飞行
+ * Home 空间锚点（setHome/captureDefaultView/goHome）+ 快照（captureSnapshot）、相机平滑飞行
  * （cancelCameraAnim/animateCameraTo，van Wijk & Nuij flyTo 同款）。
  * 依赖注入：目录切换后刷新渲染（persist 域 refresh）由 desktop.js 组装时
  * setRefresh 注入；临时操作模式退出经 App.DesktopBrowseMode。
@@ -135,13 +135,12 @@ App.DesktopNavigation = (function () {
   }
   function getCurPath() { return C.state.curPath }
 
-  // ── Home：空间锚点（位置快照 + 默认视角）──
-  // 长按底栏 Home = 记录当前相机为快照；点按 Home = 回快照（无则默认视角，再无则出厂 (0,0,1)）。
+  // ── 快照 / Home：各自独立 ──
+  // 快照（相机图标长按触发）：记录当前相机为一个快照（SnapshotStore），与 Home 锚点无关。
+  // Home 锚点（Home 按钮长按 / 顶栏「设为 Home」）：HomeStore 独立存储，与快照列表解耦。
   // 默认视角 = 用户经 Drawer「设为默认视角」设置的兜底视角。仅桌面空间（根目录）有意义。
-  // rotation 透传：竖屏（0）/横屏（90）各存各的槽位，切换画布方向后 Home 回对应槽位。
-  // 长按底栏 Home = 添加快照（Home 与快照彻底分离：快照只是快照，不影响 Home 锚点）。
-  // Home 锚点由顶栏「设为 Home」独立设置（HomeStore）。
-  function captureHome() {
+  // rotation 透传：竖屏（0）/横屏（90）各存各的槽位，切换画布方向后回对应槽位。
+  function captureSnapshot() {
     if (C.isFolderView()) return false
     if (App.SnapshotStore && typeof App.SnapshotStore.create === 'function') {
       const s = App.SnapshotStore.create(C.camera, C.state.rootId)
@@ -192,12 +191,9 @@ App.DesktopNavigation = (function () {
     return true
   }
 
-  // 回到 Home：优先使用快照列表的 Home 位（由插入位置 top/bottom 决定）；
-  // 无快照时回退到旧版 HomeStore；再无则出厂 (0,0,1)。
-  // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera。
-  // rotation 透传：create 第四参确保目标相机保持当前旋转态。
-  // 回到 Home：Home 锚点独立于快照列表（HomeStore.home > fallback > 出厂）。
-  // 快照列表是纯演示快照，与 Home 无任何关联。
+  // 回到 Home：Home 锚点独立于快照列表（HomeStore.home > fallback > 出厂 (0,0,1)）。
+  // 快照列表是纯演示快照，与 Home 无任何关联。仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。
+  // 不覆盖 rootCamera。rotation 透传：create 第四参确保目标相机保持当前旋转态。
   function goHome() {
     if (C.isFolderView()) return
     const rot = C.camera.rotation
@@ -301,7 +297,7 @@ App.DesktopNavigation = (function () {
     canGoForward: canGoForward,
     canGoUp: canGoUp,
     getCurPath: getCurPath,
-    captureHome: captureHome,
+    captureSnapshot: captureSnapshot,
     captureDefaultView: captureDefaultView,
     setHome: setHome,
     goHome: goHome,

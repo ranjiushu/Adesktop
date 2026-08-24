@@ -119,8 +119,9 @@ App.ViewMenu = (function () {
     const items = _queryItems(menu)
     for (let i = 0; i < items.length; i++) {
       if (items[i].classList.contains('view-menu-browse')) continue
-      if (items[i].classList.contains('view-menu-rotate')) {
-        // 根目录（on=false）可用，folder（on=true）禁用
+      if (items[i].classList.contains('view-menu-rotate') ||
+          items[i].classList.contains('view-menu-sethome')) {
+        // 旋转画布 / 设为 Home：根目录（on=false）可用，folder（on=true）禁用
         if (_enabled) items[i].setAttribute('disabled', '')
         else items[i].removeAttribute('disabled')
         continue

@@ -254,7 +254,7 @@ const D = sandbox.App.Desktop
     'isTrashPath', 'inTrash', 'getTrashName',
     'viewMode', 'isFolderView',
     'applyViewPrefs', 'getViewPrefs',
-    'captureHome', 'captureDefaultView', 'goHome',
+    'captureSnapshot', 'captureDefaultView', 'goHome',
     'setAdvancedBrowse', 'isAdvancedBrowse', 'exitTempMode'
   ]
   const missing = expected.filter(function (k) { return typeof D[k] !== 'function' })

@@ -24,7 +24,7 @@
   top: calc(var(--header-height) + var(--safe-top, 0px) + 4px);
   right: var(--space-md);
   z-index: 700;
-  min-width: 168px;
+  min-width: 160px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 0;
@@ -38,7 +38,7 @@
 }
 
 .view-menu-section {
-  padding: var(--space-xs) 0;
+  padding: 2px 0;
 }
 
 .view-menu-label {
@@ -50,15 +50,31 @@
 .view-menu-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-sm);
   width: 100%;
-  padding: 10px var(--space-md);
+  padding: 8px var(--space-md);
   border: none;
   background: transparent;
   font-size: var(--font-size-md);
   color: var(--color-text);
   text-align: left;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* 菜单项前导矢量图标（统一灰色，active 时跟随强调色） */
+.view-menu-item .view-menu-ico {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-secondary);
+}
+
+.view-menu-item > span {
+  flex: 1;
+}
+
+.view-menu-item.active .view-menu-ico {
+  color: var(--color-accent);
 }
 
 .view-menu-item:active {
@@ -97,23 +113,21 @@
   display: inline-block;
 }
 
-.view-menu-sep {
-  height: 1px;
-  background: var(--color-border);
-  margin: var(--space-xs) 0;
-}
-
 .view-menu-hint {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   padding: var(--space-xs) var(--space-md);
 }
 
+/* 提示（打开文件夹后可用）只在子文件夹显示：根目录下设为 Home 等项已可用，提示反成噪音 */
+.view-menu:not(.view-menu-folder) .view-menu-hint {
+  display: none;
+}
+
 /* 排列/视图只在子文件夹（view-menu-folder 态）显示：
-   Desktop 无限画布无排序/视图语义，隐藏对应 section 与分隔线 */
+   Desktop 无限画布无排序/视图语义，隐藏对应 section */
 .view-menu:not(.view-menu-folder) .view-menu-section-sort,
-.view-menu:not(.view-menu-folder) .view-menu-section-view,
-.view-menu:not(.view-menu-folder) .view-menu-sep-folder {
+.view-menu:not(.view-menu-folder) .view-menu-section-view {
   display: none;
 }
 

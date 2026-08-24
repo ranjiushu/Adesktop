@@ -17,6 +17,8 @@
     <symbol id="icon-arrow-right" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="12 5 19 12 12 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="icon-arrow-up" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="5 12 12 5 19 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="icon-home" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="9 22 9 12 15 12 15 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="icon-camera" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="icon-rotate-cw" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="icon-file" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="13 2 13 9 20 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="icon-refresh-cw" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="1 20 1 14 7 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="icon-maximize" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -123,11 +125,11 @@
   <button id="bb-btn-forward" class="bottom-bar-btn" aria-label="前进" aria-disabled="true" disabled>
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-arrow-right"/></svg>
   </button>
-  <button id="bb-btn-add" class="bottom-bar-btn bottom-bar-add" aria-label="新建">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-plus"/></svg>
-  </button>
   <button id="bb-btn-home" class="bottom-bar-btn" aria-label="Home" aria-disabled="true" disabled>
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-home"/></svg>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-home"/></svg>
+  </button>
+  <button id="bb-btn-snapshot" class="bottom-bar-btn" aria-label="快照" aria-disabled="true" disabled>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-camera"/></svg>
   </button>
   <button id="bb-btn-up" class="bottom-bar-btn" aria-label="上级目录" aria-disabled="true" disabled>
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-arrow-up"/></svg>
@@ -194,28 +196,24 @@
 <nav id="view-menu" class="view-menu" aria-hidden="true">
   <div class="view-menu-section view-menu-section-sort">
     <div class="view-menu-label">排列方式</div>
-    <button class="view-menu-item" data-sort="name">按名称<i class="view-menu-dir"></i></button>
-    <button class="view-menu-item" data-sort="mtime">按修改日期<i class="view-menu-dir"></i></button>
-    <button class="view-menu-item" data-sort="type">按类型<i class="view-menu-dir"></i></button>
-    <button class="view-menu-item" data-sort="size">按大小<i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="name"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-sort-alpha"/></svg><span>按名称</span><i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="mtime"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-clock"/></svg><span>按修改日期</span><i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="type"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-file"/></svg><span>按类型</span><i class="view-menu-dir"></i></button>
+    <button class="view-menu-item" data-sort="size"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-bar-chart"/></svg><span>按大小</span><i class="view-menu-dir"></i></button>
   </div>
-  <div class="view-menu-sep view-menu-sep-folder"></div>
   <div class="view-menu-section view-menu-section-view">
     <div class="view-menu-label">视图</div>
-    <button class="view-menu-item" data-view="grid">网格<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
-    <button class="view-menu-item" data-view="list">列表<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
+    <button class="view-menu-item" data-view="grid"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-grid"/></svg><span>网格</span><svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
+    <button class="view-menu-item" data-view="list"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-sort-lines"/></svg><span>列表</span><svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
   </div>
-  <div class="view-menu-sep view-menu-sep-browse"></div>
   <div class="view-menu-section view-menu-section-browse">
-    <button class="view-menu-item view-menu-browse" data-browse="advanced">高级浏览模式<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
+    <button class="view-menu-item view-menu-browse" data-browse="advanced"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-eye"/></svg><span>高级浏览模式</span><svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
   </div>
-  <div class="view-menu-sep view-menu-sep-rotate"></div>
   <div class="view-menu-section view-menu-section-rotate">
-    <button class="view-menu-item view-menu-rotate" data-rotate="toggle">切换画布方向<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
+    <button class="view-menu-item view-menu-rotate" data-rotate="toggle"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-rotate-cw"/></svg><span>切换画布方向</span><svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
   </div>
-  <div class="view-menu-sep view-menu-sep-home"></div>
   <div class="view-menu-section view-menu-section-home">
-    <button class="view-menu-item view-menu-sethome" data-action="set-home">设为 Home<svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-home"/></svg></button>
+    <button class="view-menu-item view-menu-sethome" data-action="set-home"><svg class="view-menu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-home"/></svg><span>设为 Home</span><svg class="view-menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-check"/></svg></button>
   </div>
   <div class="view-menu-hint">打开文件夹后可用</div>
 </nav>

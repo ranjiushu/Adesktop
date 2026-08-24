@@ -1,5 +1,7 @@
-/* 底部工具栏：高度占屏幕 1/10，5 个矢量图标按钮（中间加号弹新建对话框，
-   右 1 Home = 空间锚点：点按回快照/默认视角，长按记录位置快照；最右向上箭头 = 退回到上级目录）。
+/* 底部工具栏：高度占屏幕 1/10，5 个矢量图标按钮
+   （后退 / 前进 / Home=空间锚点：点按回 Home、长按记录新 Home、双击一览全部文件，
+   / 快照=相机：点按呼出快照列表、长按记录新快照 / 上级目录）。
+   新建（加号）已由 Morph FAB 承担，底栏不再设新建按钮。
    底栏区域右滑跟手呼出左侧 Drawer（drawer-swipe.js 监听 touch 事件）。 */
 .bottom-bar {
   position: fixed;
@@ -50,15 +52,7 @@
   opacity: 0.4;
 }
 
-/* Home 已记录位置快照：图标强调色，提示「快照存在，点按即回」 */
+/* Home 已记录位置快照（Home 锚点存在）：图标强调色，提示「快照存在，点按即回」 */
 .bottom-bar-btn.home-has-snapshot {
   color: var(--color-accent);
-}
-
-/* 中间加号：强调色，视觉突出 */
-.bottom-bar-add {
-  color: var(--color-accent);
-  width: 48px;
-  height: 48px;
-  background: rgba(59, 130, 246, 0.08);
 }

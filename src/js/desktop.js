@@ -135,7 +135,7 @@ App.Desktop = (function () {
     isFolderView: C.isFolderView,
     applyViewPrefs: P.applyViewPrefs,
     getViewPrefs: P.getViewPrefs,
-    captureHome: N.captureHome,
+    captureSnapshot: N.captureSnapshot,
     captureDefaultView: N.captureDefaultView,
     setHome: N.setHome,
     goHome: N.goHome,

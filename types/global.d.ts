@@ -794,7 +794,7 @@ interface Desktop {
   isFolderView: () => boolean
   applyViewPrefs: (prefs: ViewPrefs) => void
   getViewPrefs: () => ViewPrefs
-  captureHome: () => void
+  captureSnapshot: () => void
   captureDefaultView: () => void
   setHome: () => boolean
   goHome: () => void

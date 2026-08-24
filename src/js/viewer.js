@@ -621,6 +621,15 @@ App.InternalViewer = (function () {
         })
         body.appendChild(el)
         fitCanvasToMedia()
+        // 视频：未播放时展示**实际首帧封面**（复用缩略图服务取帧，data URI 自带），
+        // 而非黑底/类型占位；浏览器播放时自动以视频内容替换 poster。
+        // 取帧失败（如内核不支持编解码）→ 保持默认呈现，不阻塞打开。
+        if (tag === 'video' && App.Thumbnail &&
+            typeof App.Thumbnail.request === 'function') {
+          App.Thumbnail.request(state.path, state.name, 'video', function (thumbUri) {
+            if (el && el.poster !== thumbUri) el.poster = thumbUri
+          }, function () {})
+        }
       }).catch(function (err) {
         showError(err && err.message || '无法解析文件 URI')
       })

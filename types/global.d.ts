@@ -266,10 +266,26 @@ interface ViewStore {
 interface DesktopPersist {
   refresh(): Promise<any>
   initLayout(): void
+  renderFromCache(): boolean
   applyViewPrefs(prefs: ViewPrefs): void
   getViewPrefs(): ViewPrefs
   saveLayout(): void
   saveDesktopRoot(dir: string): boolean
+}
+
+/** 启动快照（首屏先行渲染用）：最近一次成功刷新的**桌面空间**状态 + items 缓存。
+ * 仅作首屏秒出投影，真实数据以 refresh 拉文件系统为准（文件即真相不破）。
+ * 文件夹视图不缓存。 */
+interface StartupSnapshot {
+  version: number
+  mode: string
+  curPath: string
+  desktopRoot: string
+  trashName: string
+  rootId: string
+  rootName: string
+  displayPath: string
+  items: Array<FileItem>
 }
 
 /** 原生桥最小封装（App.bridge） */
@@ -749,6 +765,7 @@ interface Desktop {
   refresh(): Promise<any>
   render(): void
   initGesture(): void
+  renderFromCache(): boolean
   clearSelection(): void
   hasSelection(): boolean
   getSelectionNames(): Array<string>

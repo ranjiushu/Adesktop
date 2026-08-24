@@ -34,6 +34,17 @@ App.DesktopRender = (function () {
     iconEl.appendChild(img)
   }
 
+  // 图标应用延迟到 DOM 提交后：render() 在把 card appendChild 进 grid **之前**就发起
+  // request/requestShortcutIcon；而 Thumbnail 对缓存 ready 的条目会**同步**触发 onReady，
+  // 此刻 icon.parentNode 还是 null，setThumbImg 的 if(icon.parentNode) 守卫会把它跳过 →
+  // 图标停留在类型占位（首次渲染是异步读文件、读完后 DOM 已挂载所以能显示，此后重渲染
+  // 命中 ready 缓存就回落类型图标——"显示不稳定"的根因）。延后一个宏任务再应用，DOM 已提交。
+  function deferApplyIcon(iconEl, uri, kind) {
+    setTimeout(function () {
+      if (iconEl && iconEl.parentNode) setThumbImg(iconEl, uri, kind)
+    }, 0)
+  }
+
   // 自动排布：
   //   desktop 空间：世界坐标按网格铺开（已有位置优先，位置来自 LayoutStore 持久化）
   //   folder 容器：排序后固定排布（网格 4 列自适应 / 列表单列），不读持久化位置
@@ -129,13 +140,13 @@ App.DesktopRender = (function () {
         // 应用快捷方式：类型图标兜底 → 读内嵌 base64 图标渐进替换（自包含，随文件迁移）
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor('shortcut') : '📄'
         App.Thumbnail.requestShortcutIcon(p.key, function (uri) {
-          if (icon.parentNode) setThumbImg(icon, uri, kind)
+          deferApplyIcon(icon, uri, kind)
         }, function () { /* 失败：保持类型图标 */ })
       } else if (App.Thumbnail && App.Thumbnail.canThumbnail(kind)) {
         // 先类型图标（fallback 基线），异步请求缩略图，成功替换（渐进式：类型图标 → 真缩略图）
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.iconFor(p.item.name, p.item.isDir) : '📄'
         App.Thumbnail.request(p.key, p.item.name, kind, function (uri) {
-          if (icon.parentNode) setThumbImg(icon, uri, kind)
+          deferApplyIcon(icon, uri, kind)
         }, function () { /* 失败：保持类型图标 */ })
       } else {
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.iconFor(p.item.name, p.item.isDir) : (p.item.isDir ? '📁' : '📄')

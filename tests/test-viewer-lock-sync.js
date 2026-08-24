@@ -111,7 +111,8 @@ sandbox.App.FileAPI = {
   rootInfo: function () { return Promise.resolve({ rootName: 'Test', mode: 'private', displayPath: '内部存储/Test' }) },
   list: function (p) { return Promise.resolve((fsTree[p || ''] || []).slice()) }
 }
-sandbox.App.HomeStore = { load: function () { return null }, saveHome: function () { return true }, saveFallback: function () { return true } }
+let homeSaveCalls = 0
+sandbox.App.HomeStore = { load: function () { return null }, saveHome: function () { homeSaveCalls++; return true }, saveFallback: function () { return true } }
 sandbox.App.ViewStore = { load: function () { return { viewStyle: 'grid', sortBy: 'name', sortDir: 1 } }, save: function () { return true } }
 sandbox.App.ViewMenu = { setEnabled: function () {} }
 sandbox.App.fabSpeedDial = { setSelection: function () {} }
@@ -234,6 +235,7 @@ function iconRendered(name) {
   check(eq(C.positions['a.txt'], aPosStale), '整理桌面：打开态 a.txt 位置不动（不参与整理）')
   check(eq(C.positions['b.txt'], { x: 14, y: 16 }), '整理桌面：b.txt 排到首格 (14,16)（a 的原格无占位保护）')
   check(!iconRendered('a.txt'), '整理后 a.txt 仍无图标（仍处打开态）')
+  check(homeSaveCalls === 0, '整理桌面不写回 Home 锚点（saveHome 未被调用——不重设窗口为 Home）')
 
   // ── 场景 4：关闭 → Viewer 变回文件（窗口位置吸附落位，图标重现）──
   sandbox.App.InternalViewer.closeById(viewerInstances[0].id)

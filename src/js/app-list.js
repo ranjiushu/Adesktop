@@ -78,6 +78,8 @@ App.AppList = (function () {
     img.src = uri
     avatar.innerHTML = ''
     avatar.appendChild(img)
+    // 图标自含背景/透明边：移除蓝底，避免透明角露出蓝色一圈（见 .app-list-avatar.has-icon）
+    avatar.classList.add('has-icon')
   }
 
   function _loadIcon(pkg, avatar) {
@@ -114,6 +116,41 @@ App.AppList = (function () {
     }
   }
 
+  // 行点按：列表成员必须允许原生滚动。bindPress 在 touchstart 里 preventDefault 会
+  // 让整列表拖不动（只能显示一屏），故不用之。改用被动监听 + 位移阈值判定 tap，
+  // 滚动/滑动（位移 > 12px）不算点按；user-select:none + touch-action:pan-y 由 CSS 兜底防长按选中。
+  function _bindRowTap(row) {
+    if (!row || row._bindRowTapBound) return
+    row._bindRowTapBound = true
+    let sx = 0, sy = 0, moved = false, touchFired = false
+    function confirm() {
+      _askConfirm({
+        package: row.getAttribute('data-package'),
+        label: row.getAttribute('data-label'),
+        isSystem: row.getAttribute('data-system') === '1'
+      })
+    }
+    row.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return
+      const t = e.touches[0]
+      sx = t.clientX; sy = t.clientY; moved = false
+    }, { passive: true })
+    row.addEventListener('touchmove', function (e) {
+      const t = e.touches[0]
+      if (!t) return
+      if (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) moved = true
+    }, { passive: true })
+    row.addEventListener('touchend', function () {
+      if (!moved) { touchFired = true; confirm() }
+    }, { passive: true })
+    row.addEventListener('touchcancel', function () { moved = true }, { passive: true })
+    // 桌面/鼠标兜底（无触摸时 click 可用）
+    row.addEventListener('click', function () {
+      if (touchFired || moved) return
+      confirm()
+    })
+  }
+
   function render() {
     const body = _getEl(BODY_ID)
     if (!body) return
@@ -139,13 +176,7 @@ App.AppList = (function () {
     body.innerHTML = html
     const rows = body.querySelectorAll('.app-list-row')
     for (let i = 0; i < rows.length; i++) {
-      App.utils.bindPress(rows[i], function () {
-        _askConfirm({
-          package: this.getAttribute('data-package'),
-          label: this.getAttribute('data-label'),
-          isSystem: this.getAttribute('data-system') === '1'
-        })
-      })
+      _bindRowTap(rows[i])
       _attachIcon(rows[i])
     }
   }

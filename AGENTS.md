@@ -69,6 +69,8 @@ main ←── merge --no-ff only ── feat/dev ←── topic 分支
 ```
 
 **日常开发**：单文件小改直接 commit 到 `feat/dev`；跨文件/实验性改动开 topic：
+> 长周期/实验性任务可开独立 worktree（置于 `/workspace/wt/`，用完合流回主线并 `worktree remove`），规范见 `/skills/git-workflow/SKILL.md`「Work Tree 使用规范」。
+
 
 ```bash
 git checkout -b feat/xxx feat/dev

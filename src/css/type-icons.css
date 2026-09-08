@@ -1,6 +1,6 @@
-/* 类型图标系统：SVG 图标尺寸 + 各类型颜色（stroke=currentColor）。
- * 颜色 = 类型语义色（text 蓝 / code 青 / image 绿 / pdf 红 / archive 黄褐 …），
- * 用于在同一形态（如 fileText）下区分相近类型。 */
+/* 类型图标系统：SVG 图标尺寸 + 线条版图标的主题色（stroke=currentColor）。
+ * 文件类型为 MDI 字形 + 彩色圆角瓷砖（type-icons-data.js，Apache-2.0），自带颜色；
+ * 仅 trash/shortcut/unknown 等系统态仍为线条版，颜色在此控制（随主题可调）。 */
 
 /* 图标 SVG 尺寸（desktop 空间 + folder 容器网格/列表通用） */
 .desktop-icon-glyph .type-icon {
@@ -15,24 +15,8 @@
   height: 28px;
 }
 
-/* 各类型颜色 */
-.type-icon.type-folder { color: #6b7280; }
+/* 系统态线条版颜色（全彩类型图标自带颜色，不走此表） */
 .type-icon.type-trash { color: #6b7280; }
-.type-icon.type-text { color: #3b82f6; }
-.type-icon.type-markdown { color: #8b5cf6; }
-.type-icon.type-json { color: #f59e0b; }
-.type-icon.type-html { color: #ea580c; }
-.type-icon.type-code { color: #06b6d4; }
-.type-icon.type-image { color: #10b981; }
-.type-icon.type-video { color: #8b5cf6; }
-.type-icon.type-audio { color: #ec4899; }
-.type-icon.type-archive { color: #d97706; }
-.type-icon.type-pdf { color: #ef4444; }
-.type-icon.type-word { color: #2563eb; }
-.type-icon.type-excel { color: #16a34a; }
-.type-icon.type-ppt { color: #f97316; }
-.type-icon.type-font { color: #64748b; }
-.type-icon.type-executable { color: #334155; }
 .type-icon.type-shortcut { color: #0ea5e9; }
 .type-icon.type-unknown { color: #94a3b8; }
 

@@ -65,6 +65,9 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
+        // 允许 file:///android_asset/index.html 加载 file:// 缓存缩略图 URI
+        // （应用私有 cache 目录）。Android 高版本 WebView 默认禁用跨 file:// 访问。
+        settings.setAllowFileAccessFromFileURLs(true);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         // 允许页面动态 focus() 输入框时获得初始焦点（配合前端新建对话框自动拉起键盘）
         settings.setNeedInitialFocus(true);

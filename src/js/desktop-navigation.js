@@ -1,7 +1,7 @@
 /* desktop-navigation.js：目录导航 + Home 空间锚点 + 相机平滑过渡（App.DesktopNavigation）。
  * 拆分自 desktop.js 的导航域：打开（openItem/enterFolder）、目录切换相机策略
  * （applyCameraForPath）、历史导航（goUp/goBack/goForward/canGo 系列/getCurPath）、
- * Home 空间锚点（captureHome/captureDefaultView/goHome）、相机平滑飞行
+ * Home 空间锚点（setHome/captureDefaultView/goHome）+ 快照（captureSnapshot）、相机平滑飞行
  * （cancelCameraAnim/animateCameraTo，van Wijk & Nuij flyTo 同款）。
  * 依赖注入：目录切换后刷新渲染（persist 域 refresh）由 desktop.js 组装时
  * setRefresh 注入；临时操作模式退出经 App.DesktopBrowseMode。
@@ -36,19 +36,16 @@ App.DesktopNavigation = (function () {
       App.DesktopRender.clearSelection()
       enterFolder(full)
     } else if (App.FileOpener && typeof App.FileOpener.open === 'function') {
-      // Windows 式锁定：文件被 Viewer 打开 = 锁定（禁复制/剪切/移动/删除/重命名，
-      // 拖动摆放仍可）；文件不进入选中集——Viewer 实体自身有独立选中态（脆弱/临时）。
-      // 多实例：每个打开的 Viewer 各自锁定其文件。
-      // FileOpener.open 返回实例 id（数字）→ 锁定；true（外部/快捷方式）→ 只清选中不锁定。
-      const result = App.FileOpener.open({ name: item.name, path: full }, C.isFolderView() ? null : (C.positions[full] || null), C.camera, function onClose(path) {
-        if (path) C._lockedPaths.delete(path)
-        App.DesktopRender.updateLockedVisual()
-      })
-      if (typeof result === 'number') {
-        C._lockedPaths.add(full)
-        App.DesktopRender.clearSelection()
-        App.DesktopRender.updateLockedVisual()
-      } else if (result) {
+      // Viewer = 文件的「打开」状态：打开成功 → 图标退出网格（重渲染由
+      // viewer-link 的实体集合 diff 自动触发）；关闭 → handleViewerClosed
+      // 按窗口位置吸附落位回网格。文件不进入选中集——Viewer 实体自身有
+      // 独立选中态（脆弱/临时）。
+      // FileOpener.open 返回实例 id（数字）= 进入打开态；true（外部应用/
+      // 快捷方式）= 不进入打开态，只清选中。
+      const result = App.FileOpener.open({ name: item.name, path: full }, C.isFolderView() ? null : (C.positions[full] || null), C.camera,
+        App.DesktopViewerLink && typeof App.DesktopViewerLink.handleViewerClosed === 'function'
+          ? App.DesktopViewerLink.handleViewerClosed : null)
+      if (result) {
         App.DesktopRender.clearSelection()
       }
     } else if (App.toast) {
@@ -73,8 +70,9 @@ App.DesktopNavigation = (function () {
     // 目录切换：先退出全屏态 Viewer（folder 打开的全屏预览），保留 canvas 态 Viewer（跨目录保留）
     const fs = App.InternalViewer && App.InternalViewer.fullscreenInstance ? App.InternalViewer.fullscreenInstance() : null
     if (fs) {
-      fs.exitFullscreen()   // folder 打开的全屏：退出 = close（见 exitFullscreen 的 from='folder' 分支）
-      if (fs.getPath && C._lockedPaths.has(fs.getPath())) C._lockedPaths.delete(fs.getPath())
+      // folder 打开的全屏：退出 = close（见 exitFullscreen 的 from='folder' 分支）；
+      // 打开态随实例关闭自动结束（派生态，无需手动解锁）
+      fs.exitFullscreen()
     }
     if (C.isFolderView()) {
       // 进入 folder：隐藏 canvas 态 Viewer（保留状态，退回根目录恢复）
@@ -137,13 +135,12 @@ App.DesktopNavigation = (function () {
   }
   function getCurPath() { return C.state.curPath }
 
-  // ── Home：空间锚点（位置快照 + 默认视角）──
-  // 长按底栏 Home = 记录当前相机为快照；点按 Home = 回快照（无则默认视角，再无则出厂 (0,0,1)）。
+  // ── 快照 / Home：各自独立 ──
+  // 快照（相机图标长按触发）：记录当前相机为一个快照（SnapshotStore），与 Home 锚点无关。
+  // Home 锚点（Home 按钮长按 / 顶栏「设为 Home」）：HomeStore 独立存储，与快照列表解耦。
   // 默认视角 = 用户经 Drawer「设为默认视角」设置的兜底视角。仅桌面空间（根目录）有意义。
-  // rotation 透传：竖屏（0）/横屏（90）各存各的槽位，切换画布方向后 Home 回对应槽位。
-  // 长按底栏 Home = 添加快照（Home 与快照彻底分离：快照只是快照，不影响 Home 锚点）。
-  // Home 锚点由顶栏「设为 Home」独立设置（HomeStore）。
-  function captureHome() {
+  // rotation 透传：竖屏（0）/横屏（90）各存各的槽位，切换画布方向后回对应槽位。
+  function captureSnapshot() {
     if (C.isFolderView()) return false
     if (App.SnapshotStore && typeof App.SnapshotStore.create === 'function') {
       const s = App.SnapshotStore.create(C.camera, C.state.rootId)
@@ -194,12 +191,9 @@ App.DesktopNavigation = (function () {
     return true
   }
 
-  // 回到 Home：优先使用快照列表的 Home 位（由插入位置 top/bottom 决定）；
-  // 无快照时回退到旧版 HomeStore；再无则出厂 (0,0,1)。
-  // 仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。不覆盖 rootCamera。
-  // rotation 透传：create 第四参确保目标相机保持当前旋转态。
-  // 回到 Home：Home 锚点独立于快照列表（HomeStore.home > fallback > 出厂）。
-  // 快照列表是纯演示快照，与 Home 无任何关联。
+  // 回到 Home：Home 锚点独立于快照列表（HomeStore.home > fallback > 出厂 (0,0,1)）。
+  // 快照列表是纯演示快照，与 Home 无任何关联。仅桌面空间（子文件夹内 Home 按钮禁用，此处防御）。
+  // 不覆盖 rootCamera。rotation 透传：create 第四参确保目标相机保持当前旋转态。
   function goHome() {
     if (C.isFolderView()) return
     const rot = C.camera.rotation
@@ -303,7 +297,7 @@ App.DesktopNavigation = (function () {
     canGoForward: canGoForward,
     canGoUp: canGoUp,
     getCurPath: getCurPath,
-    captureHome: captureHome,
+    captureSnapshot: captureSnapshot,
     captureDefaultView: captureDefaultView,
     setHome: setHome,
     goHome: goHome,

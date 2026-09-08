@@ -1,20 +1,27 @@
 /* desktop-viewer-link.js：Viewer 联动 + 布局 key 迁移（App.DesktopViewerLink）。
- * 拆分自 desktop.js 的联动域：Viewer 关闭与锁定管理（closeViewer/
- * isLockedPath/getLockedPaths，Windows 式锁定：被 Viewer 打开的文件禁止
- * 复制/剪切/移动/删除/重命名，只允许拖动摆放）、布局 key 迁移
- * （applyRename/applyMoves：positions/bounds/selection 以完整路径为 key，
- * 旧 key → 新 key，否则刷新后回退自动排布丢位置）。
+ * Viewer 语义（2026-08-20 重构）：Viewer = 文件的「打开」状态，不是独立窗口实体——
+ *   打开：文件变成 Viewer（图标退出网格渲染，原格子当场释放为普通空格）；
+ *   拖动 Viewer = 拖动文件本身（位置真相 = Viewer 世界矩形，无第二套坐标）；
+ *   关闭：Viewer 变回图标——按窗口位置吸附最近网格格落位（被占则避让到最近空格）。
+ * 旧「两个实体协调」机制随之整体删除：单向锚定 syncRectForPath、会话恢复贴窗对齐、
+ * _lockedPaths 锁定集合、🔒 锁定角标。锁定改为派生态（isLockedPath = InternalViewer
+ * 存在该路径的打开实例），无独立状态，天然不会失步。
  * Viewer 持久化（「Viewer 只能通过手动关闭」）：init() 注入 InternalViewer
  * 持久化监听（画布态打开/关闭/拖动/媒体自适应 → ViewerStore.save）；
+ * 同一监听兼做桌面实体集合 diff——集合变化（打开/关闭/website 异步打开/会话恢复）
+ * 触发网格重渲染（图标退场/重现），拖动/媒体自适应只改矩形不改集合，不重渲染。
  * restoreViewers() 在桌面空间 refresh 加载列表后调用，恢复上次会话打开的
  * Viewer（世界坐标原位置；文件已删除/不在当前目录 → 跳过，下次保存自然清理）。
+ * 关闭落位（handleViewerClosed）：Viewer 矩形左上吸附网格 → resolvePlacement
+ * 避让已占位图标 → positions 落盘；folder 容器无持久布局，跳过。
  * 目录切换时 Viewer 处理：全屏态走 exitFullscreen（close），canvas 态走
  * suspendCanvas/resumeCanvas（跨目录保留状态），均在 desktop-navigation.js
  * 的 applyCameraForPath 中完成，不经本模块。
- * 锁定视觉同步经 App.DesktopRender.updateLockedVisual/syncFab；
- * 迁移落盘经 App.DesktopPersist.saveLayout/refresh。
- * 依赖: namespace.js, desktop-core.js, desktop-render.js, desktop-persist.js,
- *       viewer.js, viewer-store.js
+ * 布局 key 迁移（applyRename/applyMoves）：positions/bounds/selection 以完整路径
+ * 为 key，旧 key → 新 key，否则刷新后回退自动排布丢位置；迁移落盘经
+ * App.DesktopPersist.saveLayout/refresh。
+ * 依赖: namespace.js, desktop-core.js, desktop-grid.js, desktop-render.js,
+ *       desktop-persist.js, viewer.js, viewer-store.js
  * 导出: App.DesktopViewerLink
  */
 // @ts-check
@@ -23,43 +30,89 @@
 App.DesktopViewerLink = (function () {
   const C = App.DesktopCore
 
+  // 最近一次 diff 的桌面实体路径集（_syncEntityRender 用）
+  /** @type {Record<string, boolean>} */
+  let _lastEntityPaths = {}
+  // 待播放的关闭落位动画（handleViewerClosed 记录 → 渲染后播放）
+  /** @type {{path: string, x: number, y: number} | null} */
+  let _pendingLand = null
+
   // 注入 InternalViewer 持久化监听：画布态变化（打开/关闭/拖动结束/媒体自适应）
-  // → ViewerStore.save（localStorage + 隐藏文件，文件即真相）。rootId 未就绪跳过。
-  // Viewer 拖动/自适应会同步锁定文件图标位置（moveListener），这里一并落盘布局
-  // ——否则图标位置只存在内存投影，刷新后回退错位。
+  // → ViewerStore.save（localStorage + 隐藏文件，文件即真相）。rootId 未就绪跳过落盘。
+  // 同一监听驱动桌面实体集合 diff：集合变化 → 重渲染网格（图标随文件「打开」态
+  // 退场/「关闭」态落位后重现）。Viewer 位置真相 = Viewer 矩形（ViewerStore），
+  // 桌面层不订阅逐帧 onMove——拖动 Viewer 即拖动文件，无需回写第二套坐标。
   /** @returns {void} */
   function init() {
     if (App.InternalViewer && typeof App.InternalViewer.setPersistListener === 'function') {
       App.InternalViewer.setPersistListener(function (/** @type {Array<ViewerRecord>} */ viewers) {
-        if (!C.state.rootId || !App.ViewerStore) return
-        App.ViewerStore.save(viewers, C.state.rootId)
-        if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
-          App.DesktopPersist.saveLayout()
+        if (C.state.rootId && App.ViewerStore) {
+          App.ViewerStore.save(viewers, C.state.rootId)
+          if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
+            App.DesktopPersist.saveLayout()
+          }
         }
-      })
-    }
-    // Viewer 位置/尺寸变化（拖动/媒体自适应）→ 锁定文件图标跟随（双向锚定防分家）：
-    // 图标 positions/bounds 与 Viewer rect 保持左上对齐，刷新/整理/恢复时不再错位
-    if (App.InternalViewer && typeof App.InternalViewer.setMoveListener === 'function') {
-      App.InternalViewer.setMoveListener(function (/** @type {any} */ inst) {
-        const path = inst && typeof inst.getPath === 'function' ? inst.getPath() : null
-        const rect = inst && typeof inst.getRect === 'function' ? inst.getRect() : null
-        if (!path || !rect) return
-        C.positions[path] = { x: rect.x, y: rect.y }
-        if (C.bounds[path]) {
-          C.bounds[path] = { x: rect.x, y: rect.y, w: C.bounds[path].w, h: C.bounds[path].h }
-        }
-        const node = C.iconEls[path]
-        if (node) {
-          node.style.left = rect.x + 'px'
-          node.style.top = rect.y + 'px'
-        }
+        _syncEntityRender()
       })
     }
   }
 
+  // 桌面实体集合 diff：与上次集合比较，变化则重渲染网格。
+  // 集合来源 = InternalViewer.desktopEntityPaths()（含 canvas 转全屏的实例），
+  // 不用 persist 回调的 viewers 列表（它只含 canvas 态——转全屏时会被误判为关闭）。
+  /** @returns {void} */
+  function _syncEntityRender() {
+    const paths = (App.InternalViewer && typeof App.InternalViewer.desktopEntityPaths === 'function')
+      ? App.InternalViewer.desktopEntityPaths() : []
+    /** @type {Record<string, boolean>} */
+    const next = {}
+    paths.forEach(function (/** @type {string} */ p) { if (p) next[p] = true })
+    const prevKeys = Object.keys(_lastEntityPaths)
+    const nextKeys = Object.keys(next)
+    let changed = prevKeys.length !== nextKeys.length
+    if (!changed) {
+      for (let i = 0; i < nextKeys.length; i++) {
+        if (!_lastEntityPaths[nextKeys[i]]) { changed = true; break }
+      }
+    }
+    _lastEntityPaths = next
+    if (changed && App.DesktopRender && typeof App.DesktopRender.render === 'function') {
+      App.DesktopRender.render()
+      _animateLanding()
+    }
+  }
+
+  // 关闭吸附动画：图标以「Viewer 关闭时的位置」为起点、网格格位为终点，
+  // 经 CSS transition 平滑飞入（260ms）。render 已把图标画在格位——
+  // 立即施加 translate(起点-终点) 使视觉上从 Viewer 位置开始，下一帧清除
+  // transform → 过渡到 0 即飞入格位。原位关闭（位移 < 1px）跳过。
+  /** @returns {void} */
+  function _animateLanding() {
+    const land = _pendingLand
+    _pendingLand = null
+    if (!land) return
+    const node = C.iconEls[land.path]
+    const p = C.positions[land.path]
+    if (!node || !p) return
+    const dx = land.x - p.x
+    const dy = land.y - p.y
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return
+    node.classList.add('desktop-icon-landing')
+    node.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'
+    // 下一帧清除 transform → transition 飞入格位；动画结束后清理 class（防
+    // 残留 transition 拖慢后续 picked-up 缩放）
+    C._raf(function () {
+      node.style.transform = ''
+    })
+    setTimeout(function () {
+      node.classList.remove('desktop-icon-landing')
+    }, 320)
+  }
+
   // 恢复上次会话的画布态 Viewer（仅桌面空间；由 desktop-persist refresh 列表加载后调用）。
   // 幂等：已在内存的路径跳过（refresh 重复调用/目录往返不重复开）；文件不存在跳过。
+  // 位置真相 = 持久化的 Viewer 矩形（ViewerStore）；图标不渲染（打开态），
+  // positions 中的残留网格位置关闭时被落位覆盖——无贴窗对齐（历史「两个实体」协调代码）。
   /** @returns {void} */
   function restoreViewers() {
     if (C.isFolderView()) return
@@ -90,48 +143,87 @@ App.DesktopViewerLink = (function () {
         onFallback: function () {
           App.FileAPI.openExternal(rec.path).catch(function () {})
         },
-        onClose: function (/** @type {string} */ path) {
-          if (path) C._lockedPaths.delete(path)
-          App.DesktopRender.updateLockedVisual()
-        }
+        onClose: handleViewerClosed
       })
-      C._lockedPaths.add(rec.path)
-      // 双向锚定：恢复的 Viewer 窗口左上 = 图标位置（图标可能在会话间被整理/拖动过，
-      // 以 Viewer rect 为窗口真相、图标贴窗对齐——修复历史数据分家/重叠）
-      C.positions[rec.path] = { x: rect.x, y: rect.y }
-      if (C.bounds[rec.path]) {
-        C.bounds[rec.path] = { x: rect.x, y: rect.y, w: C.bounds[rec.path].w, h: C.bounds[rec.path].h }
-      }
-      const node = C.iconEls[rec.path]
-      if (node) {
-        node.style.left = rect.x + 'px'
-        node.style.top = rect.y + 'px'
-      }
-      App.DesktopRender.updateLockedVisual()
     })
   }
 
-  // 关闭「选中的」Viewer + 解除其文件锁定（唯一出口：FAB 关闭预览）。
-  // 目录切换走 applyCameraForPath → suspendCanvas/resumeCanvas（跨目录保留），不经此处。
-  function closeViewer() {
-    const inst = App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function'
-      ? App.InternalViewer.selectedInstance() : null
-    if (!inst) return
-    const path = inst.getPath()
-    App.InternalViewer.closeById(inst.id)
-    if (path) C._lockedPaths.delete(path)
-    App.DesktopRender.updateLockedVisual()
-    App.DesktopRender.syncFab()
+  // Viewer 关闭（文件「打开」态结束）：Viewer 变回图标——窗口矩形左上吸附最近
+  // 网格格，被占则避让到最近空格（BFS，落位文件让位——不顶开桌上已有图标）。
+  // 图标重现由 persist 监听的实体集合 diff 触发（close → _notifyPersist）。
+  // folder 容器（全屏预览随退出关闭）无持久布局，跳过落位。
+  /** @param {string} path @param {{x: number, y: number, w: number, h: number} | null} [rect] @returns {void} */
+  function handleViewerClosed(path, rect) {
+    if (!path || C.isFolderView() || !rect) return
+    if (!App.DesktopGrid) return
+    // 被占格子 = 当前在网格渲染的图标（bounds 权威）；打开态文件不在其中，不挡落位
+    /** @type {Set<string>} */
+    const taken = new Set()
+    Object.keys(C.bounds).forEach(function (k) {
+      if (k === path) return
+      const c = App.DesktopGrid.worldToCell(C.bounds[k].x, C.bounds[k].y)
+      taken.add(c.cx + ',' + c.cy)
+    })
+    const snapped = App.DesktopGrid.snapToGrid(rect.x, rect.y)
+    const sc = App.DesktopGrid.worldToCell(snapped.x, snapped.y)
+    const free = App.DesktopGrid.findFreeCell(sc.cx, sc.cy, taken)
+    C.positions[path] = App.DesktopGrid.cellToWorld(free.cx, free.cy)
+    // 记录落位动画起点（Viewer 关闭时的窗口位置）；渲染后由 _animateLanding 播放
+    _pendingLand = { path: path, x: rect.x, y: rect.y }
+    if (App.DesktopPersist && typeof App.DesktopPersist.saveLayout === 'function') {
+      App.DesktopPersist.saveLayout()
+    }
   }
 
-  // 锁定判断（actions.js 用）：路径是否被任一 Viewer 锁定
+  // 关闭 C.selection 中的 Viewer（批量关闭：FAB「关闭预览」操作 C.selection 内的 viewer 路径）。
+  // 关闭链：inst.close → onClose(handleViewerClosed 落位) → persist 监听集合 diff → 网格重渲染。
+  // 关闭后 viewer 路径从 C.selection 移除；保留文件路径（文件仍选中）。
+  // 目录切换走 applyCameraForPath → suspendCanvas/resumeCanvas（跨目录保留），不经此处。
+  /** @returns {void} */
+  function closeViewer() {
+    if (!App.InternalViewer || typeof App.InternalViewer.getByPath !== 'function') return
+    const toClose = Array.from(C.selection).filter(function (p) {
+      return App.InternalViewer.hasPath(p)
+    })
+    if (!toClose.length) return
+    // 先记录要关闭的 viewer 路径，再关闭实例（关闭后 hasPath 返回 false，不能事后查询）
+    const closedSet = new Set(toClose)
+    toClose.forEach(function (p) {
+      const inst = App.InternalViewer.getByPath(p)
+      if (inst) App.InternalViewer.closeById(inst.id)
+    })
+    // viewer 路径从 C.selection 移除（closeById 触发实体 diff → 图标落位重现）
+    C.selection = new Set(Array.from(C.selection).filter(function (p) {
+      return !closedSet.has(p)
+    }))
+    if (App.DesktopRender) {
+      App.DesktopRender.applySelection()
+      App.DesktopRender.syncFab()
+    }
+  }
+
+  // 文件「打开」态判定（actions/move-target 的禁改检查用）：
+  // 派生态——InternalViewer 存在该路径的打开实例（任意模式，含 folder 全屏预览）。
   /** @param {string} path @returns {boolean} */
   function isLockedPath(path) {
-    return C._lockedPaths.has(path)
+    return !!(App.InternalViewer && typeof App.InternalViewer.hasPath === 'function' &&
+      App.InternalViewer.hasPath(path))
   }
 
   /** @returns {Array<string>} */
-  function getLockedPaths() { return Array.from(C._lockedPaths) }
+  function getLockedPaths() {
+    if (!App.InternalViewer || typeof App.InternalViewer.list !== 'function') return []
+    return App.InternalViewer.list()
+      .filter(function (/** @type {any} */ inst) { return inst.isOpen() })
+      .map(function (/** @type {any} */ inst) { return inst.getPath() })
+  }
+
+  // 文件是否为桌面实体态（canvas / canvas 转全屏）：渲染/整理据此让文件退出网格
+  /** @param {string} path @returns {boolean} */
+  function isDesktopEntityPath(path) {
+    return !!(App.InternalViewer && typeof App.InternalViewer.isDesktopEntityPath === 'function' &&
+      App.InternalViewer.isDesktopEntityPath(path))
+  }
 
   // 重命名后布局 key 迁移：positions/bounds 以完整路径为 key，
   // 旧 key → 新 key，否则新名字刷新后回退自动排布丢位置。随后重绘。
@@ -187,8 +279,10 @@ App.DesktopViewerLink = (function () {
     init: init,
     restoreViewers: restoreViewers,
     closeViewer: closeViewer,
+    handleViewerClosed: handleViewerClosed,
     isLockedPath: isLockedPath,
     getLockedPaths: getLockedPaths,
+    isDesktopEntityPath: isDesktopEntityPath,
     applyRename: applyRename,
     applyMoves: applyMoves
   }

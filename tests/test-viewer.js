@@ -75,9 +75,22 @@ check(V.cardIsPortrait('text') && V.cardIsPortrait('markdown') && V.cardIsPortra
 check(!V.cardIsPortrait('image') && !V.cardIsPortrait('video') && !V.cardIsPortrait('svg'), 'cardIsPortrait: 图/视频/svg → 原始比例')
 check(!V.cardIsPortrait('website'), 'cardIsPortrait: website → 宽卡片（接近全屏，非 3:4）')
 
-// ── Viewer 态锚点：center = 视觉中心（text/parsed）；file = 文件位置（媒体）──
-check(V.anchorIsCenter('text') && V.anchorIsCenter('markdown') && V.anchorIsCenter('json') && V.anchorIsCenter('html') && V.anchorIsCenter('website'), 'anchorIsCenter: 文本/解析/网站 → 视觉中心')
-check(!V.anchorIsCenter('image') && !V.anchorIsCenter('video') && !V.anchorIsCenter('audio') && !V.anchorIsCenter('svg'), 'anchorIsCenter: 媒体 → 文件位置')
+// ── 原地展开 anchorRect：卡片左上 = 图标位置，超视口夹回可视区 ──
+// 相机 (0,0,1)、视口 412×915、卡片 240×320：图标在视口内 → 原位（左上对齐图标）
+let ar1 = V.anchorRect({ x: 100, y: 200 }, 240, 320, { x: 0, y: 0, zoom: 1 }, 412, 915)
+check(ar1 && ar1.x === 100 && ar1.y === 200, 'anchorRect: 图标在视口内 → 卡片左上 = 图标位置（原地展开）')
+// 图标在屏幕右下角 → 卡片夹回视口（右/下边距 16px，顶部栏预留 96px）
+let ar2 = V.anchorRect({ x: 400, y: 800 }, 240, 320, { x: 0, y: 0, zoom: 1 }, 412, 915)
+check(ar2 && ar2.x === 156 && ar2.y === 579,
+  'anchorRect: 卡片超视口 → 夹回 (156,579)，实际 (' + (ar2 && ar2.x) + ',' + (ar2 && ar2.y) + ')')
+// 图标在左上角 → 卡片被顶部栏预留压到 y=96（x 保持 16 边距内原样）
+let ar3 = V.anchorRect({ x: 16, y: 16 }, 240, 320, { x: 0, y: 0, zoom: 1 }, 412, 915)
+check(ar3 && ar3.x === 16 && ar3.y === 96, 'anchorRect: 顶部图标 → y 夹到 96（顶部栏预留），x 不动')
+// zoom=2：世界距离 = 屏幕 px/2，夹取边界随之缩放；卡片宽超可视区 → 贴最小边
+let ar4 = V.anchorRect({ x: 300, y: 500 }, 240, 320, { x: 0, y: 0, zoom: 2 }, 412, 915)
+check(ar4 && ar4.x === 8 && approx(ar4.y, 129.5),
+  'anchorRect: zoom=2 卡片超宽贴 x=8、y 夹到 129.5，实际 (' + (ar4 && ar4.x) + ',' + (ar4 && ar4.y) + ')')
+check(V.anchorRect(null, 240, 320, { x: 0, y: 0, zoom: 1 }, 412, 915) === null, 'anchorRect: anchor 缺失 → null')
 
 // ── cardSize34：3:4 竖版卡片（约束视口内，中心不变）──
 let s34 = V.cardSize34(412, 915)
@@ -86,67 +99,11 @@ check(s34.w <= 412 - 32 + 1 && s34.h <= 915 - 96 + 1, 'cardSize34 约束在视�
 s34 = V.cardSize34(100, 100)
 check(s34.w >= 200 && s34.h >= 160, 'cardSize34 下限钳制（MIN_W/MIN_H）')
 
-// ── visualCenter：相机视觉中心世界坐标 ──
-let vc = V.visualCenter({ x: 100, y: 50, zoom: 2 }, 412, 915)
-check(approx(vc.x, 100 + 412 / 4) && approx(vc.y, 50 + 915 / 4), 'visualCenter = 相机左上角 + 视口/(2·zoom)')
-check(V.visualCenter(null, 412, 915) === null, 'visualCenter 相机缺失 → null 降级')
-
-// ── 拖动手柄：handleScreenRect（屏幕坐标，固定尺寸不随 zoom）──
-// 卡片世界 rect {x:100,y:200,w:200,h:100}，相机 (0,0,1)：手柄屏幕矩形位于卡片底部中心下方
-let hs1 = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1 })
-check(hs1 && hs1.w === 36 && hs1.h === 6, 'handleScreenRect 屏幕尺寸固定 36×6')
-check(approx(hs1.x, 100 + 200 / 2 - 18) && approx(hs1.y, 200 + 100 + 14), 'handleScreenRect 位置 = 卡片底部中心 + 间距 14px')
-// zoom=2：世界→屏幕翻倍，但手柄屏幕尺寸仍 36×6（位置随之缩放，间距 14px 恒定）
-let hs2 = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 2 })
-check(hs2 && hs2.w === 36 && hs2.h === 6, 'handleScreenRect zoom=2 屏幕尺寸仍固定 36×6')
-check(approx(hs2.x, (100 + 100) * 2 - 18) && approx(hs2.y, (200 + 100) * 2 + 14), 'handleScreenRect zoom=2 位置随世界坐标换算')
-check(V.handleScreenRect(null, { x: 0, y: 0, zoom: 1 }) === null, 'handleScreenRect 卡片 rect 缺失 → null')
-
-// ── 拖动手柄：handleWorldRect（世界坐标命中矩形，与屏幕矩形互逆）──
-let hw1 = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1 })
-check(hw1 && approx(hw1.w, 36) && approx(hw1.h, 6), 'handleWorldRect zoom=1 世界尺寸 = 屏幕尺寸')
-check(approx(hw1.x + hw1.w / 2, 200) && approx(hw1.y, 314), 'handleWorldRect 中心 = 卡片底部中心，顶 = 底部+14px')
-let hw2 = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 2 })
-check(hw2 && approx(hw2.w, 18) && approx(hw2.h, 3), 'handleWorldRect zoom=2 世界尺寸 = 屏幕尺寸/zoom（命中矩形随画布缩放）')
-check(approx(hw2.y, 307), 'handleWorldRect zoom=2 间距也按 /zoom（屏幕恒定 14px）')
-
-// ── 拖动手柄：rotation=90（画布顺时针旋转）──
-// 卡片世界 rect {x:100,y:200,w:200,h:100}，相机 (0,0,1,90)，视口 360×640：
-// 旋转后卡片视觉底部 = 原右边缘中心 (300, 250) → 未旋转屏幕 (300,250)
-// → 绕中心 (180,320) 顺时针 90°：(x,y) → (-y, x) 相对中心
-//   dx=300-180=120, dy=250-320=-70 → (70, 120) + (180,320) = (250, 440)
-//   手柄 y 再 +GAP → (250-18, 440+14) = (232, 454)
-const hsRot = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1, rotation: 90 }, 360, 640)
-check(hsRot && approx(hsRot.x, 250 - 18) && approx(hsRot.y, 440 + 14),
-  'handleScreenRect rotation=90 手柄贴卡片视觉底部（原右边缘中心绕中心旋转）')
-// handleWorldRect rotation=90：需要 vw/vh 计算旋转中心，
-// 先算屏幕矩形再逆变换回世界坐标，屏幕 36×6 → 世界 6×36（宽高互换）
-const hwRot = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1, rotation: 90 }, 360, 640)
-check(hwRot && approx(hwRot.w, 6) && approx(hwRot.h, 36),
-  'handleWorldRect rotation=90 世界尺寸交换（宽=HANDLE_H, 高=HANDLE_W）')
-// handleWorldRect 与 handleScreenRect 互逆：screenToWorld(handleScreenRect 中心) 落入命中矩形
-const hsRotCenter = { x: hsRot.x + hsRot.w / 2, y: hsRot.y + hsRot.h / 2 }
-const _cam90 = { x: 0, y: 0, zoom: 1, rotation: 90 }
-const _cx = 360 / 2, _cy = 640 / 2
-const _lx = (hsRotCenter.y - _cy) + _cx
-const _ly = -(hsRotCenter.x - _cx) + _cy
-const _wx = _cam90.x + _lx / _cam90.zoom
-const _wy = _cam90.y + _ly / _cam90.zoom
-check(_wx >= hwRot.x && _wx <= hwRot.x + hwRot.w && _wy >= hwRot.y && _wy <= hwRot.y + hwRot.h,
-  'handleWorldRect rotation=90 与 handleScreenRect 互逆（screenToWorld 中心落入命中矩形）')
-// handleWorldRect rotation=90 zoom=2：世界尺寸再除以 zoom
-const hwRot2 = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 2, rotation: 90 }, 360, 640)
-check(hwRot2 && approx(hwRot2.w, 3) && approx(hwRot2.h, 18),
-  'handleWorldRect rotation=90 zoom=2 世界尺寸 = 交换后/z')
-// handleWorldRect rotation=90 无 vw/vh → 退化为旧逻辑（防御路径）
-const hwRotFallback = V.handleWorldRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1, rotation: 90 })
-check(hwRotFallback && hwRotFallback.w > 0 && hwRotFallback.h > 0,
-  'handleWorldRect rotation=90 无 vw/vh 退化（不崩溃）')
-
-// rotation=0 且传了 vw/vh → 行为不变（旋转分支不触发）
-let hsPlain = V.handleScreenRect({ x: 100, y: 200, w: 200, h: 100 }, { x: 0, y: 0, zoom: 1 }, 360, 640)
-check(approx(hsPlain.x, 100 + 100 - 18) && approx(hsPlain.y, 200 + 100 + 14),
-  'handleScreenRect rotation=0 传 vw/vh 行为不变')
+// 拖动手柄已于 2026-08-20 刀 1 删除（交互模型与文件图标统一：选中即可直接拖动，
+// 无需辅助入口）——handleScreenRect/handleWorldRect 纯函数随之移除，不再有手柄测试。
+check(typeof V.handleScreenRect === 'undefined' && typeof V.handleWorldRect === 'undefined' &&
+  typeof V.handleAt === 'undefined' && typeof V.syncHandles === 'undefined',
+  '手柄 API 已整体移除（handleScreenRect/handleWorldRect/handleAt/syncHandles 不存在）')
 
 if (failures > 0) {
   console.error('  [FAIL] viewer 测试 ' + failures + ' 项失败')

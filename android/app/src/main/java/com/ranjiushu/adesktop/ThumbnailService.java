@@ -1,4 +1,4 @@
-/* 缩略图服务：图片采样解码 / 视频首帧提取 → 缩放到 256px 最长边 → JPEG 写磁盘缓存 → 返回 file:// URI。
+/* 缩略图服务：图片采样解码 / 视频首帧提取 → 缩放到 256px 最长边 → JPEG 写磁盘缓存 → 返回 data URI。
  * 缓存 key = path@mtime@size（文件修改后自然失效）；缓存位于 cacheDir/thumbs（系统可清理）。
  * 采样解码控制内存（大图不全量加载）；解码失败回调错误（前端回退类型图标）。
  */
@@ -7,7 +7,6 @@ package com.ranjiushu.adesktop;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
-import android.net.Uri;
 
 import androidx.documentfile.provider.DocumentFile;
 
@@ -44,7 +43,7 @@ class ThumbnailService {
         }
         File cacheFile = thumbCacheFile(path, mtime, size);
         if (cacheFile.exists() && cacheFile.length() > 0) {
-            return Uri.fromFile(cacheFile).toString();
+            return thumbUri(cacheFile);
         }
         Bitmap bmp = isVideoPath(path) ? decodeVideoFrame(resolved) : decodeImageThumb(resolved);
         if (bmp == null) throw new IOException("无法生成缩略图: " + path);
@@ -57,7 +56,26 @@ class ThumbnailService {
             thumb.compress(Bitmap.CompressFormat.JPEG, 82, fos);
             fos.flush();
         }
-        return Uri.fromFile(cacheFile).toString();
+        return thumbUri(cacheFile);
+    }
+
+    /** 返回 data:image/jpeg;base64 URI，彻底规避 WebView file:// / content:// 权限与时效问题。
+     *  缩略图文件小（通常几 KB~几十 KB），base64 开销可接受；缓存命中也直接读文件转 data URI，
+     *  保证 Activity/页面重建后同一张图仍能显示。 */
+    private String thumbUri(File cacheFile) throws IOException {
+        byte[] bytes = readAll(cacheFile);
+        String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+        return "data:image/jpeg;base64," + b64;
+    }
+
+    private byte[] readAll(File f) throws IOException {
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(f);
+             java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = fis.read(buf)) != -1) bos.write(buf, 0, n);
+            return bos.toByteArray();
+        }
     }
 
     /** 缩略图缓存文件：key = 相对路径 + mtime + size 的 hash（文件修改后自然失效） */

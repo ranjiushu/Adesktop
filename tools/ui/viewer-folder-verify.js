@@ -31,6 +31,10 @@ async function main() {
   })
   await page.goto(HTML, { waitUntil: 'networkidle0' })
   await page.waitForFunction(function () { return window.App && document.querySelector('.desktop-icon') }, { timeout: 10000 })
+  // 桩环境首启弹「授权手机存储」对话框——占用返回键优先级，先关掉再验证
+  await page.evaluate(function () {
+    if (App.Dialog && typeof App.Dialog.close === 'function') App.Dialog.close('all-files-dialog-overlay')
+  })
   await page.evaluate(function () { App.Desktop.openItem('docs') })
   await page.waitForFunction(function () { return document.querySelectorAll('.desktop-icon').length === 1 }, { timeout: 5000 })
 

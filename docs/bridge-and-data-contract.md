@@ -92,7 +92,7 @@
 ### 2.1 相机不变式（运行时契约，类型系统拦不住）
 
 - `Camera = {x, y, zoom}`：`x/y` 为**视口左上角对应的世界点**，`zoom` 为缩放因子。
-- `zoom` 范围 `[0.3, 3]`（`ZOOM_MIN` / `ZOOM_MAX`）；NaN 回退 1。
+- `zoom` 范围 `[0.1, 10]`（`ZOOM_MIN` / `ZOOM_MAX`）；NaN 回退 1。
 - 构造一律经 `DesktopCamera.create()`，其内部已钳制；禁止裸写 `{x,y,zoom}`。
 
 ## 三、变更规则（改契约必须同步）

@@ -58,17 +58,24 @@ App.fabSpeedDial = (function () {
         }
         break
       case 'close-preview':
-        // 关闭预览：关闭「选中的」Viewer + 解除文件锁定（Desktop 统一管理）
+        // 关闭预览：批量关闭 C.selection 中的 Viewer（Desktop 统一管理）
         if (App.Desktop && typeof App.Desktop.closeViewer === 'function') {
           App.Desktop.closeViewer()
         }
         collapse()
         return
       case 'fullscreen-preview':
-        // 全屏预览：选中实例进入完整预览（相册式独立新页面）
-        if (App.InternalViewer && typeof App.InternalViewer.selectedInstance === 'function') {
-          const inst = App.InternalViewer.selectedInstance()
-          if (inst && typeof inst.toFullscreen === 'function') inst.toFullscreen()
+        // 全屏预览：从 C.selection 中找到唯一的 Viewer 路径，进入完整预览
+        {
+          const names = App.Desktop && typeof App.Desktop.getSelectionNames === 'function'
+            ? App.Desktop.getSelectionNames() : []
+          const viewerPath = names.find(function (p) {
+            return App.InternalViewer && typeof App.InternalViewer.hasPath === 'function' && App.InternalViewer.hasPath(p)
+          })
+          if (viewerPath && App.InternalViewer) {
+            const inst = App.InternalViewer.getByPath(viewerPath)
+            if (inst && typeof inst.toFullscreen === 'function') inst.toFullscreen()
+          }
         }
         collapse()
         return
@@ -171,20 +178,26 @@ App.fabSpeedDial = (function () {
       const hasClip = App.Clipboard && typeof App.Clipboard.has === 'function' && App.Clipboard.has()
       if (pasteBtn) pasteBtn.style.display = hasClip ? '' : 'none'
     } else if (_state === 'selection') {
-      const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
-        App.InternalViewer.anySelected()
+      // 统一选中模型：C.selection 同时包含文件路径和 Viewer 路径，需分别解析
+      const selArr = App.Desktop && typeof App.Desktop.getSelectionNames === 'function'
+        ? App.Desktop.getSelectionNames() : []
+      const hasViewerPath = App.InternalViewer && typeof App.InternalViewer.hasPath === 'function'
+        ? selArr.some(function (p) { return App.InternalViewer.hasPath(p) }) : false
+      const hasFilePath = selArr.some(function (p) {
+        return !(App.InternalViewer && App.InternalViewer.hasPath(p))
+      })
+      // 恰好只选中 1 个 Viewer（无文件选中）→ 显示全屏预览 + 关闭预览
+      const singleViewer = hasViewerPath && !hasFilePath && selArr.length === 1
       // 回收站守卫：选中含回收站（根目录）→ 隐藏文件操作，只留「打开」；
       // 进入回收站视图（inTrash）→ 禁用 删除/剪切/重命名（只读，防二次删除嵌套）。
-      const selNames = App.Desktop && typeof App.Desktop.getSelectionNames === 'function'
-        ? App.Desktop.getSelectionNames() : []
-      const selHasTrash = selNames.some(function (n) {
+      const selHasTrash = selArr.some(function (n) {
         return App.Desktop && typeof App.Desktop.isTrashPath === 'function' && App.Desktop.isTrashPath(n)
       })
       const inTrash = App.Desktop && typeof App.Desktop.inTrash === 'function' && App.Desktop.inTrash()
-      const fileOps = !viewerSel && !selHasTrash
-      _setBtnVisible(sd, 'open', !viewerSel)
-      _setBtnVisible(sd, 'fullscreen-preview', viewerSel)
-      _setBtnVisible(sd, 'close-preview', viewerSel)
+      const fileOps = hasFilePath && !selHasTrash
+      _setBtnVisible(sd, 'open', hasFilePath && !hasViewerPath)
+      _setBtnVisible(sd, 'fullscreen-preview', singleViewer)
+      _setBtnVisible(sd, 'close-preview', hasViewerPath)
       _setBtnVisible(sd, 'copy', fileOps)
       _setBtnVisible(sd, 'cut', fileOps && !inTrash)
       _setBtnVisible(sd, 'move', fileOps && !inTrash)
@@ -256,9 +269,7 @@ App.fabSpeedDial = (function () {
     const wasOpMode = _state === 'snapshot-operation'
     _state = 'collapsed'
     if (wasSelection) {
-      if (App.InternalViewer && typeof App.InternalViewer.deselectAll === 'function') {
-        App.InternalViewer.deselectAll()
-      }
+      // 统一选中模型：clearSelection 同时清 C.selection（含 Viewer 路径）+ applySelection 同步视觉
       if (App.Desktop && typeof App.Desktop.clearSelection === 'function') {
         App.Desktop.clearSelection()
       }

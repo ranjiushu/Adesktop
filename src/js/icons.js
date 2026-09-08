@@ -51,10 +51,10 @@
     // ── 操作/编辑 ──
     'edit', 'rename', 'refreshCw', 'maximize', 'scissors', 'dragHandle', 'selectInverse', 'externalLink',
     // ── 视图/排列 ──
-    'grid', 'columns', 'layoutTop', 'image', 'sliders', 'filter', 'shuffle', 'swap', 'sortAlpha', 'sortLength', 'sortLines',
+    'grid', 'columns', 'layoutTop', 'image', 'camera', 'sliders', 'filter', 'shuffle', 'swap', 'sortAlpha', 'sortLength', 'sortLines',
     // ── 信息/状态 ──
     'info', 'search', 'settings', 'download', 'eye', 'eyeOff', 'clock', 'history', 'activity', 'barChart',
-    'pin', 'pinOff', 'similar', 'merge', 'target', 'smile', 'sun', 'moon', 'code', 'smartphone', 'wrench',
+    'pin', 'pinOff', 'similar', 'merge', 'target', 'smile', 'sun', 'moon', 'code', 'smartphone', 'wrench', 'rotateCw',
     // ── 学习/媒体 ──
     'bookOpen', 'skipBack', 'play', 'pause', 'skipForward', 'music', 'backup'
   ]

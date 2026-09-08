@@ -1,13 +1,13 @@
-// Viewer 文件锁定生命周期集成测试（修复：锁定文件图标与 Viewer 预览窗口双向锚定）。
-// 背景：锁定文件有双位置源（图标 positions vs Viewer rect），打开时对齐后各自
-// 独立演化 → 拖动图标/拖动 Viewer/整理桌面/避让会让两者分家 → 重叠/占位混乱。
-// 修复语义（Windows 占用式）：
-//   1. 图标拖动 → Viewer 实时跟随（syncRectForPath）
-//   2. Viewer 拖动 → 图标实时跟随（moveListener → positions/bounds/iconEl）
-//   3. 整理桌面跳过锁定文件，其余排布让开其占位格（occupied）
-//   4. 其它文件拖动不能顶开锁定文件（resolvePlacement immovable 钉子户）
-// 驱动方式：真实 Desktop + 真实手势层 + InternalViewer 桩（记录双向同步），
-// touch 事件走完整链路。
+// 文件「打开」态（Viewer 即文件）集成测试（2026-08-20 重构，取代旧「锁定文件单向锚定」）。
+// 旧语义的病：文件打开后网格图标 + 上层窗口两个实体并存，双位置源（positions vs
+// Viewer rect）各自演化 → 分家/重叠，靠单向锚定/钉子户/锁定集合打补丁协调。
+// 新语义：Viewer = 文件的打开状态，同一实体两种形态——
+//   1. 打开：图标退出网格渲染（原格子释放为普通空格），位置真相 = Viewer 矩形
+//   2. Viewer 拖动/移动不回写 positions（无第二套坐标，无需同步）
+//   3. 整理桌面：打开态文件不是网格成员（不参与、不留占位格）
+//   4. 关闭：Viewer 变回图标——窗口位置吸附落位（被占避让），图标重现
+// 驱动方式：真实 Desktop + 真实手势层 + 真实 FileOpener + InternalViewer 桩
+// （实例生命周期 + persist 通知模拟真实 viewer.js 行为），touch 事件走完整链路。
 // 用法: node test-viewer-lock-sync.js [项目路径]   （由 run-tests.sh 调用）
 'use strict'
 
@@ -107,12 +107,12 @@ sandbox.App.bridge = { vibrate: function () {} }
 sandbox.App.toast = { show: function () {} }
 sandbox.App.Dialog = { open: function () {}, close: function () {} }
 sandbox.App.Loading = { showTag: function () {}, hideTag: function () {}, show: function () {}, hide: function () {} }
-sandbox.App.Actions = { moveIntoFolder: function () {} }
 sandbox.App.FileAPI = {
   rootInfo: function () { return Promise.resolve({ rootName: 'Test', mode: 'private', displayPath: '内部存储/Test' }) },
   list: function (p) { return Promise.resolve((fsTree[p || ''] || []).slice()) }
 }
-sandbox.App.HomeStore = { load: function () { return null }, saveHome: function () { return true }, saveFallback: function () { return true } }
+let homeSaveCalls = 0
+sandbox.App.HomeStore = { load: function () { return null }, saveHome: function () { homeSaveCalls++; return true }, saveFallback: function () { return true } }
 sandbox.App.ViewStore = { load: function () { return { viewStyle: 'grid', sortBy: 'name', sortDir: 1 } }, save: function () { return true } }
 sandbox.App.ViewMenu = { setEnabled: function () {} }
 sandbox.App.fabSpeedDial = { setSelection: function () {} }
@@ -121,33 +121,52 @@ sandbox.App.BottomBar = { updateNavButtons: function () {} }
 sandbox.App.Clipboard = { isCut: function () { return false } }
 sandbox.App.ViewerStore = { load: function () { return { viewers: [] } }, save: function () { return true } }
 
-// ── InternalViewer 桩：一个 canvas 实例（a.txt）+ 双向同步记录 ──
-const syncRectCalls = []    // syncRectForPath 调用记录 {path, x, y}
+// ── InternalViewer 桩：实例生命周期模拟真实 viewer.js ──
+// open → 创建 canvas 实例 + persist 通知；closeById → onClose(path, rect) + 移除 + persist 通知
 let persistListenerFn = null
 let moveListenerFn = null
-const viewerRect = { x: 16, y: 16, w: 200, h: 280 }
-const stubInst = {
-  id: 'v1',
-  getMode: function () { return 'canvas' },
-  getPath: function () { return 'a.txt' },
-  getRect: function () { return { x: viewerRect.x, y: viewerRect.y, w: viewerRect.w, h: viewerRect.h } },
-  isSelected: function () { return false },
-  beginDrag: function () { return true },
-  setRectFromIcon: function (x, y) {
-    viewerRect.x = x
-    viewerRect.y = y
-    return true
-  }
+let viewerInstances = []
+let nextViewerId = 1
+function canvasViewerList() {
+  return viewerInstances.map(function (i) {
+    return { path: i.getPath(), name: i.getPath(), kind: 'text', rect: i.getRect() }
+  })
 }
 sandbox.App.InternalViewer = {
   setPersistListener: function (fn) { persistListenerFn = fn },
   setMoveListener: function (fn) { moveListenerFn = fn },
-  syncRectForPath: function (path, x, y) {
-    syncRectCalls.push({ path: path, x: x, y: y })
-    if (path === 'a.txt') return stubInst.setRectFromIcon(x, y)
-    return false
+  open: function (opts) {
+    const anchor = opts.anchor || { x: 0, y: 0 }
+    const rect = opts.rect || { x: anchor.x, y: anchor.y, w: 200, h: 280 }
+    const inst = {
+      id: nextViewerId++,
+      _path: opts.path,
+      _rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+      _onClose: opts.onClose,
+      isOpen: function () { return true },
+      getMode: function () { return 'canvas' },
+      getPath: function () { return this._path },
+      getRect: function () { return { x: this._rect.x, y: this._rect.y, w: this._rect.w, h: this._rect.h } },
+      isDesktopEntity: function () { return true },
+      isSelected: function () { return false },
+      setSelected: function () {}
+    }
+    viewerInstances.push(inst)
+    if (persistListenerFn) persistListenerFn(canvasViewerList())
+    return inst.id
   },
-  handleAt: function () { return null },
+  closeById: function (id) {
+    const inst = viewerInstances.find(function (i) { return i.id === id })
+    if (!inst) return false
+    viewerInstances = viewerInstances.filter(function (i) { return i.id !== id })
+    if (typeof inst._onClose === 'function') inst._onClose(inst._path, inst.getRect())
+    if (persistListenerFn) persistListenerFn(canvasViewerList())
+    return true
+  },
+  list: function () { return viewerInstances.slice() },
+  hasPath: function (p) { return viewerInstances.some(function (i) { return i.getPath() === p }) },
+  isDesktopEntityPath: function (p) { return viewerInstances.some(function (i) { return i.getPath() === p }) },
+  desktopEntityPaths: function () { return viewerInstances.map(function (i) { return i.getPath() }) },
   topmostAt: function () { return null },
   rectHit: function () { return null },
   selectOnly: function () {},
@@ -155,18 +174,12 @@ sandbox.App.InternalViewer = {
   deselectAll: function () {},
   selectedInstance: function () { return null },
   draggingInstance: function () { return null },
-  syncHandles: function () {},
-  showHandles: function () {},
-  hideHandles: function () {},
   fullscreenInstance: function () { return null },
   suspendCanvas: function () {},
   resumeCanvas: function () {},
-  list: function () { return [] },
-  open: function () {},
-  closeById: function () {},
-  closeAll: function () {},
-  count: function () { return 0 },
-  isAnyOpen: function () { return false }
+  closeAll: function () { viewerInstances = [] },
+  count: function () { return viewerInstances.length },
+  isAnyOpen: function () { return viewerInstances.length > 0 }
 }
 
 vm.createContext(sandbox)
@@ -174,93 +187,88 @@ for (const f of ['namespace.js', 'desktop-nav.js', 'double-tap.js', 'desktop-sel
   'folder-sort.js', 'desktop-grid.js', 'folder-layout.js', 'layout-store.js', 'view-store.js',
   'home-store.js', 'desktop-camera.js', 'desktop-gesture.js', 'desktop-core.js', 'desktop-render.js',
   'desktop-browse-mode.js', 'desktop-navigation.js', 'desktop-persist.js', 'desktop-viewer-link.js',
-  'desktop-gesture-handlers.js', 'desktop.js', 'actions.js']) {
+  'desktop-gesture-handlers.js', 'desktop.js', 'file-opener.js', 'desktop-organize.js', 'actions.js']) {
   vm.runInContext(fs.readFileSync(path.join(SRC_DIR, f), 'utf8'), sandbox, { filename: f })
 }
 
 const D = sandbox.App.Desktop
 const C = sandbox.App.DesktopCore
+const VL = sandbox.App.DesktopViewerLink
 function touch(id, x, y) { return { identifier: id, clientX: x, clientY: y } }
 function tev(type, pts, changed) {
   return { type: type, touches: pts, changedTouches: changed || pts, preventDefault: function () {} }
 }
 // 屏幕坐标 → world（viewport top=56，camera (0,0,1)）
 function screen(wx, wy) { return { x: wx, y: wy + 56 } }
+function iconRendered(name) {
+  return createdIcons.some(function (n) { return n.getAttribute('data-name') === name })
+}
 
 ;(async function () {
   D.initGesture()
-  // main.js 里才调用的 ViewerLink.init：注入持久化 + 移动监听（双向锚定接线）
-  sandbox.App.DesktopViewerLink.init()
+  VL.init()   // main.js 里才调用的 ViewerLink.init：注入持久化 + 实体 diff 监听
   await D.refresh()
-  check(createdIcons.length === 2, '根目录渲染 2 个图标')
+  check(createdIcons.length === 2, '根目录渲染 2 个图标（全部关闭态）')
+  check(eq(C.positions['a.txt'], { x: 16, y: 16 }), 'a.txt 自动排布在 (16,16)')
 
-  // ── 场景 1：拖动锁定文件图标 → Viewer 实时跟随（含 drop 网格吸附同步）──
-  C._lockedPaths.add('a.txt')
+  // ── 场景 1：双击打开 → 文件变成 Viewer（图标退出网格，原格子释放）──
   const aCenter = screen(16 + 42, 16 + 38)   // a.txt 图标中心（世界 (58,54)）
-  // tap 选中 a.txt
   viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, aCenter.x, aCenter.y)]))
   viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, aCenter.x, aCenter.y)]))
-  check(D.getSelectionNames().length === 1 && D.getSelectionNames()[0] === 'a.txt', 'tap 选中 a.txt')
-  // 拖：mv1 微移触发 drag-start（起点=此处），mv2 产生 60px 世界增量 → 吸附到新格
-  const mv1 = { x: aCenter.x + 8, y: aCenter.y }
-  const mv2 = { x: aCenter.x + 68, y: aCenter.y + 68 }
   viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, aCenter.x, aCenter.y)]))
-  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, mv1.x, mv1.y)]))
-  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, mv2.x, mv2.y)]))
-  check(syncRectCalls.length >= 1, '图标拖动 → syncRectForPath 被调用')
-  check(eq(viewerRect, { x: 76, y: 84, w: 200, h: 280 }),
-    '拖动中 Viewer 实时跟随（未吸附 76,84），实际 (' + viewerRect.x + ',' + viewerRect.y + ')')
-  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, mv2.x, mv2.y)]))
-  check(eq(viewerRect, { x: 116, y: 132, w: 200, h: 280 }),
-    'drop 网格吸附后 Viewer 同步到 (116,132)，实际 (' + viewerRect.x + ',' + viewerRect.y + ')')
-  check(eq(C.positions['a.txt'], { x: 116, y: 132 }), '图标拖动 → positions 落位 (116,132)')
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, aCenter.x, aCenter.y)]))
+  check(viewerInstances.length === 1 && viewerInstances[0].getPath() === 'a.txt', '双击 → a.txt 打开为 Viewer 实例')
+  check(VL.isLockedPath('a.txt') === true, '打开态 = 锁定（派生态，禁改禁移）')
+  check(!iconRendered('a.txt') && iconRendered('b.txt'), '打开后 a.txt 图标退出网格（只剩 b.txt）')
+  check(!C.bounds['a.txt'], '打开态文件无命中边界（点选/框选/拖动都碰不到）')
 
-  // ── 场景 2：Viewer 拖动 → 图标实时跟随 ──
-  const vBefore = C.positions['a.txt']
-  moveListenerFn(stubInst)   // 模拟 Viewer 拖动回调（getRect 返回当前 viewerRect）
-  check(eq(C.positions['a.txt'], vBefore), 'Viewer 拖动回调：位置未变时幂等（positions 不变）')
-  // 模拟 Viewer 拖到新位置
-  viewerRect.x = 150
-  viewerRect.y = 260
-  moveListenerFn(stubInst)
-  check(eq(C.positions['a.txt'], { x: 150, y: 260 }), 'Viewer 拖到 (150,260) → 图标 positions 同步 (150,260)')
-  const aNode = C.iconEls['a.txt']
-  check(aNode && aNode.style.left === '150px' && aNode.style.top === '260px',
-    'Viewer 拖动 → 图标 DOM 同步（left/top 150/260）')
+  // ── 场景 2：Viewer 拖动不回写 positions（无第二套坐标，桌面层不订阅 onMove）──
+  check(moveListenerFn === null, 'Viewer 位置变化监听未注入（Viewer 矩形自身即位置真相）')
+  const aPosStale = C.positions['a.txt']
+  viewerInstances[0]._rect.x = 300
+  viewerInstances[0]._rect.y = 260
+  check(eq(C.positions['a.txt'], aPosStale), 'Viewer 窗口移动后 positions 不动（关闭时按窗口落位）')
 
-  // ── 场景 3：整理桌面跳过锁定文件（图标与 Viewer 不再分家）──
-  const aPosBefore = C.positions['a.txt']
+  // ── 场景 3：整理桌面——打开态文件不是网格成员（不参与、不留占位格）──
   sandbox.App.Actions.organizeDesktop()
   await new Promise(function (res) { setTimeout(res, 30) })   // refresh 异步完成
-  check(eq(C.positions['a.txt'], aPosBefore), '整理桌面：锁定文件 a.txt 保持原位 (150,260)')
-  // 锁定文件占位格不被其它条目占用（a 的位置不是网格格点 → 无占用断言改为：b 不与 a 重叠）
-  const bPos = C.positions['b.txt']
-  const overlap = bPos && aPosBefore &&
-    !(bPos.x + 84 <= aPosBefore.x || aPosBefore.x + 84 <= bPos.x ||
-      bPos.y + 76 <= aPosBefore.y || aPosBefore.y + 76 <= bPos.y)
-  check(!overlap, '整理桌面：b.txt 不与锁定文件 a.txt 重叠')
+  check(eq(C.positions['a.txt'], aPosStale), '整理桌面：打开态 a.txt 位置不动（不参与整理）')
+  check(eq(C.positions['b.txt'], { x: 14, y: 16 }), '整理桌面：b.txt 排到首格 (14,16)（a 的原格无占位保护）')
+  check(!iconRendered('a.txt'), '整理后 a.txt 仍无图标（仍处打开态）')
+  check(homeSaveCalls === 0, '整理桌面不写回 Home 锚点（saveHome 未被调用——不重设窗口为 Home）')
 
-  // ── 场景 4：钉子户避让——拖动 b.txt 到锁定文件位置，a 不让位 ──
-  const bCenter = screen(bPos.x + 42, bPos.y + 38)
-  const nearStart = { x: bCenter.x + 8, y: bCenter.y }   // 微移触发 drag-start（起点=此处）
-  const dragTo = screen(150 + 42, 260 + 38)              // 目标：a 图标中心（世界 (192,298)）
-  // 选中 b
-  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, bCenter.x, bCenter.y)]))
-  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, bCenter.x, bCenter.y)]))
-  // 拖 b：位移 = dragTo - nearStart（drag-start 已含 8px 微移）
-  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, bCenter.x, bCenter.y)]))
-  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, nearStart.x, nearStart.y)]))
-  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, dragTo.x, dragTo.y)]))
-  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, dragTo.x, dragTo.y)]))
-  check(eq(C.positions['a.txt'], { x: 150, y: 260 }), '钉子户：拖动 b 后锁定文件 a 保持原位 (150,260)')
-  const bAfter = C.positions['b.txt']
-  check(bAfter && !(bAfter.x === 150 && bAfter.y === 260), '钉子户：b 与锁定文件冲突时让位（不占 a 的格）')
+  // ── 场景 4：关闭 → Viewer 变回文件（窗口位置吸附落位，图标重现）──
+  sandbox.App.InternalViewer.closeById(viewerInstances[0].id)
+  check(VL.isLockedPath('a.txt') === false, '关闭后锁定自动解除（实例消失，派生态）')
+  check(eq(C.positions['a.txt'], { x: 316, y: 248 }),
+    '关闭落位：窗口左上 (300,260) 吸附网格 (316,248)，实际 ' + JSON.stringify(C.positions['a.txt']))
+  check(iconRendered('a.txt'), '关闭后 a.txt 图标重现（实体集合 diff → 重渲染）')
+  const aNode = C.iconEls['a.txt']
+  check(aNode && aNode.style.left === '316px' && aNode.style.top === '248px',
+    '重现图标落在吸附位置 (316,248)')
+
+  // ── 场景 5：关闭落位避让——期望格被占 → 最近空格 ──
+  // 再打开 a.txt，把 b.txt 挪到 a 的窗口吸附格上，关闭时 a 应避让到右邻
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 316 + 42, 248 + 38 + 56)]))
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, 316 + 42, 248 + 38 + 56)]))
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, 316 + 42, 248 + 38 + 56)]))
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, 316 + 42, 248 + 38 + 56)]))
+  check(viewerInstances.length === 1 && !iconRendered('a.txt'), '再次打开 a.txt（图标退出）')
+  // b.txt 占据 a 的期望格（316,248)：直接摆位 + 重渲染建立 bounds
+  C.positions['b.txt'] = { x: 316, y: 248 }
+  sandbox.App.DesktopRender.render()
+  viewerInstances[0]._rect.x = 300
+  viewerInstances[0]._rect.y = 260
+  sandbox.App.InternalViewer.closeById(viewerInstances[0].id)
+  check(eq(C.positions['a.txt'], { x: 416, y: 248 }),
+    '期望格被 b.txt 占用 → 避让到右邻空格 (416,248)，实际 ' + JSON.stringify(C.positions['a.txt']))
+  check(eq(C.positions['b.txt'], { x: 316, y: 248 }), '静止图标 b.txt 不动')
 
   if (failures > 0) {
     console.error('  [FAIL] test-viewer-lock-sync ' + failures + ' 项失败')
     process.exit(1)
   }
-  console.log('  [ok] test-viewer-lock-sync 锁定文件双向锚定回归全部通过')
+  console.log('  [ok] test-viewer-lock-sync 文件「打开」态回归全部通过')
 })().catch(function (e) {
   console.error('  [FAIL] test-viewer-lock-sync 异常: ' + e.message)
   console.error(e.stack)

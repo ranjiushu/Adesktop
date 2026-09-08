@@ -162,13 +162,13 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 |------|------|
 | 输入 | `item = {name, path}`；anchor（桌面空间世界坐标，null = 沉浸式） |
 | 前置 | 文件存在；类型可由 `FileOpener.kindFor` 分派 |
-| 成功 | 内部 Viewer 打开（text/markdown/json/html/svg/image/video/audio/website）→ 文件路径**加入锁定集合**（Windows 式：锁定期间 rename/copy/cut/delete 拒绝，含锁定目录内子项）；外部应用（unknown 类型）→ `openExternal` 分派，**不锁定**；`.desktop` 快捷方式 → launchApp / website iframe，不锁定 |
+| 成功 | 内部 Viewer 打开（text/markdown/json/html/svg/image/video/audio/website）→ 文件进入「打开」态：**图标退出网格**（原格子释放为普通空格），rename/copy/cut/delete/move 拒绝（锁定为派生态：`isLockedPath` = InternalViewer 存在该路径实例，含锁定目录内子项）；外部应用（unknown 类型）→ `openExternal` 分派，**不进入打开态**；`.desktop` 快捷方式 → launchApp / website iframe（website 同样进入打开态） |
 | 失败 | 内部预览失败 → onFallback 交外部应用；无可用应用 → toast「无法打开」 |
-| 取消 | Viewer 关闭（FAB 关闭预览）→ 解除文件锁定（`closeViewer`） |
-| UI 状态 | 锁定视觉同步（`updateLockedVisual`/syncFab）；关闭后解锁 |
+| 取消 | Viewer 关闭（FAB 关闭预览）→ `handleViewerClosed` 按窗口位置吸附落位回网格（被占避让 + 落位动画），图标重现 |
+| UI 状态 | 打开态 = 图标消失（实体集合 diff 触发重渲染）；关闭后图标落位重现 |
 | 后端 | `read`（文本类）/ `resolveUri`（媒体流式）/ `openExternal`（ACTION_VIEW）/ `openUrl`（浏览器兜底） |
 
-现有测试：`tests/test-file-opener.js`（kindFor 分派）、`tests/test-desktop-viewerlink-lock.js`（锁定）。
+现有测试：`tests/test-file-opener.js`（kindFor 分派）、`tests/test-desktop-viewerlink-lock.js`（打开态生命周期：派生锁定/落位/集合 diff 渲染/落位动画）。
 
 ## 三、命名规划器（唯一入口）
 
@@ -191,7 +191,7 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 | 7 | 唯一入口 uniqueName 三处共用 + planPaste 键改 name | test-clipboard.js / test-actions.js | **已修（2026-08-17）** |
 | 8 | rename 跨目录拒绝（两后端一致） | test-actions.js（newName 含 / 拒绝）+ FileStore.java 同目录校验 | **已修（2026-08-17）** |
 | 9 | delete 进 .trash 重名加序号 / 回收站自身不可删 / 未授权拒绝 | test-actions.js | 已有 |
-| 10 | open 锁定 / 解锁 | test-desktop-viewerlink-lock.js | 已有 |
+| 10 | open 打开态生命周期（派生锁定 / 落位 / 图标退场重现） | test-desktop-viewerlink-lock.js + test-viewer-lock-sync.js | 已有 |
 | 11 | SAF/private 双后端等价（Operation Contract Test） | SAF move 改名语义已修（TransferEngine leafOf 分支）；mtime 差异已文档化接受；Java 侧依赖 Android，退化为真机手工验收矩阵（待生成） | 部分完成 |
 
 ## 五、变更规则

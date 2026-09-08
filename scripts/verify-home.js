@@ -4,8 +4,9 @@
 //        根目录含 docs 文件夹，boot refresh 即成功）：
 //    1. Home 按钮存在且根目录下可用，初始无快照标记，相机 (0,0,1)
 //    2. 双击进入子文件夹 → Home 禁用；点上级目录 → 恢复可用
-//    3. 双指平移 + 捏合偏离 → 长按 Home（650ms）→ 快照写入 localStorage
-//       + toast（快照与 Home 锚点彻底分离：不触发 Home 锚点类）
+//    3. 双指平移 + 捏合偏离 → 长按快照按钮（650ms）→ 快照写入 localStorage
+//       + toast（快照与 Home 锚点彻底分离：不触发 Home 锚点类）；
+//       Home 按钮长按 = 记录 Home 锚点（不在此场景，见 verify-rotate）
 //    4. 再次平移偏离 → 点按 Home → 相机回出厂（无锚点时；快照不影响 Home）
 //    5. 设为默认视角 → fallback 写入，home 保留
 //    6. 全程零 pageerror
@@ -145,6 +146,7 @@ async function main() {
 
   // ── 1. Home 按钮存在、根目录可用、无快照标记、相机 (0,0,1) ──
   const homeRect = await rect('#bb-btn-home')
+  const snapRect = await rect('#bb-btn-snapshot')
   const homeState = await page.evaluate(() => {
     const b = document.getElementById('bb-btn-home')
     return { disabled: b.disabled, hasClass: b.classList.contains('home-has-snapshot') }
@@ -175,7 +177,7 @@ async function main() {
     fail('根目录 docs 图标未渲染')
   }
 
-  // ── 3. 平移 + 捏合偏离 → 长按 Home 记录快照 ──
+  // ── 3. 平移 + 捏合偏离 → 长按快照按钮记录快照 ──
   const vp = await rect('#desktop-viewport')
   await pan(client, vp.x, vp.y + 200, 120, 0)
   await pinchIn(client, vp.x, vp.y + 200)
@@ -183,18 +185,18 @@ async function main() {
   if (tPan && tPan.s > 1.3) pass('捏合后 zoom ≈ ' + tPan.s.toFixed(2))
   else fail('捏合后 zoom 断言', JSON.stringify(tPan))
 
-  await tap(client, homeRect.x, homeRect.y, 650)  // 长按 650ms > 500ms
+  await tap(client, snapRect.x, snapRect.y, 650)  // 长按快照按钮 650ms > 500ms
   const snapBundle = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
   })
   const snap = snapBundle && snapBundle.portrait && snapBundle.portrait.groups[0] && snapBundle.portrait.groups[0].snapshots && snapBundle.portrait.groups[0].snapshots[0]
   if (snap && snap.camera && typeof snap.camera.zoom === 'number' && snap.camera.zoom > 1.3) {
-    pass('长按 Home → 快照写入 localStorage（zoom=' + snap.camera.zoom.toFixed(2) + '）')
+    pass('长按快照按钮 → 快照写入 localStorage（zoom=' + snap.camera.zoom.toFixed(2) + '）')
   } else {
     fail('快照写入断言', JSON.stringify(snapBundle))
   }
   const afterLong = await page.evaluate(() => document.getElementById('bb-btn-home').classList.contains('home-has-snapshot'))
-  if (!afterLong) pass('长按 Home 记录快照 → Home 锚点类不出现（快照与 Home 彻底分离）')
+  if (!afterLong) pass('长按快照按钮记录快照 → Home 锚点类不出现（快照与 Home 彻底分离）')
   else fail('快照不应触发 Home 锚点类')
   const toast1 = await page.evaluate(() => { const t = document.querySelector('.toast'); return t ? t.textContent : '' })
   if (toast1.indexOf('已记录快照') >= 0) pass('长按 toast: ' + toast1)
@@ -395,6 +397,25 @@ async function main() {
   } else {
     fail('图标位置保持断言', 'expect=' + JSON.stringify(docsPos) + ' got=' + JSON.stringify(docsAfterReload))
   }
+
+  // ── 5d. 长按 Home 按钮 → 记录新的 Home 锚点（HomeStore），Home 高亮 ──
+  //（与快照彻底分离：长按 Home 写 HomeStore，不写快照；快照由快照按钮长按记录，见场景 3）
+  const homeBtn = await rect('#bb-btn-home')
+  await tap(client, homeBtn.x, homeBtn.y, 650)   // 长按 650ms > 500ms
+  await sleep(400)
+  const homeStoreD = await page.evaluate(() => {
+    try { return JSON.parse(localStorage.getItem('desktop.home.v1')) } catch (e) { return null }
+  })
+  const appHome = homeStoreD && homeStoreD.home
+  if (appHome && typeof appHome.x === 'number' && isFinite(appHome.x) &&
+      typeof appHome.zoom === 'number' && isFinite(appHome.zoom)) {
+    pass('长按 Home 按钮 → HomeStore 锚点写入（x=' + appHome.x.toFixed(1) + ', zoom=' + appHome.zoom.toFixed(2) + '）')
+  } else {
+    fail('Home 锚点写入断言', JSON.stringify(homeStoreD))
+  }
+  const homeMarked = await page.evaluate(() => document.getElementById('bb-btn-home').classList.contains('home-has-snapshot'))
+  if (homeMarked) pass('长按 Home 按钮 → Home 按钮高亮（home-has-snapshot）')
+  else fail('长按 Home 后 Home 按钮应高亮')
 
   // ── 6. 零 pageerror ──
   if (pageErrors.length === 0) pass('全程零 pageerror')

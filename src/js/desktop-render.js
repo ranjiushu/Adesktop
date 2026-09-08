@@ -1,9 +1,11 @@
 /* desktop-render.js：桌面渲染与选中同步（App.DesktopRender）。
  * 拆分自 desktop.js 的渲染域：自动排布（layout）+ 图标网格渲染（render）+
  * 选中态视觉同步（applySelection/syncFab/clearSelection/hasSelection）+
- * 锁定视觉（updateLockedVisual）+ 选中查询（getSelectionNames/getSelectionEntries）。
+ * 选中查询（getSelectionNames/getSelectionEntries）。
+ * 「打开」态文件（Viewer 即文件）在 layout 阶段退出网格渲染，原格子释放为
+ * 普通空格（desktop-viewer-link.isDesktopEntityPath 判定）。
  * 只读写 App.DesktopCore 状态，不持有业务编排；Viewer 联动模块经
- * App.DesktopRender.syncFab/updateLockedVisual 复用本模块。
+ * App.DesktopRender.syncFab 复用本模块。
  * 依赖: namespace.js, desktop-core.js, desktop-grid.js, folder-sort.js,
  *       folder-layout.js, type-icons.js, thumbnail.js, shortcut.js, clipboard.js
  * 导出: App.DesktopRender
@@ -24,12 +26,23 @@ App.DesktopRender = (function () {
     img.decoding = 'async'
     img.onerror = function () {
       if (iconEl && iconEl.parentNode) {
-        iconEl.innerHTML = App.TypeIcons.svgFor(kind)
+        iconEl.innerHTML = App.TypeIcons.kindSvg(kind)
       }
     }
     img.src = uri
     iconEl.innerHTML = ''
     iconEl.appendChild(img)
+  }
+
+  // 图标应用延迟到 DOM 提交后：render() 在把 card appendChild 进 grid **之前**就发起
+  // request/requestShortcutIcon；而 Thumbnail 对缓存 ready 的条目会**同步**触发 onReady，
+  // 此刻 icon.parentNode 还是 null，setThumbImg 的 if(icon.parentNode) 守卫会把它跳过 →
+  // 图标停留在类型占位（首次渲染是异步读文件、读完后 DOM 已挂载所以能显示，此后重渲染
+  // 命中 ready 缓存就回落类型图标——"显示不稳定"的根因）。延后一个宏任务再应用，DOM 已提交。
+  function deferApplyIcon(iconEl, uri, kind) {
+    setTimeout(function () {
+      if (iconEl && iconEl.parentNode) setThumbImg(iconEl, uri, kind)
+    }, 0)
   }
 
   // 自动排布：
@@ -59,16 +72,22 @@ App.DesktopRender = (function () {
       }
     }
     let cols = Math.max(3, Math.min(8, Math.floor(C.viewportWidth() / App.DesktopGrid.GRID_W)))
-    return items.map(function (item, i) {
+    const out = []
+    items.forEach(function (item, i) {
       // 虚拟回收站 key = trashName（'.trash'，相对桥层根）；其余 = 当前目录 + 名
       const isVirtualTrash = C.state.mode === 'all-files' && item.name === C.state.trashName
       const key = isVirtualTrash ? C.state.trashName : C.fullPath(item.name)
+      // 文件「打开」态（Viewer 即文件）：图标退出网格，原格子释放为普通空格
+      // （不预留、不占位——整理自然填掉，关闭时按 Viewer 窗口位置重新落位）
+      if (App.DesktopViewerLink && typeof App.DesktopViewerLink.isDesktopEntityPath === 'function' &&
+          App.DesktopViewerLink.isDesktopEntityPath(key)) return
       let pos = C.positions[key]
       if (!pos) {
         pos = App.DesktopGrid.cellToWorld(i % cols, Math.floor(i / cols))
       }
-      return { item: item, key: key, x: pos.x, y: pos.y }
+      out.push({ item: item, key: key, x: pos.x, y: pos.y })
     })
+    return out
   }
 
   function render() {
@@ -121,16 +140,16 @@ App.DesktopRender = (function () {
         // 应用快捷方式：类型图标兜底 → 读内嵌 base64 图标渐进替换（自包含，随文件迁移）
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor('shortcut') : '📄'
         App.Thumbnail.requestShortcutIcon(p.key, function (uri) {
-          if (icon.parentNode) setThumbImg(icon, uri, kind)
+          deferApplyIcon(icon, uri, kind)
         }, function () { /* 失败：保持类型图标 */ })
       } else if (App.Thumbnail && App.Thumbnail.canThumbnail(kind)) {
         // 先类型图标（fallback 基线），异步请求缩略图，成功替换（渐进式：类型图标 → 真缩略图）
-        icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor(kind) : '📄'
+        icon.innerHTML = App.TypeIcons ? App.TypeIcons.iconFor(p.item.name, p.item.isDir) : '📄'
         App.Thumbnail.request(p.key, p.item.name, kind, function (uri) {
-          if (icon.parentNode) setThumbImg(icon, uri, kind)
+          deferApplyIcon(icon, uri, kind)
         }, function () { /* 失败：保持类型图标 */ })
       } else {
-        icon.innerHTML = App.TypeIcons ? App.TypeIcons.svgFor(kind) : (p.item.isDir ? '📁' : '📄')
+        icon.innerHTML = App.TypeIcons ? App.TypeIcons.iconFor(p.item.name, p.item.isDir) : (p.item.isDir ? '📁' : '📄')
       }
       // 应用快捷方式（.desktop）：显示名剥离扩展名；回收站：显示「回收站」（真实名 .trash 隐藏）
       let displayName = p.item.name
@@ -160,29 +179,35 @@ App.DesktopRender = (function () {
       C.bounds[key].w = node.offsetWidth || ICON_W
       C.bounds[key].h = node.offsetHeight || ICON_H
     })
-    // 渲染后恢复锁定视觉（网格重建会丢失 class）
-    updateLockedVisual()
   }
 
-  // ── 选中态同步：图标 class + FAB 操作栏路由 ──
-  // FAB 展开条件 = 文件选中 或 Viewer 实体选中（二者其一，互斥出现）
+  // ── 选中态同步：图标 class + Viewer 实体视觉 + FAB 操作栏路由 ──
+  // 统一选中模型（2026-08-20 刀 2）：Viewer 路径并入 C.selection，选中视觉由
+  // applySelection 统一驱动——文件图标 toggle .selected，Viewer 实例 toggle
+  // .viewer-card-selected。取消 InternalViewer.selectOnly/deselectAll/anySelected
+  // 并行状态，消除一类同步 bug。
   function applySelection() {
     Object.keys(C.iconEls).forEach(function (key) {
       if (C.selection.has(key)) C.iconEls[key].classList.add('selected')
       else C.iconEls[key].classList.remove('selected')
     })
+    // 同步 Viewer 实体选中视觉（viewer-card-selected）：C.selection 包含 viewer 路径
+    if (App.InternalViewer && typeof App.InternalViewer.list === 'function') {
+      App.InternalViewer.list().forEach(function (inst) {
+        inst.setSelected(C.selection.has(inst.getPath()))
+      })
+    }
     syncFab()
   }
 
+  // FAB 展开条件 = C.selection 非空（文件或 Viewer 路径均可）
   function syncFab() {
     if (App.fabSpeedDial && typeof App.fabSpeedDial.setSelection === 'function') {
-      const viewerSel = App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
-        App.InternalViewer.anySelected()
-      App.fabSpeedDial.setSelection(C.selection.size > 0 || viewerSel)
+      App.fabSpeedDial.setSelection(C.selection.size > 0)
     }
   }
 
-  // 取消文件选中（Viewer 保持打开、文件保持锁定——选中与查看解绑）
+  // 取消全部选中（文件 + Viewer 实体统一：C.selection 清空 → applySelection 同步视觉）
   function clearSelection() {
     C.selection = new Set()
     applySelection()
@@ -190,16 +215,6 @@ App.DesktopRender = (function () {
 
   // 是否有文件选中（返回键取消选中用）
   function hasSelection() { return C.selection.size > 0 }
-
-  // 锁定视觉：被 Viewer 打开的文件图标加锁标记
-  function updateLockedVisual() {
-    Object.keys(C.iconEls).forEach(function (key) {
-      const node = C.iconEls[key]
-      if (!node) return
-      if (C._lockedPaths.has(key)) node.classList.add('desktop-icon-locked')
-      else node.classList.remove('desktop-icon-locked')
-    })
-  }
 
   // 当前选中完整路径列表（复制/剪切/重命名用）
   function getSelectionNames() {
@@ -226,7 +241,6 @@ App.DesktopRender = (function () {
     syncFab: syncFab,
     clearSelection: clearSelection,
     hasSelection: hasSelection,
-    updateLockedVisual: updateLockedVisual,
     getSelectionNames: getSelectionNames,
     getSelectionEntries: getSelectionEntries
   }

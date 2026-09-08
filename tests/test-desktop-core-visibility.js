@@ -4,7 +4,7 @@
 //   2. 重赋值（C.selection = new Set()）对其他模块立即可见
 //   3. 属性变更（C.state.curPath = 'xxx'）对其他模块立即可见
 //   4. 工具函数（el/fmtSize/fullPath/isFolderView/viewport）行为正确
-//   5. desktop-viewer-link.js 删除 closeAllViewers 后，锁定 API 仍完整
+//   5. 文件「打开」态锁定 API 是派生态（Viewer 实例存在即锁定，无独立集合）
 // 用法: node test-desktop-core-visibility.js [项目路径]   （由 run-tests.sh 调用）
 'use strict'
 
@@ -101,10 +101,17 @@ sandbox.App.DesktopCamera = {
   worldToScreen: function (x, y) { return { x: x, y: y } }
 }
 sandbox.App.DesktopGesture = { init: function () {}, setCamera: function () {} }
+// 打开实例路径（文件「打开」态）可控桩：锁定是派生态（实例存在即锁定）
+let viewerOpenPaths = []
 sandbox.App.InternalViewer = {
   selectedInstance: function () { return null },
   anySelected: function () { return false },
-  list: function () { return [] },
+  list: function () {
+    return viewerOpenPaths.map(function (p) {
+      return { isOpen: function () { return true }, getPath: function () { return p } }
+    })
+  },
+  hasPath: function (p) { return viewerOpenPaths.indexOf(p) >= 0 },
   closeAll: function () {},
   closeById: function () {}
 }
@@ -180,14 +187,15 @@ const D = sandbox.App.Desktop
   C.dragTargets = []
   C.state.trashName = ''
 
-  // ── 8. C._lockedPaths 变更跨模块可见（ViewerLink 锁定 API）──
-  check(D.isLockedPath('a.txt') === false, 'isLockedPath 初始为 false')
+  // ── 8. 文件「打开」态是派生态（ViewerLink 锁定 API，无 _lockedPaths 集合）──
+  check(C._lockedPaths === undefined, 'C._lockedPaths 集合已删除（锁定派生自 Viewer 实例）')
+  check(D.isLockedPath('a.txt') === false, 'isLockedPath 初始为 false（无打开实例）')
   check(D.getLockedPaths().length === 0, 'getLockedPaths 初始为空')
-  C._lockedPaths.add('a.txt')
-  check(D.isLockedPath('a.txt') === true, 'isLockedPath 变更为 true')
+  viewerOpenPaths.push('a.txt')   // 模拟 Viewer 打开 a.txt
+  check(D.isLockedPath('a.txt') === true, '打开实例存在 → isLockedPath = true')
   check(D.getLockedPaths().length === 1, 'getLockedPaths 长度为 1')
-  C._lockedPaths.delete('a.txt')
-  check(D.isLockedPath('a.txt') === false, 'isLockedPath 恢复为 false')
+  viewerOpenPaths.length = 0      // 模拟 Viewer 关闭
+  check(D.isLockedPath('a.txt') === false, '实例关闭 → isLockedPath 恢复为 false')
 
   // ── 9. 工具函数：el() ──
   const node = C.el('div', 'test-class', 'hello')
@@ -246,7 +254,7 @@ const D = sandbox.App.Desktop
     'isTrashPath', 'inTrash', 'getTrashName',
     'viewMode', 'isFolderView',
     'applyViewPrefs', 'getViewPrefs',
-    'captureHome', 'captureDefaultView', 'goHome',
+    'captureSnapshot', 'captureDefaultView', 'goHome',
     'setAdvancedBrowse', 'isAdvancedBrowse', 'exitTempMode'
   ]
   const missing = expected.filter(function (k) { return typeof D[k] !== 'function' })

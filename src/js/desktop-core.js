@@ -54,11 +54,11 @@ App.DesktopCore = (function () {
   C.selection = /** @type {Set<string>} */ (new Set())
   C.iconEls = {}     // fullPath → DOM 元素
   C.dragTargets = []        // 移动的图标 fullPath 列表（组移动）
+  C.dragViewerTargets = []  // 移动的 Viewer 实例路径（混合组拖动：viewer 用独立拖动管道）
   C.dragStartWorld = null   // 手指起始世界坐标
   C.dragStartPositions = {} // fullPath → 起始世界坐标（保持组内相对位置）
-  // 文件锁定（Windows 式）：被 Viewer 打开的文件禁止复制/剪切/移动/删除/重命名，
-  // 只允许拖动摆放（桌面空间布局）；关闭对应 Viewer 即解除。多实例：Set 存所有锁定路径
-  C._lockedPaths = /** @type {Set<string>} */ (new Set())
+  // 文件「打开」态（Viewer 即文件）是派生态：InternalViewer 存在该路径实例即锁定
+  // （禁复制/剪切/移动/删除/重命名），无独立集合可失步——见 desktop-viewer-link.js。
   // Viewer 选中态由 InternalViewer 实例管理（单选：最多一个选中，脆弱/临时）
 
   // 双击窗口状态

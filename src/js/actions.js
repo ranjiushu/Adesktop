@@ -65,13 +65,13 @@ App.Actions = (function () {
     App.toast.show('已刷新')
   }
 
-  // ── 整理桌面（Morph FAB「整理桌面」）：按名称/类型排序到 Home 视角的居中可见网格。
-  //    锚点 = Home 快照相机（无快照 → 出厂 (0,0,1)）——整理结果落在 Home 可见区域中心，
-  //    整理后相机复位到锚点（用户立即看到全部图标，不会「整理完不知道跑哪去了」）。
-  //    zoom 保持当前缩放（2026-08-19：原强制 Home 槽位 zoom，用户缩放后整理视野跳变）。
+  // ── 整理桌面（Morph FAB「整理桌面」）：按名称/类型排序到 Home 锚点框架内的网格。
+  //    锚点 = Home 快照相机（按当前画布方向取槽位；无 Home → 出厂 (0,0,1)）——
+  //    位置与缩放都取自 Home，不随当前屏幕窗口/缩放漂移。
+  //    整理后相机复位到 Home 锚点（用户立即看到全部图标，不会「整理完不知道跑哪去了」）。
+  //    整理只读 Home 作为排布基准，**绝不写回/覆盖 Home 锚点**（2026-08-24 用户修正：
+  //    此前把当前窗口写回 Home 两方向槽位并强制当前缩放——正是「基于当前窗口」「重设窗口为 Home」的根因）。
   //    竖屏行优先（先左→右再上→下）；横屏列优先视觉（旋转 90° 自然呈现）。
-  //    锚点写入**两方向** Home 槽位（同一 x/y/zoom）——旋转后任何方向点 Home 恒回到
-  //    整理区域中心（原只写当前方向，另一方向槽位是历史残留，旋转跳槽位即「找不到」）。
   //    虚拟回收站（isDir）参与排序（文件夹组最前）。仅桌面空间可用。
   /** @returns {void} */
   function organizeDesktop() {
@@ -88,34 +88,29 @@ App.Actions = (function () {
       App.DesktopNavigation.cancelCameraAnim()
     }
     const rot = C.camera && C.camera.rotation === 90 ? 90 : 0
-    // 整理锚点：Home 快照（按当前画布方向取槽位）> 出厂 (0,0,1)；zoom 保持当前缩放
+    // 整理锚点：始终基于 Home（按当前画布方向取槽位）——位置与缩放都取自 Home 锚点，
+    // 不随当前屏幕窗口 / 当前缩放漂移。无 Home → 出厂 (0,0,1)。
     const home = App.HomeStore && typeof App.HomeStore.load === 'function'
       ? App.HomeStore.load(C.state.rootId, rot) : null
     const anchor = App.DesktopOrganize.anchorFromHome(home, rot)
-    anchor.zoom = (C.camera && C.camera.zoom) || 1
     // 布局数据文件（.adesktop-layout.json）不参与整理（渲染时同样过滤——否则它被排进
     // 网格（json 组恰在 html/md 之间）但不可见 → 网格留空位，2026-08-19 真机反馈）
-    // 锁定文件（正在预览）不参与整理：图标与 Viewer 预览窗口双向锚定（窗口在文件上方），
-    // 排走图标 = 与窗口分家/重叠；锁定文件保持原位，其余文件排布跳过其占位格子
-    /** @type {Array<{x: number, y: number}>} */
-    const lockedPoints = []
+    // 「打开」态文件（Viewer 即文件）不是网格成员：不参与整理、不留占位格——
+    // 其原格子是普通空格，整理自然填掉；关闭时按 Viewer 窗口位置重新落位
+    // （desktop-viewer-link.handleViewerClosed）
     const entries = C.state.items
       .filter(function (it) {
         if (it.name === C.LAYOUT_FILE) return false
         const key = (it.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())
           ? C.state.trashName : C.fullPath(it.name)
-        if (C._lockedPaths && C._lockedPaths.has(key)) {
-          const p = C.positions[key]
-          if (p) lockedPoints.push({ x: p.x, y: p.y })
-          return false
-        }
-        return true
+        return !(App.DesktopViewerLink && typeof App.DesktopViewerLink.isDesktopEntityPath === 'function' &&
+          App.DesktopViewerLink.isDesktopEntityPath(key))
       })
       .map(function (it) {
         return { name: it.name, isDir: it.isDir }
       })
     const placed = App.DesktopOrganize.organize(
-      entries, C.viewportWidth(), C.viewportHeight(), anchor, lockedPoints)
+      entries, C.viewportWidth(), C.viewportHeight(), anchor)
     placed.forEach(function (p) {
       // key：虚拟回收站 = trashName（桥层根固定串）；其余 = 完整相对路径
       const key = (p.name === C.state.trashName && C.state.mode === 'all-files' && !C.isFolderView())
@@ -134,22 +129,12 @@ App.Actions = (function () {
     // saveLayout 写 .adesktop-layout.json 是异步的，refresh 读文件存在竞态
     // （读到旧/无文件 → 不触发 applyCameraForPath → transform 停留旧状态 →
     // 图标按旧 transform 渲染错位「找不见」，2026-08-19 真机反馈）。
-    // 与 toggleRotate 同款：setCamera（内部 commit 应用 transform）+ Viewer 手柄同步。
+    // 与 toggleRotate 同款：setCamera（内部 commit 应用 transform）。
     if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
       App.DesktopGesture.setCamera(C.camera)
     }
-    if (App.InternalViewer && typeof App.InternalViewer.syncHandles === 'function') {
-      App.InternalViewer.syncHandles(C.camera)
-    }
-    // 整理锚点写入**两方向** Home 槽位（同一 x/y/zoom，仅 rotation 字段区分）：
-    // 屏幕中心世界点 = (c.x + w/2z, c.y + h/2z) 与 rotation 无关（见 desktop-camera.js），
-    // 因此两方向共用同一 x/y/zoom 时视野中心恒 = 整理区域中心——旋转、Home、整理
-    // 三角色锚定同一世界点，任何操作序列都不丢中心（2026-08-19 真机「找不到」根治）
-    if (App.HomeStore && typeof App.HomeStore.saveHome === 'function') {
-      const cam0 = { x: anchor.x, y: anchor.y, zoom: anchor.zoom }
-      App.HomeStore.saveHome(cam0, C.state.rootId, 0)
-      App.HomeStore.saveHome(cam0, C.state.rootId, 90)
-    }
+    // 整理**不写回 Home 锚点**：整理只是按 Home 框架重排图标并复位相机，
+    // 用户的 Home 设置（位置/缩放）保持原样，绝不被整理结果覆盖（2026-08-24 用户修正）。
     // 布局持久化失败不得阻断整理结果渲染（内存 positions/相机已更新，文件仍可见）：
     // 曾无保护直调 → 桥方法缺失时同步抛异常 → refresh() 不执行 → canvas transform/DOM
     // 停留旧状态 → 图标错位「找不见」、双击 Home 全览也跟着失效（2026-08-19 真机反馈）

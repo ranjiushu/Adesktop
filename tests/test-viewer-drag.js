@@ -1,11 +1,12 @@
-// Viewer 拖动手柄「按住即拖动」回归测试（修复：拿起判定以按下起点为基准）。
-// 背景：手柄命中区仅 6px 高（HANDLE_H），TAP_THRESHOLD=6px——按下后位移一旦
-// 超过阈值触发 drag-start，移动后点必然移出手柄矩形；旧实现用【移动后】点重新
-// handleAt 命中，几乎必然拿不起，表现为「手柄点不动/拖不动」。
-// 修复后 drag-start 携带按下起点（sx/sy），handleDragStart 以起点命中 → 拿得起。
+// Viewer 实体拖动回归测试（2026-08-20 刀 1：拖动手柄删除后的新交互模型）。
+// 背景：手柄原是「两套选中模型」的补丁（未选中 Viewer 拖动 = 框选，需辅助入口
+// 直接拿起）。交互模型与文件图标统一后手柄删除，Viewer 拖动手势 = 文件手势：
+//   - 已选中 Viewer：按下位移超阈值 → 直接拿起（viewer-selected → beginDrag）
+//   - 未选中 Viewer：按下拖动 → 框选（不拿起）；框选结束命中 → 选中
+//   - 未选中 Viewer：长按 → 选中 + 拿起（与文件图标一致）
 // 驱动方式：真实 Desktop + 真实手势层（vm 最小 DOM stub）+ InternalViewer 桩
-// （handleAt 复刻 viewer.js handleWorldRect 判定），touch 事件走完整链路。
-// 用法: node test-handle-drag.js [项目路径]   （由 run-tests.sh 调用）
+// （无 handleAt/syncHandles——手柄 API 已移除，手势层不得再调用），touch 事件走完整链路。
+// 用法: node test-viewer-drag.js [项目路径]   （由 run-tests.sh 调用）
 'use strict'
 
 const fs = require('fs')
@@ -112,48 +113,47 @@ sandbox.App.BottomBar = { updateNavButtons: function () {} }
 sandbox.App.Clipboard = { isCut: function () { return false } }
 sandbox.App.ViewerStore = { load: function () { return [] }, save: function () { return true } }
 
-// ── InternalViewer 桩：一个 canvas 态实例 + handleAt（复刻 viewer.js handleWorldRect）──
-const HANDLE_W = 36
-const HANDLE_H = 6
-const HANDLE_GAP = 14
-function handleWorldRect(rect, camera) {
-  const z = camera.zoom || 1
-  const gap = HANDLE_GAP / z, w = HANDLE_W / z, h = HANDLE_H / z
-  const cx = rect.x + rect.w / 2
-  const top = rect.y + rect.h + gap
-  return { x: cx - w / 2, y: top, w: w, h: h }
-}
-const handleAtCalls = []      // handleAt 收到的世界点（验证命中基准 = 按下起点）
+// ── InternalViewer 桩：一个 canvas 态实例（无手柄 API——已随刀 1 移除）──
 const beginDragCalls = []
+const moveByCalls = []
+const endDragCalls = []
 const selectOnlyCalls = []
 const cardRect = { x: 100, y: 200, w: 200, h: 280 }
 const stubInst = {
   id: 'v1',
+  selected: false,
+  dragging: false,
   getMode: function () { return 'canvas' },
-  isSelected: function () { return false },
-  beginDrag: function (w) { beginDragCalls.push(w); return true },
-  handleHitTest: function (wx, wy, camera) {
-    const r = handleWorldRect(cardRect, camera)
-    return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h
+  getPath: function () { return 'a.txt' },
+  isOpen: function () { return true },
+  setSelected: function (on) { stubInst.selected = on },
+  isSelected: function () { return stubInst.selected },
+  beginDrag: function (w) { beginDragCalls.push(w); this.dragging = true; return true },
+  moveBy: function (w) { moveByCalls.push(w) },
+  endDrag: function () { endDragCalls.push(true); this.dragging = false },
+  cancelDrag: function () { this.dragging = false },
+  isDragging: function () { return this.dragging },
+  getRect: function () { return { x: cardRect.x, y: cardRect.y, w: cardRect.w, h: cardRect.h } },
+  rectHitWorld: function (rect) {
+    var r = cardRect
+    return !(r.x + r.w < rect.x || rect.x + rect.w < r.x || r.y + r.h < rect.y || rect.y + rect.h < r.y)
   }
 }
+function pointInCard(wx, wy) {
+  return wx >= cardRect.x && wx <= cardRect.x + cardRect.w && wy >= cardRect.y && wy <= cardRect.y + cardRect.h
+}
 sandbox.App.InternalViewer = {
-  handleAt: function (wx, wy, camera) {
-    handleAtCalls.push({ x: wx, y: wy })
-    return stubInst.handleHitTest(wx, wy, camera) ? stubInst : null
+  setSelected: function (inst, on) { /* stub: visual sync handled by applySelection */ },
+  topmostAt: function (wx, wy) { return pointInCard(wx, wy) ? stubInst : null },
+  rectHit: function (rect) {
+    const r = cardRect
+    const hit = !(r.x + r.w < rect.x || rect.x + rect.w < r.x || r.y + r.h < rect.y || rect.y + rect.h < r.y)
+    return hit ? stubInst : null
   },
-  topmostAt: function () { return null },
-  rectHit: function () { return null },
-  selectOnly: function (id) { selectOnlyCalls.push(id) },
-  anySelected: function () { return false },
-  deselectAll: function () {},
-  selectedInstance: function () { return null },
-  draggingInstance: function () { return null },
-  syncHandles: function () {},
-  showHandles: function () {},
-  hideHandles: function () {},
+  list: function () { return [stubInst] },
+  hasPath: function (p) { return p === 'a.txt' },
+  getByPath: function (p) { return p === 'a.txt' ? stubInst : null },
   setPersistListener: function () {},
-  list: function () { return [] },
   open: function () {},
   closeById: function () {}
 }
@@ -174,45 +174,62 @@ function touch(id, x, y) { return { identifier: id, clientX: x, clientY: y } }
 function tev(type, pts, changed) {
   return { type: type, touches: pts, changedTouches: changed || pts, preventDefault: function () {} }
 }
-// 屏幕坐标 → world（viewport top=56，camera (0,0,1)：世界 = 局部屏幕坐标）
+// 世界坐标 → 屏幕事件坐标（viewport top=56，camera (0,0,1)：世界 = 局部屏幕坐标）
 function screen(wx, wy) { return { x: wx, y: wy + 56 } }
+function sleep(ms) { return new Promise(function (res) { setTimeout(res, ms) }) }
 
 ;(async function () {
   D.initGesture()
   await D.refresh()
 
-  // 手柄世界矩形（相机 (0,0,1)）
-  const cam = D.getCamera ? D.getCamera() : sandbox.App.DesktopCore.camera
-  const hr = handleWorldRect(cardRect, cam)
-  const handleCenter = { x: hr.x + hr.w / 2, y: hr.y + hr.h / 2 }
+  const cardCenter = { x: cardRect.x + cardRect.w / 2, y: cardRect.y + cardRect.h / 2 }
 
-  // ── 场景：按下手柄中心 → 位移 7px（超 TAP_THRESHOLD=6）→ 直接拿起拖动 ──
-  const p = screen(handleCenter.x, handleCenter.y)
+  // 统一选中模型：通过 C.selection 设置 Viewer 路径选中（替代旧 per-instance selected 标志）
+  const C = sandbox.App.DesktopCore
+
+  // ── 场景 1：已选中 Viewer → 按下位移 7px（超 TAP_THRESHOLD=6）→ 直接拿起 ──
+  C.selection = new Set(['a.txt'])
+  let p = screen(cardCenter.x, cardCenter.y)
   viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, p.x, p.y)]))
-  // 纵向移动 7px：旧实现移动后点已移出手柄矩形（高 6px）→ 拿不起；修复后以按下起点命中
   viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, p.x, p.y + 7)]))
-  check(beginDragCalls.length === 1, '按住手柄 + 位移 7px → beginDrag 一次（拿得起）')
-  check(selectOnlyCalls.length === 1 && selectOnlyCalls[0] === 'v1', '按住手柄 → 自动选中该 Viewer（selectOnly v1）')
-
-  // 命中基准 = 按下起点：handleAt 收到的每个点都应 ≈ 起点（down 命中 + drag-start 起点命中）
-  const allAtStart = handleAtCalls.length >= 2 && handleAtCalls.every(function (pt) {
-    return Math.abs(pt.x - handleCenter.x) < 0.5 && Math.abs(pt.y - handleCenter.y) < 0.5
-  })
-  check(allAtStart, 'handleAt 命中基准 = 按下起点（收到 ' + handleAtCalls.length + ' 次，' +
-    '而非移动后点 ' + JSON.stringify({ x: handleCenter.x, y: handleCenter.y + 7 }) + '）')
-
-  // 拖动继续 → moveBy 语义：桩 beginDrag 已拿起点，后续 drag 事件由 draggingInstance 接管
+  check(beginDragCalls.length === 1, '已选中 Viewer + 位移 7px → beginDrag 一次（选中即可直接拖动，无需手柄）')
   viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, p.x, p.y + 40)]))
+  check(moveByCalls.length === 1, '拖动继续 → moveBy 跟随')
   viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, p.x, p.y + 40)]))
-  check(true, '拖动 + 抬起完整走完（无异常）')
+  check(endDragCalls.length === 1 && !stubInst.dragging, '抬起 → endDrag 收尾')
+
+  // ── 场景 2：未选中 Viewer → 按下拖动 = 框选（不拿起）；框选结束命中 → 选中 ──
+  C.selection = new Set()
+  beginDragCalls.length = 0
+  selectOnlyCalls.length = 0
+  p = screen(cardCenter.x, cardCenter.y)
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, p.x, p.y)]))
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, p.x + 60, p.y + 60)]))
+  check(beginDragCalls.length === 0, '未选中 Viewer + 拖动 → 框选（不直接拿起，与文件图标一致）')
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, p.x + 60, p.y + 60)]))
+  check(C.selection.has('a.txt'), '框选结束命中 Viewer → a.txt 进入 C.selection')
+
+  // ── 场景 3：未选中 Viewer → 长按 = 选中 + 拿起（与文件图标一致）──
+  C.selection = new Set()
+  beginDragCalls.length = 0
+  selectOnlyCalls.length = 0
+  endDragCalls.length = 0
+  p = screen(cardCenter.x, cardCenter.y)
+  viewportEl.dispatch('touchstart', tev('touchstart', [touch(1, p.x, p.y)]))
+  await sleep(600)   // LONGPRESS_MS = 500
+  check(C.selection.has('a.txt'), '长按未选中 Viewer → a.txt 进入 C.selection（先选中）')
+  check(beginDragCalls.length === 1, '长按未选中 Viewer → 拿起（beginDrag via startGroupDrag）')
+  viewportEl.dispatch('touchmove', tev('touchmove', [touch(1, p.x + 30, p.y + 30)]))
+  viewportEl.dispatch('touchend', tev('touchend', [], [touch(1, p.x + 30, p.y + 30)]))
+  check(endDragCalls.length === 1, '长按拖动抬起 → endDrag 收尾')
 
   if (failures > 0) {
-    console.error('  [FAIL] test-handle-drag 手柄拖动回归 ' + failures + ' 项失败')
+    console.error('  [FAIL] test-viewer-drag Viewer 拖动回归 ' + failures + ' 项失败')
     process.exit(1)
   }
-  console.log('  [ok] test-handle-drag 手柄拖动回归全部通过')
+  console.log('  [ok] test-viewer-drag Viewer 拖动回归全部通过')
 })().catch(function (e) {
-  console.error('  [FAIL] test-handle-drag 异常: ' + e.message)
+  console.error('  [FAIL] test-viewer-drag 异常: ' + e.message)
   console.error(e.stack)
   process.exit(1)
 })

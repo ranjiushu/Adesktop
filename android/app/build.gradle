@@ -16,12 +16,25 @@ android {
     }
 
     signingConfigs {
-        // 开发期临时签名（复用 debug keystore），发布前替换为正式 keystore
+        // 开发期临时签名（复用 debug keystore）
         dev {
             storeFile file("${System.getenv('HOME')}/.android/debug.keystore")
             storePassword "android"
             keyAlias "androiddebugkey"
             keyPassword "android"
+        }
+        // 正式发布签名：在 android/keystore.properties 配置（该文件已 gitignore，永不入库）
+        // storeFile=... / storePassword=... / keyAlias=... / keyPassword=...（storeFile 为相对 android/ 的路径）
+        release {
+            def propsFile = rootProject.file('keystore.properties')
+            if (propsFile.exists()) {
+                def props = new Properties()
+                props.load(new FileInputStream(propsFile))
+                storeFile rootProject.file(props['storeFile'])
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
         }
     }
 
@@ -31,7 +44,9 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.dev
+            // 有 keystore.properties 用正式签名，否则回退 debug 签名（CI/本地开发）
+            def hasReleaseKey = rootProject.file('keystore.properties').exists()
+            signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.dev
         }
     }
 

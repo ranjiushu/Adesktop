@@ -1,7 +1,8 @@
 /* 底部工具栏：5 个按钮。
  * 左 1 = 后退（＜）驱动 Desktop.goBack，左 2 = 前进（＞）驱动 Desktop.goForward，
- * 中间加号弹新建对话框，右 1 = Home（空间锚点：点按回快照/默认视角，长按记录位置快照），
- * 右 2 = 上级目录（↑）驱动 Desktop.goUp。
+ * 中间 = Home（空间锚点：点按回 Home 锚点、长按记录新的 Home、双击一览全部文件），
+ * 右 1 = 快照（相机图标：点按呼出快照列表、长按记录新的快照），右 2 = 上级目录（↑）驱动 Desktop.goUp。
+ * 新建（加号）已由 Morph FAB 承担，底栏不再设新建按钮。
  * 后退/前进禁用态：根目录不可后退、栈尾不可前进；上级与 Home 禁用态：子文件夹容器内禁用
  * （Home 只在桌面空间有意义，随 refresh 更新）。
  * 循环演示：无「演示模式」开关——桌面空间存在快照时，前进/后退直接循环翻页
@@ -32,25 +33,28 @@ App.BottomBar = (function () {
     let fwd = _getEl('bb-btn-forward')
     let up = _getEl('bb-btn-up')
     let home = _getEl('bb-btn-home')
+    let snap = _getEl('bb-btn-snapshot')
     if (!App.Desktop) return
     if (_inLoopMode()) {
-      // 循环演示：前进/后退恒可用（无边界），上级/Home 按空间语义
+      // 循环演示：前进/后退恒可用（无边界），上级/Home/快照按空间语义
       if (back) _setEnabled(back, true)
       if (fwd) _setEnabled(fwd, true)
       if (up) _setEnabled(up, typeof App.Desktop.canGoUp === 'function' && App.Desktop.canGoUp())
       if (home) _setEnabled(home, true)
+      if (snap) _setEnabled(snap, true)
       updateHomeState()
       return
     }
     const canBack = typeof App.Desktop.canGoBack === 'function' && App.Desktop.canGoBack()
     const canFwd = typeof App.Desktop.canGoForward === 'function' && App.Desktop.canGoForward()
     const canUp = typeof App.Desktop.canGoUp === 'function' && App.Desktop.canGoUp()
-    // Home 仅桌面空间可用（子文件夹容器相机是滚动态，快照无意义）
+    // Home/快照 仅桌面空间可用（子文件夹容器相机是滚动态，锚点/快照无意义）
     const canHome = typeof App.Desktop.isFolderView === 'function' && !App.Desktop.isFolderView()
     if (back) _setEnabled(back, canBack)
     if (fwd) _setEnabled(fwd, canFwd)
     if (up) _setEnabled(up, canUp)
     if (home) _setEnabled(home, canHome)
+    if (snap) _setEnabled(snap, canHome)
     updateHomeState()
   }
 
@@ -87,14 +91,7 @@ App.BottomBar = (function () {
 
   /** @returns {void} */
   function init() {
-    let add = _getEl('bb-btn-add')
-    if (add) {
-      App.utils.bindPress(add, function () {
-        if (App.CreateDialog && typeof App.CreateDialog.open === 'function') {
-          App.CreateDialog.open()
-        }
-      })
-    }
+    // 新建（加号）已由 Morph FAB 承担，底栏不再设新建按钮。
     let back = _getEl('bb-btn-back')
     if (back) {
       App.utils.bindPress(back, function () {
@@ -119,8 +116,8 @@ App.BottomBar = (function () {
         }
       })
     }
-    // Home：单击 = 回空间锚点视角（快照优先，无则默认视角）；双击 = 一览全部文件
-    // （fit-bounds：全部图标放进屏幕，见 DesktopFit）；长按 500ms = 记录当前位置快照
+    // Home（空间锚点，独立于快照列表）：单击 = 回 Home 锚点；双击 = 一览全部文件
+    // （fit-bounds，见 DesktopFit）；长按 500ms = 记录新的 Home 锚点（HomeStore）。
     let home = _getEl('bb-btn-home')
     if (home) {
       App.utils.bindPressSplit(home, {
@@ -135,8 +132,24 @@ App.BottomBar = (function () {
           }
         },
         onLongPress: function () {
-          if (App.Desktop && typeof App.Desktop.captureHome === 'function') {
-            App.Desktop.captureHome()
+          if (App.Desktop && typeof App.Desktop.setHome === 'function') {
+            App.Desktop.setHome()
+          }
+        }
+      })
+    }
+    // 快照（相机图标）：单击 = 呼出快照列表；长按 500ms = 记录新的快照（SnapshotStore）。
+    let snap = _getEl('bb-btn-snapshot')
+    if (snap) {
+      App.utils.bindPressSplit(snap, {
+        onTap: function () {
+          if (App.SnapshotSheet && typeof App.SnapshotSheet.open === 'function') {
+            App.SnapshotSheet.open()
+          }
+        },
+        onLongPress: function () {
+          if (App.Desktop && typeof App.Desktop.captureSnapshot === 'function') {
+            App.Desktop.captureSnapshot()
           }
         }
       })

@@ -2,6 +2,101 @@
 
 ## Unreleased
 
+### 开源准备（GPL-3.0）（2026-09-08）
+
+- **新增 LICENSE**：GNU General Public License v3（全文本入库，README 附版权声明）
+- **README 重写**：面向外部读者——特性/架构/构建/签名/测试/文档索引，移除内部工作区路径
+  （`/workspace/AAA 安装包/`）与私有仓库交叉引用（`/workspace/lexicull`）
+- **移除私有备份耦合**：`tools/cos-bundle-check.sh` / `tools/bundle-source.sh` /
+  `tests/test-cos-bundle-check.sh` 从仓库剥离（含私有 COS 桶路径），`build-local.sh`
+  步骤 6 同步移除（管线收敛为 5 步）；备份能力迁移到仓库外本地脚本
+- **移除错放的 gifski 资产**：`gifski-web/` 子项目与 `android/build-gifski.sh`
+  迁出本仓库（gifski 已有独立仓库 gifski-android）
+- **正式签名通道**：`build.gradle` 新增 release signingConfig——存在
+  `android/keystore.properties`（已 gitignore）时用正式签名，否则回退 debug keystore，
+  明文 debug 密码不再承担发布职责
+- 文档同步：`docs/build-pipeline.md`（删 COS 备份一节 + 归档路径泛化）、
+  `docs/verification-matrix.md`、`docs/README.md`、`AGENTS.md`、post-commit 注释
+
+### Viewer 选中模型统一（刀 2：Viewer 合入 C.selection，与文件同一套交互）（2026-08-20）
+
+- **动机**：刀 1 摘掉了手柄，但 Viewer 仍用独立选中状态（per-instance `selected` 标志 + `selectOnly/deselectAll/anySelected/selectedInstance` 并行 API），与文件的 `C.selection` Set 各管各的——框选只能单选 Viewer、混合拖动不支持、FAB 特判 `viewerSel` 靠五处手势回调手动同步，仍是一类同步 bug 温床
+- **Viewer 合入 `C.selection`**：选中视觉由 `applySelection` 统一驱动，并行管理器方法全部删除
+- **手势全面统一**：hitTest 的 Viewer 命中归入 `selected`/`icon`（与文件同类型）；handleTap Viewer 点击/延迟反选与文件同一逻辑；marqueeEnd 混合多选（文件+Viewer 合并进同一 `C.selection`）；长按/直接拿起走 `startGroupDrag`（双轨：文件→网格拖、Viewer→实例拖）
+- **混合组拖动**：`C.dragViewerTargets` 新增属性；`startGroupDrag` 分派文件+Viewer 双轨拖动；`handleDrag/handleDrop/handleSingleCancel` 并行处理两轨；落点：文件吸附+避让、Viewer 自由定位（各自 `endDrag` 持久化）
+- **双击 Viewer = 全屏预览**（与「双击文件 = 打开」对称：已打开的文件再「打开」= 完整视图）
+- **FAB 混合选中语义**：`C.selection` 含 Viewer 路径时显示「关闭预览」；恰好单选 Viewer 且无文件选中时显示「全屏预览」；文件操作作用于未锁定成员；关闭预览批量关闭选中 Viewer
+- **`closeViewer` 改为批量关闭**（`C.selection` 中的 Viewer 路径，关闭后路径从 `C.selection` 移除，保留文件选中；`closedSet` 预快照避免关闭后 `hasPath` 返回 false 导致路径过滤条件反转）
+- 测试同步：test-viewer-drag（统一选中模型全链路：C.selection.has 代替 per-instance selected）、test-desktop-viewerlink-lock（closeViewer 用 C.selection 代替 selectedViewerId）、三个 UI 验证批量替换已删除 API（anySelected/selectOnly/deselectAll → C.selection + applySelection/clearSelection + DesktopSelection.selectOnly）
+
+### Viewer 交互模型统一（刀 1：摘手柄 + 静态预览）（2026-08-20）
+
+- **动机**：Viewer 与文件是两套并行选中系统（C.selection vs 实例 selected 标志），
+  靠五处手势特判手动同步；canvas 态内容交互（文本滚动/JSON 折叠/网页 iframe）与
+  实体手势抢同一根手指；拖动手柄是为绕开这两者加的第五条输入路径，自身还带着
+  屏幕层 DOM + 相机每帧同步 + rotation=90 换算的维护成本
+- **拖动手柄整体删除**：拿起语义与文件图标统一后自然成立——已选中直接拖、
+  未选中框选、长按选中+拿起；手柄 DOM/命中（handleAt/handleWorldRect）/
+  相机同步（syncHandles × 4 处调用）/手势命中类型（viewer-handle）/CSS 全移除
+- **canvas 态静态预览**：非音视频模块内容零交互（viewer-card-static：
+  pointer-events:none + overflow:hidden）——Viewer 态 = 图片式预览，
+  内容操作（滚动/阅读/网页）只在全屏预览态；视频/音频保留原生控件（唯一例外）；
+  website 网页 canvas 态静态化（「拖到网页设待上传」走世界坐标命中不受影响）
+- **bundle 瘦身约 10KB**（839977 → 829136）
+- 测试同步：test-handle-drag.js 重写为 test-viewer-drag.js（新模型全链路回归）；
+  test-viewer.js 手柄纯函数段移除（改断言 API 不存在）；viewer-entity-verify /
+  viewer-modules-verify / viewer-folder-verify 同步新模型并修复陈旧断言
+  （授权弹窗吃返回键/锁定角标已删/visualCenter→anchorRect）
+
+### 画布缩放范围放宽 0.3~3 → 0.1~10（2026-08-20）
+
+- **动机**：0.3~3 对 100×116 网格偏保守——放大端看不了缩略图细节、缩小端看不了稀疏
+  桌面全局；根目录桌面位置本已无限（onClamp 只钳 folder 容器），唯一限制就是 zoom
+- **边界仍是安全网而非手感**：下限 0.1 防 panBy 位移爆炸（zoom→0 时 dx/zoom 顶穿浮点
+  精度），上限 10 防 translate3d 超大像素丢精度 + 缩略图位图放大发糊；真无穷不可行
+  （CSS transform 与 double 都撑不住）
+- **Home/fit 行为变化**：单文件一览 zoom 从 3 提到 3.55（恰好放下的 raw 值，不再被
+  max 卡住）；max 10 在真实视口下永不触发（单图标 bw=116 → 需视口 ≥1160px）
+- **极端飞行安全**：0.1↔10（100x zoom 比）新增单测——中心点轨迹线性（偏差 4.7e-13）、
+  全程有限无 NaN、屏幕空间速度均匀（峰值/平均 2.07 ≤ 3.5，真感知指标）；世界空间
+  均匀性指标在极端 zoom 比下失真（低 zoom 段 1 屏幕像素 = 10 世界单位），改测屏幕速度
+- 文档同步：`docs/interaction.md`（缩放范围 ×2 处）、`docs/bridge-and-data-contract.md`
+  （`[0.1, 10]`）；测试同步：test-desktop-camera / test-desktop-fit
+
+### Viewer 重构为文件的「打开」状态（2026-08-20）
+
+- **语义**：Viewer 不再是独立窗口实体，而是文件的「打开」状态——双击文件 =
+  在原地变成 Viewer（图标退出网格，原格子释放为普通空格）；拖动 Viewer =
+  拖动文件本身（无第二套坐标）；关闭 = 按窗口位置吸附最近网格格落位（被占
+  自动避让），图标带 260ms 落位动画飞回格位
+- **删除的协调代码**：图标→窗口单向锚定（syncRectForPath）、会话恢复贴窗对齐、
+  锁定集合 `_lockedPaths` + 锁定角标、整理桌面「钉子户」占位避让——它们的共同
+  前提（图标与窗口并存）已不存在；锁定改为派生态（InternalViewer 存在该路径
+  实例即锁定），无状态可失步
+- **整理桌面**：打开态文件不是网格成员——不参与、不留占位格（用户拍板方案），
+  关闭时按窗口位置重新落位
+- **原地展开**：text/parsed/website 打开不再弹到屏幕视觉中心 + 级联错位，
+  改为卡片左上锚定图标位置，超视口自动夹回可视区（anchorRect 纯函数）
+- **folder 容器不变**：全屏预览保持原样（不退出网格、不持久化）
+- **website 快捷方式**：打开期间图标同样退出网格（顺带移除旧「预览中允许删除
+  .desktop」的 MVP 妥协）
+- 测试：重写 test-viewer-lock-sync / test-desktop-viewerlink-lock（打开态生命周期），
+  test-viewer.js 锚点断言 → anchorRect 夹取，viewer E2E 断言改「图标退出网格」；
+  verify.sh 16 项门禁全绿
+
+### 类型图标升级为 Material 彩色瓷砖（MT 管理器风格，2026-08-19）
+
+- **图标源**：Material Design Icons（Apache-2.0，Pictogrammers）官方字形 + 彩色圆角方块，
+  白色字形 = MT/NP/ApktoolM 三款工具同款图标风格（已拆包证实其文件图标即 Material 字形）；
+  16 个 kind 各一个瓷砖，标准语义色（pdf 红 / word 蓝 / excel 绿 / ppt 橙 / image 青 / audio 粉…）
+- **目录图标**：经典黄色 Material folder 字形（非瓷砖），与 MT 管理器一致
+- **三级解析**：扩展名精确匹配 → kind 瓷砖 → 线条占位；trash/shortcut/unknown 保持线条版
+  （stroke currentColor，随主题自适应）；全彩瓷砖自带颜色，浅色/深色/自定义主题通用
+- **新模块**：`src/js/type-icons-data.js`（16 个瓷砖，由 `tools/gen-type-icons-data.js` 生成，
+  已登记 JS_ORDER）；`TypeIcons.iconFor(name,isDir)` / `kindSvg(kind)` API，
+  渲染层 `desktop-render.js` 文件图标改走扩展名解析
+- **构建**：bundle 827KB → 840KB（+1.5%）；verify.sh 16 项门禁全绿
+
 ### 桌面目录改用系统 SAF 授权选择器（2026-08-19）
 
 - **移除固定路径 + 手动输入**：Drawer「桌面目录」不再弹出常见目录 chips + 自定义输入框，

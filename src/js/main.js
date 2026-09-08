@@ -20,10 +20,8 @@ App.boot = function boot() {
           // 无选中 → desktop 菜单（新建/刷新/粘贴）。
           // 语义收敛：FAB 展开 ⇔ 选中态一致——selection 态收起（collapse）即取消选中，
           // 故移动选择器取消后 FAB 已收起、选中已清空，短按回到 desktop 菜单。
-          const hasSel = (App.Desktop && typeof App.Desktop.hasSelection === 'function' &&
-            App.Desktop.hasSelection()) ||
-            (App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
-            App.InternalViewer.anySelected())
+          const hasSel = App.Desktop && typeof App.Desktop.hasSelection === 'function' &&
+            App.Desktop.hasSelection()
           if (hasSel) App.fabSpeedDial.setSelection(true)
           else App.fabSpeedDial.expand('desktop')
         }
@@ -93,6 +91,8 @@ App.boot = function boot() {
   // 桌面：启动无限画布手势（双指 pan/zoom）+ 以文件系统为数据源渲染
   if (App.Desktop) {
     if (typeof App.Desktop.initGesture === 'function') App.Desktop.initGesture()
+    // 首屏缓存先行：有启动快照则立即用缓存 items 渲染图标（秒出），随后 refresh 后台对齐
+    if (typeof App.Desktop.renderFromCache === 'function') App.Desktop.renderFromCache()
     if (typeof App.Desktop.refresh === 'function') App.Desktop.refresh()
   }
   return true
@@ -129,13 +129,7 @@ if (App.InternalViewer && typeof App.InternalViewer.hasFullscreen === 'function'
   if (fs && typeof fs.exitFullscreen === 'function') fs.exitFullscreen()
   return true
 }
-// 2. 有选中（Viewer 选中 或 文件选中）→ 取消选中（脆弱选中态，返回键统一取消）
-if (App.InternalViewer && typeof App.InternalViewer.anySelected === 'function' &&
-    App.InternalViewer.anySelected()) {
-  App.InternalViewer.deselectAll()
-  if (App.Desktop && typeof App.Desktop.clearSelection === 'function') App.Desktop.clearSelection()
-  return true
-}
+// 2. 有选中（文件 + Viewer 路径统一在 C.selection）→ 取消选中（脆弱选中态，返回键统一取消）
 if (App.Desktop && typeof App.Desktop.hasSelection === 'function' && App.Desktop.hasSelection()) {
   if (App.Desktop.clearSelection) App.Desktop.clearSelection()
   return true

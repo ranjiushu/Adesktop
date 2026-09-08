@@ -6,7 +6,7 @@
 //   4. clearSelection() 清空选中集 + DOM + FAB
 //   5. hasSelection() / getSelectionNames() / getSelectionEntries() 正确反映选中态
 //   6. syncFab() 联动 fabSpeedDial（选中态 或 Viewer 选中）
-//   7. updateLockedVisual() 同步锁定 class
+//   7. 「打开」态文件（Viewer 即文件）退出网格渲染，原格子释放
 //   8. layout() desktop 空间 vs folder 容器排布逻辑
 // 用法: node test-desktop-render-boundary.js [项目路径]   （由 run-tests.sh 调用）
 'use strict'
@@ -88,7 +88,9 @@ const sandbox = {
 sandbox.window = sandbox
 sandbox.App.TypeIcons = {
   kindFor: function (name, isDir) { return isDir ? 'folder' : 'text' },
-  svgFor: function (kind) { return '<svg>' + kind + '</svg>' }
+  svgFor: function (kind) { return '<svg>' + kind + '</svg>' },
+  iconFor: function () { return '<svg></svg>' },
+  kindSvg: function (kind) { return '<svg>' + kind + '</svg>' }
 }
 sandbox.App.Thumbnail = {
   canThumbnail: function () { return false },
@@ -100,9 +102,14 @@ sandbox.App.Clipboard = { isCut: function () { return false } }
 sandbox.App.fabSpeedDial = {
   setSelection: function (has) { fabSetSelectionCalls.push(!!has) }
 }
+// 桌面实体路径（文件「打开」态）可控桩：layout 据此让图标退出网格
+let entityPaths = []
 sandbox.App.InternalViewer = {
   anySelected: function () { return false },
-  selectedInstance: function () { return null }
+  selectedInstance: function () { return null },
+  hasPath: function (p) { return entityPaths.indexOf(p) >= 0 },
+  isDesktopEntityPath: function (p) { return entityPaths.indexOf(p) >= 0 },
+  desktopEntityPaths: function () { return entityPaths.slice() }
 }
 sandbox.App.DesktopCamera = { create: function () { return { x: 0, y: 0, zoom: 1 } } }
 sandbox.App.DesktopGesture = { init: function () {}, setCamera: function () {} }
@@ -238,16 +245,26 @@ const D = sandbox.App.Desktop
   check(fabSetSelectionCalls.length === 2 && fabSetSelectionCalls[1] === false,
     'syncFab: 无选中 → setSelection(false)')
 
-  // ── 10. updateLockedVisual() 同步锁定 class ──
+  // ── 10. 「打开」态文件退出网格渲染（Viewer 即文件：无图标、无命中边界）──
+  C.state.curPath = ''
   C.selection = new Set()
+  C.positions = {}
+  C.state.items = [
+    { name: 'a.txt', isDir: false, size: 10, mtime: 1 },
+    { name: 'b.txt', isDir: false, size: 20, mtime: 2 }
+  ]
   R.render()
-  const a2 = createdIcons.find(function (n) { return n.getAttribute('data-name') === 'a.txt' })
-  C._lockedPaths.add('a.txt')
-  R.updateLockedVisual()
-  check(a2.classList.contains('desktop-icon-locked'), 'updateLockedVisual: a.txt 有 locked class')
-  C._lockedPaths.delete('a.txt')
-  R.updateLockedVisual()
-  check(!a2.classList.contains('desktop-icon-locked'), 'updateLockedVisual: 解锁后无 locked class')
+  check(createdIcons.length === 2, '全部关闭态：渲染 2 个图标')
+  entityPaths = ['a.txt']   // a.txt 进入「打开」态（Viewer 实体存在）
+  R.render()
+  check(createdIcons.length === 1, 'a.txt 打开后：只渲染 1 个图标（原格子释放）')
+  check(createdIcons[0].getAttribute('data-name') === 'b.txt', '留下的图标是 b.txt')
+  check(!C.bounds['a.txt'], '打开态文件无命中边界（不参与点选/框选）')
+  check(!C.iconEls['a.txt'], '打开态文件无图标 DOM')
+  entityPaths = []          // a.txt 关闭（Viewer 变回文件）
+  R.render()
+  check(createdIcons.length === 2 && !!C.bounds['a.txt'], '关闭后图标回到网格')
+  entityPaths = []
 
   // ── 11. layout() desktop 空间：已有位置优先 ──
   C.state.curPath = ''

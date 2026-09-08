@@ -53,8 +53,12 @@ async function main() {
   })
   await page.goto(HTML, { waitUntil: 'networkidle0' })
   await page.waitForFunction(function () { return window.App && document.querySelectorAll('.desktop-icon').length === 4 }, { timeout: 10000 })
+  // 桩环境首启弹「授权手机存储」对话框——overlay 吃触摸且占用返回键优先级，先关掉
+  await page.evaluate(function () {
+    if (App.Dialog && typeof App.Dialog.close === 'function') App.Dialog.close('all-files-dialog-overlay')
+  })
 
-  console.log('═══ 1. 文本模块（parsed: readme.md）Viewer 态 = 3:4 + 视觉中心 ═══')
+  console.log('═══ 1. 文本模块（parsed: readme.md）Viewer 态 = 3:4 + 原地展开 ═══')
   await page.evaluate(function () { App.Desktop.openItem('readme.md') })
   await page.waitForFunction(function () { return document.querySelector('.viewer-card-canvas') }, { timeout: 5000 })
   let r1 = await page.evaluate(function () {
@@ -64,17 +68,21 @@ async function main() {
   })
   check(Math.abs(r1.ratio - 3 / 4) < 0.02, '文本模块 Viewer 态卡片 = 3:4 竖版（宽:高 ≈ 3:4，实测 ' + r1.ratio.toFixed(3) + '）')
 
-  console.log('═══ 2. 视觉中心锚点（相机中心世界坐标）═══')
+  console.log('═══ 2. 原地展开锚点（卡片左上 = 图标左上世界坐标，超视口夹回） ═══')
   const r2 = await page.evaluate(function () {
     const vw = document.getElementById('viewer-layer').clientWidth
     const vh = document.getElementById('viewer-layer').clientHeight
-    const cam = App.DesktopCamera.create(200, 300, 1)  // 相机左上角世界点 (200,300)
-    const vc = App.InternalViewer.visualCenter(cam, vw, vh)
-    const rect = App.InternalViewer.worldRect(vc, 300, 400)
-    return { cx: vc.x, cy: vc.y, rectCenterX: rect.x + rect.w / 2, rectCenterY: rect.y + rect.h / 2 }
+    const cam = App.DesktopCamera.create(0, 0, 1)
+    // 图标在视口内：卡片左上 = 图标左上（原地展开，无偏移）
+    const rIn = App.InternalViewer.anchorRect({ x: 50, y: 120 }, 300, 400, cam, vw, vh)
+    // 图标靠近右下边缘：卡片夹回可视区（16px 边距 + 顶部预留 96px）
+    const rClamp = App.InternalViewer.anchorRect({ x: vw - 20, y: vh - 20 }, 300, 400, cam, vw, vh)
+    return { rIn: rIn, rClamp: rClamp, vw: vw, vh: vh }
   })
-  check(Math.abs(r2.cx - r2.rectCenterX) < 0.001 && Math.abs(r2.cy - r2.rectCenterY) < 0.001,
-    '视觉中心 = 相机中心世界点，卡片中心对齐该锚点')
+  check(r2.rIn && r2.rIn.x === 50 && r2.rIn.y === 120,
+    '原地展开：视口内图标 → 卡片左上 = 图标左上（原位变成 Viewer）')
+  check(r2.rClamp && r2.rClamp.x === (r2.vw - 16 - 300) && r2.rClamp.y === (r2.vh - 16 - 400),
+    '原地展开：图标贴右下边缘 → 卡片夹回可视区（右下 16px 边距）')
 
   console.log('═══ 3. 文本完整预览态 = reader 工具条 + 缩放 + 换行 ═══')
   await page.evaluate(function () { App.InternalViewer.closeAll() })
@@ -82,7 +90,7 @@ async function main() {
   await page.waitForFunction(function () { return document.querySelector('.viewer-pre') }, { timeout: 5000 })
   await page.evaluate(function () {
     const hit = App.InternalViewer.topmostAt(200, 400)
-    if (hit) { App.InternalViewer.selectOnly(hit.id); hit.toFullscreen() }
+    if (hit) { App.DesktopCore.selection = App.DesktopSelection.selectOnly(hit.getPath()); App.DesktopRender.applySelection(); hit.toFullscreen() }
   })
   await page.waitForFunction(function () { return document.querySelector('.viewer-card-fullscreen .viewer-pre') }, { timeout: 5000 })
   const r3 = await page.evaluate(function () {
@@ -143,7 +151,7 @@ async function main() {
     const cardBefore = { w: parseFloat(card.style.width), h: parseFloat(card.style.height) }
     const imgBefore = { w: img.getBoundingClientRect().width, h: img.getBoundingClientRect().height }
     const headerBefore = getComputedStyle(header).display
-    App.InternalViewer.selectOnly(inst.id)
+    App.DesktopCore.selection = App.DesktopSelection.selectOnly(inst.getPath()); App.DesktopRender.applySelection()
     const hs = getComputedStyle(header)
     const hr = header.getBoundingClientRect()
     const br = body.getBoundingClientRect()
@@ -180,7 +188,7 @@ async function main() {
     const card = inst._card
     const header = card.querySelector('.viewer-header')
     const body = card.querySelector('.viewer-body')
-    App.InternalViewer.selectOnly(inst.id)
+    App.DesktopCore.selection = App.DesktopSelection.selectOnly(inst.getPath()); App.DesktopRender.applySelection()
     const hs = getComputedStyle(header)
     const hr = header.getBoundingClientRect()
     const br = body.getBoundingClientRect()
@@ -205,7 +213,7 @@ async function main() {
     const b = document.querySelector('.viewer-card-canvas').getBoundingClientRect()
     return { left: b.left, top: b.top, w: b.width, h: b.height, right: b.right }
   })
-  const before = await page.evaluate(function () { return App.InternalViewer.anySelected() })
+  const before = await page.evaluate(function () { return App.DesktopCore.selection.size > 0 })
   const client = await page.target().createCDPSession()
   const sy = card.top + card.h / 2
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: Math.max(0, card.left - 40), y: sy, id: 1 }] })
@@ -213,7 +221,7 @@ async function main() {
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: card.right + 40, y: sy, id: 1 }] })
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await new Promise(function (res) { setTimeout(res, 200) })
-  const after = await page.evaluate(function () { return App.InternalViewer.anySelected() })
+  const after = await page.evaluate(function () { return App.DesktopCore.selection.size > 0 })
   check(!before && after, '框选划过未选中 Viewer → 触发选中（' + before + ' → ' + after + '）')
 
   console.log('═══ 7. 纯函数三模块映射 ═══')
@@ -225,14 +233,14 @@ async function main() {
       img: App.InternalViewer.moduleFor('image'),
       portraitTxt: App.InternalViewer.cardIsPortrait('text'),
       portraitImg: App.InternalViewer.cardIsPortrait('image'),
-      centerMd: App.InternalViewer.anchorIsCenter('markdown'),
-      centerMp3: App.InternalViewer.anchorIsCenter('audio')
+      portraitAudio: App.InternalViewer.cardIsPortrait('audio'),
+      portraitVideo: App.InternalViewer.cardIsPortrait('video')
     }
   })
   check(r5.md === 'parsed' && r5.txt === 'text' && r5.mp3 === 'media' && r5.img === 'media',
     'moduleFor 三模块分派正确')
   check(r5.portraitTxt && !r5.portraitImg, 'cardIsPortrait: 文本 3:4 / 图片原始比例')
-  check(r5.centerMd && !r5.centerMp3, 'anchorIsCenter: 解析文本视觉中心 / 音频文件位置')
+  check(r5.portraitAudio && !r5.portraitVideo, 'cardIsPortrait: 音频 3:4 封面卡片 / 视频原始比例')
 
   await browser.close()
   if (failures > 0) { console.error('[FAIL] ' + failures + ' 项失败'); process.exit(1) }

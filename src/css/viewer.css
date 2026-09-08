@@ -17,36 +17,6 @@
   pointer-events: auto;
 }
 
-/* ── 拖动手柄：canvas 态 Viewer 底部中心下方的悬浮横条（屏幕层固定尺寸）── */
-.viewer-drag-handle {
-  position: absolute;
-  border-radius: 0;
-  background: rgba(107, 114, 128, 0.55);
-  pointer-events: none;   /* 纯视觉；命中走手势层 handleAt 世界坐标判定 */
-  transition: background 0.15s ease;
-}
-
-.viewer-drag-handle.viewer-drag-handle-active {
-  background: var(--color-accent);
-}
-
-/* ── 拖动手柄：canvas 态 Viewer 卡片底部中心下方的悬浮小横条（辅助拖动入口）──
-   屏幕坐标定位（viewer-layer 内，不随画布 transform 缩放），固定尺寸；
-   命中检测走手势层世界坐标（handleWorldRect 反算），元素本身 pointer-events 穿透
-   （layer 默认 none），不拦截桌面手势。 */
-.viewer-drag-handle {
-  position: absolute;
-  border-radius: 0;
-  background: rgba(107, 114, 128, 0.5);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-  pointer-events: none;
-  transition: background 0.15s ease;
-}
-
-.viewer-drag-handle.viewer-drag-handle-active {
-  background: var(--color-accent);
-}
-
 /* 卡片：flex 纵向面板（canvas 态世界坐标定位 / fullscreen 态占满内容区） */
 .viewer-card {
   display: flex;
@@ -130,6 +100,16 @@
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--color-surface);
+}
+
+/* 画布实体静态预览（viewer-card-static，2026-08-20 刀 1）：
+   canvas 态非音视频模块内容零交互——图片式预览，不滚动不点按；
+   选中/多选/移动等实体手势与文件图标一致（触摸穿透到卡片 → 手势层），
+   内容操作（滚动/阅读/网页）只在全屏预览态。
+   视频/音频不加 static 标记，保留原生控件（唯一例外）。 */
+.viewer-card-canvas.viewer-card-static .viewer-body {
+  pointer-events: none;
+  overflow: hidden;
 }
 
 /* ── 文本（TXT） ── */
@@ -259,6 +239,8 @@
   width: 100%;
   max-height: 100%;
   background: #000;
+  /* 未播放时以 poster（实际首帧）等比显示，不拉伸/裁切；播放后同样 contained */
+  object-fit: contain;
 }
 
 /* ── 音频（3:4 封面卡片：占位封面 + 原生播放控制）── */
@@ -454,18 +436,11 @@
   background: var(--hover-dim);
 }
 
-/* ── 文件锁定标记（Windows 式：被 Viewer 打开的文件，禁复制/剪切/移动/删除/重命名） ── */
-.desktop-icon-locked {
-  position: relative;
-}
-
-.desktop-icon-locked::after {
-  content: '\1F512';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 14px;
-  line-height: 1;
+/* 关闭落位动画：图标从 Viewer 窗口位置飞入网格格位（transform 由
+ * desktop-viewer-link 设置/清除；class 动画结束后清理，不残留 transition） */
+.desktop-icon.desktop-icon-landing {
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 5;
 }
 
 /* ── 相册式全屏（#viewer-fs-page）：媒体黑底 contain 居中；文档浅色阅读 ── */

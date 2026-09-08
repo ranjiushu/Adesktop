@@ -55,7 +55,7 @@ git status && git log --oneline -3     # 工作区上下文
 | `bash tools/build-web.sh` | src/ → dist/adesktop.bundle.html（--strict 体积棘轮） |
 | `node tools/minify-bundle.js` | 压缩 → dist/adesktop.bundle.min.html |
 | `npm run typecheck` | 渐进式类型检查（tsc --noEmit，覆盖 @ts-check 模块） |
-| `bash android/build-local.sh` | 全量构建 + 归档 APK 到 /workspace/AAA 安装包/（滚动保留最新 10 个 + R8 mapping）+ 每 25 提交 COS bundle 备份 |
+| `bash android/build-local.sh` | 全量构建 + 归档 APK 到 /workspace/AAA 安装包/（滚动保留最新 10 个 + R8 mapping） |
 | `bash tools/verify.sh` | 提交前门禁（env-check + build --strict + typecheck + minify + lint + 测试 + E2E × 6） |
 | `bash tools/lint.sh` | 代码检查（构建一致性/文档链接/CHANGELOG/头部注释/var 纪律） |
 | `bash tests/run-tests.sh` | 测试套件（自动发现 test-*.js / test-*.sh） |
@@ -69,6 +69,8 @@ main ←── merge --no-ff only ── feat/dev ←── topic 分支
 ```
 
 **日常开发**：单文件小改直接 commit 到 `feat/dev`；跨文件/实验性改动开 topic：
+> 长周期/实验性任务可开独立 worktree（置于 `/workspace/wt/`，用完合流回主线并 `worktree remove`），规范见 `/skills/git-workflow/SKILL.md`「Work Tree 使用规范」。
+
 
 ```bash
 git checkout -b feat/xxx feat/dev

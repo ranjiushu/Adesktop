@@ -271,14 +271,16 @@ async function main() {
     fail('根目录 docs 图标未渲染（folder 场景跳过）')
   }
 
-  // ── 4.5 横屏/竖屏 Home 槽位独立（切换画布方向后落在对应方向槽位位置）──
-  // 竖屏平移相机 → 长按记录竖屏快照（位置 P1）→ 旋转到横屏：横屏无快照 → 保持
-  // 当前位置只转方向 → 横屏再平移 → 长按记录横屏快照（位置 P2 ≠ P1）→ 转回竖屏：
-  // 应落在竖屏槽位位置 P1 → 再转横屏：应落在横屏槽位位置 P2
+  // ── 4.5 横屏/竖屏快照槽位独立 ──
+  // 快照按钮长按记录当前方向的快照槽位（竖屏/横屏各自独立、互不覆盖）。
+  // 旋转本身是纯保中心（不跳槽位，见 4.5b）；Home 与快照彻底分离（点 Home 回 Home 锚点，
+  // 无锚点则出厂）。此段验证：长按快照按钮可分别写入 portrait / landscape 槽位且位置不同、
+  // 互不覆盖，且快照不触发 Home 锚点类。
   const homeRect = await rect('#bb-btn-home')
+  const snapRect = await rect('#bb-btn-snapshot')
   const vp = await rect('#desktop-viewport')
-  if (homeRect && vp) {
-    // 竖屏：平移相机偏离原点 → 长按 Home 记录竖屏快照（P1）
+  if (homeRect && vp && snapRect) {
+    // 竖屏：平移相机偏离原点 → 长按快照按钮记录竖屏快照（P1）
     await pan(client, vp.x, vp.y + 200, 120, 0)
     await sleep(200)
     const camPortrait = await page.evaluate(() => {
@@ -286,13 +288,13 @@ async function main() {
       const m = /translate3d\((-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px,\s*(-?[\d.]+(?:e-?\d+)?)px?\)\s*scale\(([\d.]+)\)/.exec(t)
       return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]), s: parseFloat(m[4]) } : null
     })
-    await tap(client, homeRect.x, homeRect.y, 650)
+    await tap(client, snapRect.x, snapRect.y, 650)
     await sleep(300)
     const bundleP = await page.evaluate(() => {
       try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
     })
     const snapP = bundleP && bundleP.portrait && bundleP.portrait.groups[0] && bundleP.portrait.groups[0].snapshots && bundleP.portrait.groups[0].snapshots[0]
-    if (snapP && snapP.camera) pass('竖屏长按 Home → 快照写入 portrait 槽位（tx=' + camPortrait.tx.toFixed(0) + '）')
+    if (snapP && snapP.camera) pass('竖屏长按快照按钮 → 快照写入 portrait 槽位（tx=' + camPortrait.tx.toFixed(0) + '）')
     else fail('竖屏快照写入断言', JSON.stringify(bundleP))
     // 旋转到横屏：横屏槽位尚无快照 → 保持当前位置只转方向（相机位置不变，仅加 rotate）
     await tap(client, menuBtn.x, menuBtn.y)
@@ -303,16 +305,16 @@ async function main() {
       document.getElementById('bb-btn-home').classList.contains('home-has-snapshot'))
     if (!hasSnapLand) pass('切横屏 → Home 不高亮（无锚点；快照与 Home 分离）')
     else fail('快照不应触发 Home 锚点类')
-    // 横屏：再平移相机（位置偏离竖屏槽位 P1）→ 长按记录横屏快照（P2 ≠ P1）
+    // 横屏：再平移相机（位置偏离竖屏槽位 P1）→ 长按快照按钮记录横屏快照（P2 ≠ P1）
     await pan(client, vp.x, vp.y + 200, -60, 40)
     await sleep(200)
-    await tap(client, homeRect.x, homeRect.y, 650)
+    await tap(client, snapRect.x, snapRect.y, 650)
     await sleep(300)
     const bundleL = await page.evaluate(() => {
       try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }
     })
     const snapL = bundleL && bundleL.landscape && bundleL.landscape.groups[0] && bundleL.landscape.groups[0].snapshots && bundleL.landscape.groups[0].snapshots[0]
-    if (snapL && snapL.camera) pass('横屏长按 Home → 快照写入 landscape 槽位')
+    if (snapL && snapL.camera) pass('横屏长按快照按钮 → 快照写入 landscape 槽位')
     else fail('横屏快照写入断言', JSON.stringify(bundleL))
     // 记录横屏平移后的相机位置（P2'——保中心转回竖屏的参照）
     const camLandBefore = await page.evaluate(() => {
@@ -329,7 +331,7 @@ async function main() {
       fail('竖屏/横屏快照槽位应独立且位置不同', JSON.stringify({ homeCam, landCam }))
     }
     // 竖屏更新快照 → 横屏槽位保留原值（互不覆盖）
-    await tap(client, homeRect.x, homeRect.y, 650)
+    await tap(client, snapRect.x, snapRect.y, 650)
     await sleep(300)
     const bundleP2 = await page.evaluate(() => {
       try { return JSON.parse(localStorage.getItem('desktop.snapshots.legacy.v3')) } catch (e) { return null }

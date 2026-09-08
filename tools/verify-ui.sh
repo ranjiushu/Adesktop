@@ -10,7 +10,7 @@
 set -uo pipefail
 cd "$(dirname "$(dirname "${BASH_SOURCE[0]}")")"
 
-VERIFY="/skills/ui-verify/scripts/verify-insets.js"
+VERIFY="/skills/toolchain-skills/ui-verify/scripts/verify-insets.js"
 HTML="dist/adesktop.bundle.min.html"
 
 if [ ! -x "/workspace/chrome/arm64/chrome-headless-shell-linux-arm64/chrome-headless-shell" ] && [ -z "${CHROME_PATH:-}" ]; then

@@ -1,51 +1,81 @@
 # Adesktop
 
-以真实文件系统为基础的移动端空间化工作台。像 Windows 桌面：文件即对象，图标自由摆放，位置持久记忆。
+以**真实文件系统**为基础的移动端空间化工作台——把 Windows 桌面的隐喻搬到 Android 上：
+文件即对象，图标自由摆放，位置持久记忆。
 
-技术栈与 LexiCull 相同：纯前端单文件 + Android WebView 壳，零框架零第三方依赖。
+纯前端单文件 + Android WebView 壳，**零框架、零第三方运行时依赖**。
 
-## 定位
+## 特性
 
-- **文件即真相**：一切数据（包括桌面布局）落真实文件系统，不做云端/数据库抽象
-- **空间化**：图标在桌面自由摆放，位置/大小存元数据文件，重启还原
-- **移动端优先**：触控交互、安全区适配、真机文件系统访问（Java Bridge）
+- **文件即真相**：一切数据（包括桌面布局）落在真实文件系统，不做云端/数据库抽象
+- **空间化桌面**：图标自由摆放、框选、混合拖动，位置/相机等元数据以隐藏文件形式随目录迁移
+- **内置文件查看器**：图片/音视频/文本/JSON/网页预览，桌面内小窗 + 全屏两级视图
+- **文件操作**：复制/移动/重命名/删除/压缩等八类操作，SAF 授权目录 + 私有目录双后端
+- **移动端优先**：触控手势状态机、安全区适配、edge-to-edge 沉浸式
 
-## 结构
+## 技术架构
 
 ```
-src/                     拆分源码（index.html + css/ + js/）
-  index.html             应用骨架，__STYLE_PLACEHOLDER__ / __JS_PLACEHOLDER__ 占位
-  css/                   样式（按 CSS_ORDER 拼接）
-  js/                    逻辑（按 JS_ORDER 拼接，先定义后使用）
-tools/                   构建脚本
-  build-web.sh           src/ → dist/adesktop.bundle.html
-  minify-bundle.js       压缩 → dist/adesktop.bundle.min.html
-  build-local.sh         Android 全量构建 + 归档 APK
-  verify.sh              提交前门禁
-tests/                   测试套件（run-tests.sh 自动发现）
+src/                     前端源码（index.html + css/ + js/，零依赖 vanilla JS）
+tools/                   构建脚本（build-web.sh 拼接 → minify-bundle.js 压缩）
 android/                 WebView 壳（Gradle 工程，包名 com.ranjiushu.adesktop）
-docs/                    文档
-dist/                    构建产物（不入库）
+  └── FileBridge         经 SAF（Storage Access Framework）访问真实文件系统，
+                         以 @JavascriptInterface 暴露给前端，Promise 化调用
+tests/                   单元测试 + 无头 Chromium E2E
+docs/                    架构 / 桥协议 / 交互设计 / 数据完整性文档
 ```
+
+构建产物是**单个 HTML 文件**（`dist/adesktop.bundle.min.html`），打进 APK assets，
+WebView 加载后与 Java Bridge 交互。详见 `docs/architecture.md`、`docs/build-pipeline.md`。
 
 ## 构建
+
+前置：Node.js ≥ 22、Android SDK（compileSdk 34）、JDK 17。
 
 ```bash
 bash tools/build-web.sh        # 1. src/ → dist/adesktop.bundle.html
 node tools/minify-bundle.js    # 2. → dist/adesktop.bundle.min.html
-bash android/build-local.sh    # 3. 打包 APK 并归档到 /workspace/AAA 安装包/（滚动保留最新 10 个）
-bash tools/verify.sh           # 提交前门禁
+cd android && ./gradlew assembleRelease   # 3. → APK（R8 裁剪）
 ```
 
-## 快速上手
+也可以一步完成（构建 + 归档 APK）：
 
-1. 在 `src/js/` 新增模块，登记进 `tools/build-web.sh` 的 `JS_ORDER` / `CSS_ORDER`
-2. `bash tools/build-web.sh` 构建并验证产物
-3. 新增 `tests/test-*.js`，`bash tests/run-tests.sh` 运行
+```bash
+bash android/build-local.sh
+```
 
-## 状态
+### 签名
 
-- [x] 项目骨架初始化（src / tools / tests / android / git）
-- [ ] 应用功能开发
-- [x] 应用显示名（Adesktop）
-- [x] 包名（com.ranjiushu.adesktop，与 LexiCull 同域名前缀）
+默认使用 debug keystore 签名（仅适合开发/自用）。正式发布请在 `android/keystore.properties`
+中配置正式签名（该文件已被 gitignore）：
+
+```properties
+storeFile=my-release.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
+
+## 测试
+
+```bash
+bash tests/run-tests.sh   # 单元测试套件（自动发现 test-*.js / test-*.sh）
+bash tools/verify.sh      # 完整门禁：构建 + 类型检查 + 压缩 + lint + 测试 + E2E
+```
+
+## 文档
+
+| 文档 | 说明 |
+|------|------|
+| `docs/architecture.md` | 架构分层与桥接口协议 |
+| `docs/bridge-and-data-contract.md` | FileBridge 方法面与数据契约 |
+| `docs/interaction.md` | 桌面交互设计（坐标模型 / 手势状态机） |
+| `docs/data-integrity.md` | 「文件即真相」的数据完整性纪律 |
+| `docs/viewer.md` | 文件查看器架构决策 |
+
+## License
+
+[GPL-3.0](LICENSE) — Copyright (C) 2026 ranjiushu
+
+本程序是自由软件：你可以在 GNU 通用公共许可证 v3 的条款下再分发和/或修改它。
+衍生作品必须以相同协议开源。

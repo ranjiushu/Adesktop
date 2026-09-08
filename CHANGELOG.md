@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### 开源准备（GPL-3.0）（2026-09-08）
+
+- **新增 LICENSE**：GNU General Public License v3（全文本入库，README 附版权声明）
+- **README 重写**：面向外部读者——特性/架构/构建/签名/测试/文档索引，移除内部工作区路径
+  （`/workspace/AAA 安装包/`）与私有仓库交叉引用（`/workspace/lexicull`）
+- **移除私有备份耦合**：`tools/cos-bundle-check.sh` / `tools/bundle-source.sh` /
+  `tests/test-cos-bundle-check.sh` 从仓库剥离（含私有 COS 桶路径），`build-local.sh`
+  步骤 6 同步移除（管线收敛为 5 步）；备份能力迁移到仓库外本地脚本
+- **移除错放的 gifski 资产**：`gifski-web/` 子项目与 `android/build-gifski.sh`
+  迁出本仓库（gifski 已有独立仓库 gifski-android）
+- **正式签名通道**：`build.gradle` 新增 release signingConfig——存在
+  `android/keystore.properties`（已 gitignore）时用正式签名，否则回退 debug keystore，
+  明文 debug 密码不再承担发布职责
+- 文档同步：`docs/build-pipeline.md`（删 COS 备份一节 + 归档路径泛化）、
+  `docs/verification-matrix.md`、`docs/README.md`、`AGENTS.md`、post-commit 注释
+
 ### Viewer 选中模型统一（刀 2：Viewer 合入 C.selection，与文件同一套交互）（2026-08-20）
 
 - **动机**：刀 1 摘掉了手柄，但 Viewer 仍用独立选中状态（per-instance `selected` 标志 + `selectOnly/deselectAll/anySelected/selectedInstance` 并行 API），与文件的 `C.selection` Set 各管各的——框选只能单选 Viewer、混合拖动不支持、FAB 特判 `viewerSel` 靠五处手势回调手动同步，仍是一类同步 bug 温床

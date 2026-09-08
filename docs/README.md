@@ -13,4 +13,3 @@
 | `viewer.md` | 文件查看器架构决策（FileOpener 分派 / InternalViewer / HTML 桥隔离 / 锚点跟随） |
 | `repo-map.md` | 仓库地图（逐源文件行数 + 职责，构建时自动生成，不入库） |
 
-技术栈基准：`/workspace/lexicull`（同构参考，禁止直接复制其业务代码）。

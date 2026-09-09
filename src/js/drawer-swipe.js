@@ -149,12 +149,17 @@ App.DrawerSwipe = (function () {
     function handleStart(e) {
       if (e.touches.length !== 1) return
       if (!drawer.classList.contains('drawer-open')) return
-      // 触摸可交互元素时不启动关闭手势（按钮走 bindPress，输入框走键盘）
+      // 仅豁免可编辑元素（输入框走触摸聚焦/软键盘）。
+      // 按钮不再豁免：Blink 触摸目标调整（touch adjustment）会把按钮边缘数 px 内的
+      // touchstart 吸附到按钮上——若跳过按钮，「从按钮（或其吸附区）起滑」永远
+      // 关不掉 Drawer（真机+E2E 均可复现的坑）。
+      // 冲突解法：起滑照常跟踪；确认是关闭滑动后由 handleEnd 在 capture 阶段
+      // stopPropagation 掉 touchend，起点按钮的 bindPress 收不到松手事件、
+      // 不误触发；若只是点按（未进入 closing），事件链原样放行，按钮正常响应。
       let t = e.target
-      if (t && (t.tagName === 'BUTTON' || t.tagName === 'INPUT' ||
-                t.tagName === 'TEXTAREA' || t.tagName === 'A' ||
-                t.tagName === 'SELECT')) return
-      if (t && t.closest('button, input, textarea, a, select')) return
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+                t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (t && t.closest('input, textarea, select, [contenteditable]')) return
       _sx = e.touches[0].clientX
       _sy = e.touches[0].clientY
       _samplePts = []
@@ -193,6 +198,9 @@ App.DrawerSwipe = (function () {
     function handleEnd(e) {
       if (_state !== 'closing') { _state = 'idle'; return }
       _state = 'idle'
+      // 手势已消费为关闭滑动：capture 阶段掐断 touchend 传播，起点若落在按钮上
+      // （含触摸吸附），其 bindPress 收不到 touchend、不会误触发按钮动作
+      if (e && typeof e.stopPropagation === 'function') e.stopPropagation()
       let dist = Math.abs((e && e.changedTouches && e.changedTouches[0]
         ? e.changedTouches[0].clientX : 0) - _sx)
       let progress = Math.min(_width, dist) / _width
@@ -213,7 +221,8 @@ App.DrawerSwipe = (function () {
       if (App.Drawer && typeof App.Drawer.open === 'function') App.Drawer.open()
     }
 
-    // capture:true 确保在 bindPress 之前拦截（drawer 内按钮 touchstart 已被跳过）
+    // touchend/touchmove 用 capture:true：确保在起点按钮的 bindPress（bubble 阶段）
+    // 之前拦截——关闭滑动被消费时 stopPropagation，按钮不误触发（见 handleEnd）
     drawer.addEventListener('touchstart', handleStart, { passive: true })
     drawer.addEventListener('touchmove', handleMove, { passive: false, capture: true })
     drawer.addEventListener('touchend', handleEnd, { capture: true })

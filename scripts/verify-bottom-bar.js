@@ -144,17 +144,42 @@ async function main() {
   else fail('底栏右划未打开 Drawer')
 
   // ── 4. Drawer 左滑 → 跟手关闭 ──
-  // 起滑点须在列表项下方足够远的空白区：Blink 触摸目标调整（touch adjustment）会把
-  // 按钮下方数 px 内的 touchstart 重定向到最近的可点元素，导致关闭手势被
-  // handleStart 的「按钮上不启动」守卫跳过（Drawer 头部布局微调动过按钮底边后踩中）。
-  await swipe(client, 250, 600, 80, 600, 12, 12)
+  // 起滑点 y=520 刻意选在末个按钮底边几 px 内：Blink 触摸目标调整（touch adjustment）
+  // 会把该 touchstart 吸附到按钮上——回归「按钮吸附区起滑关不掉 Drawer」的坑
+  // （修复：handleStart 不再跳过按钮，消费为关闭滑动时 stopPropagation 掉 touchend）。
+  await swipe(client, 250, 520, 80, 520, 12, 12)
   await sleep(450)
   const swipedClosed = await page.evaluate(() => {
     const d = document.getElementById('drawer')
     return !(d && d.classList.contains('drawer-open'))
   })
-  if (swipedClosed) pass('Drawer 左滑 → 跟手关闭')
+  if (swipedClosed) pass('Drawer 左滑 → 跟手关闭（按钮吸附区起滑）')
   else fail('Drawer 左滑未关闭')
+
+  // ── 4b. 从按钮正中起滑左滑 → Drawer 关闭且按钮动作不触发 ──
+  await swipe(client, 40, bbY, 340, bbY, 12, 12)
+  await sleep(450)
+  const btnRect = await page.evaluate(() => {
+    const b = document.getElementById('btn-build-info')
+    if (!b) return null
+    const r = b.getBoundingClientRect()
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+  })
+  if (btnRect) {
+    const endX = Math.max(20, btnRect.x - 170)
+    await swipe(client, btnRect.x, btnRect.y, endX, btnRect.y, 12, 12)
+    await sleep(450)
+    const btnSwipe = await page.evaluate(() => {
+      const d = document.getElementById('drawer')
+      const bi = document.getElementById('buildinfo')
+      return {
+        drawerClosed: !(d && d.classList.contains('drawer-open')),
+        buildinfoOpen: !!(bi && bi.classList.contains('buildinfo-open'))
+      }
+    })
+    if (btnSwipe.drawerClosed && !btnSwipe.buildinfoOpen) pass('按钮正中起滑 → 关闭且不误触发按钮动作')
+    else fail('按钮起滑异常: ' + JSON.stringify(btnSwipe))
+  } else fail('btn-build-info 缺失')
 
   // ── 5. 底栏小幅慢滑（<30% 且低速）→ 弹回不打开 ──
   await swipe(client, 40, bbY, 100, bbY, 12, 40)

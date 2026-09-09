@@ -218,36 +218,41 @@
   <div class="view-menu-hint">打开文件夹后可用</div>
 </nav>
 
-<!-- ===== 左侧 Drawer 工具栏（汉堡呼出） ===== -->
+<!-- ===== 左侧 Drawer（汉堡呼出）：MT 管理器式——深色头部（应用徽章 + 名称 + 存储模式）+ 分组列表 ===== -->
 <div id="drawer-overlay" class="drawer-overlay"></div>
 <nav id="drawer" class="drawer" aria-hidden="true">
   <div class="drawer-header">
-      <span class="drawer-title">工具栏</span>
+    <span class="drawer-app-badge">A</span>
+    <div class="drawer-app-meta">
+      <span class="drawer-title">Adesktop</span>
+      <span class="drawer-subtitle" id="drawer-root-mode"></span>
     </div>
+  </div>
   <div class="drawer-body">
-    <div class="drawer-section">
-      <div class="drawer-label">根目录</div>
-      <div class="drawer-root-path" id="drawer-root-path">未知</div>
-      <div class="drawer-root-mode" id="drawer-root-mode"></div>
-      <button class="drawer-item" data-action="desktop-dir">
-        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder"/></svg></span><span>桌面目录</span>
-      </button>
+    <div class="drawer-group-label">本地</div>
+    <div class="drawer-info-row">
+      <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder"/></svg></span>
+      <div class="drawer-info-meta">
+        <span class="drawer-info-title">根目录</span>
+        <span class="drawer-root-path" id="drawer-root-path">未知</span>
+      </div>
     </div>
-    <div class="drawer-section">
-      <div class="drawer-label">操作</div>
-      <button class="drawer-item" data-action="switch-root">
-        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder-move"/></svg></span><span>授权手机存储</span>
-      </button>
-      <button class="drawer-item" data-action="installed-apps">
-        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-smartphone"/></svg></span><span>已安装应用</span>
-      </button>
-      <button class="drawer-item" data-action="new-website">
-        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-external-link"/></svg></span><span>新建网站</span>
-      </button>
-      <button class="drawer-item" id="btn-build-info">
-        <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-wrench"/></svg></span><span>提交与构建</span>
-      </button>
-    </div>
+    <button class="drawer-item" data-action="desktop-dir">
+      <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-folder-move"/></svg></span><span>桌面目录</span>
+    </button>
+    <div class="drawer-group-label">工具</div>
+    <button class="drawer-item" data-action="switch-root">
+      <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-smartphone"/></svg></span><span>授权手机存储</span>
+    </button>
+    <button class="drawer-item" data-action="installed-apps">
+      <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-grid"/></svg></span><span>已安装应用</span>
+    </button>
+    <button class="drawer-item" data-action="new-website">
+      <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-external-link"/></svg></span><span>新建网站</span>
+    </button>
+    <button class="drawer-item" id="btn-build-info">
+      <span class="drawer-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-wrench"/></svg></span><span>提交与构建</span>
+    </button>
   </div>
 </nav>
 

@@ -1,19 +1,18 @@
-/* 已安装应用面板：全屏覆盖，右侧滑入（标准页面跳转方向，与 Drawer 来源方向解耦；
+/* 已安装应用面板：全屏覆盖，无过渡动画直接切换（用户明确不要滑入弹出效果；
    系统返回键/返回按钮退出）。层级 1200：与 buildinfo 同级；确认框复用 dialog-overlay（1300）。 */
 .app-list {
   position: fixed;
   inset: 0;
   z-index: 1200;
   background: var(--color-bg);
-  transform: translateX(100%);
-  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  visibility: hidden;
   display: flex;
   flex-direction: column;
   padding-top: var(--safe-top, 0px);
   padding-bottom: var(--safe-bottom, 0px);
 }
 .app-list.app-list-open {
-  transform: translateX(0);
+  visibility: visible;
 }
 
 .app-list-header {

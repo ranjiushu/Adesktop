@@ -144,7 +144,10 @@ async function main() {
   else fail('底栏右划未打开 Drawer')
 
   // ── 4. Drawer 左滑 → 跟手关闭 ──
-  await swipe(client, 250, 520, 80, 520, 12, 12)
+  // 起滑点须在列表项下方足够远的空白区：Blink 触摸目标调整（touch adjustment）会把
+  // 按钮下方数 px 内的 touchstart 重定向到最近的可点元素，导致关闭手势被
+  // handleStart 的「按钮上不启动」守卫跳过（Drawer 头部布局微调动过按钮底边后踩中）。
+  await swipe(client, 250, 600, 80, 600, 12, 12)
   await sleep(450)
   const swipedClosed = await page.evaluate(() => {
     const d = document.getElementById('drawer')

@@ -66,13 +66,13 @@
   transform: translateX(0);
 }
 
-/* 头部（MT 管理器式）：深色横带，应用徽章 + 名称 + 当前存储模式副标题 */
+/* 头部（MT 管理器式信息结构，浅色化）：应用徽章 + 名称 + 当前存储模式副标题。
+   与列表同底不切块——深色横带在浅色主题里突兀（真机反馈） */
 .drawer-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: var(--space-lg) var(--space-md) var(--space-md);
-  background: #26292f;
+  padding: var(--space-lg) var(--space-md) var(--space-sm);
 }
 .drawer-app-badge {
   display: flex;
@@ -81,7 +81,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
+  background: #26292f;
   color: #fff;
   font-size: var(--font-size-lg);
   font-weight: 700;
@@ -95,12 +95,12 @@
 .drawer-title {
   font-size: var(--font-size-lg);
   font-weight: 600;
-  color: #fff;
+  color: var(--color-text);
   line-height: 1.3;
 }
 .drawer-subtitle {
   font-size: var(--font-size-sm);
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--color-text-secondary);
   margin-top: 2px;
   overflow: hidden;
   white-space: nowrap;

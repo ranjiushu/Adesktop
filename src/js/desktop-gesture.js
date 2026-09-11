@@ -3,10 +3,12 @@
  * 单指 tap/框选/长按拿起留待阶段 B 扩展（状态机已预留 single/dead 路径）。
  * 阶段 E：高级浏览模式——单指拖动（任意位置）→ 平移画布（桌面）/ 滚动目录（文件夹），
  *         由 _browseMode 标志控制；空位命中进入 pan 相位而非 marquee。
+ * 阶段 G：单指 pan 惯性（动量）——松手后按末段速度平滑滑行一段（iOS DecelerationRate 模型，
+ *         图片查看器式手感）；只对高级浏览模式 pan 相位生效，慢拖即停，新手势/目录切换打断。
  * 关键：指数突变处理——1→2 取消单指意图；2→1 剩指进 dead 直到抬起，
  *       绝不误触发 tap/框选（这是触摸手势最易出 bug 的地方）。
  * 依赖: namespace.js, desktop-camera.js
- * 导出: App.DesktopGesture（纯函数供单元测试）
+ * 导出: App.DesktopGesture（纯函数供单元测试：windowVelocity/inertiaStep/inertiaDone）
  */
 'use strict'
 
@@ -45,10 +47,67 @@ App.DesktopGesture = (function () {
     return cam
   }
 
+  // ── 纯函数：末段速度（VelocityTracker 语义，100ms 窗口，与 drawer-swipe 一致）──
+  // samples: [{x, y, t}]（viewport 局部坐标 + 时间戳，t 相对或绝对均可）；返回 {vx, vy}（px/ms）。
+  // 取窗口内最早→最晚样本的位移/时间。样本 <2 或时间未推进 → 0（无速度可算）。
+  function windowVelocity(samples, windowMs) {
+    const W = (typeof windowMs === 'number' && windowMs > 0) ? windowMs : FLING_VELOCITY_WINDOW_MS
+    if (!Array.isArray(samples) || samples.length < 2) return { vx: 0, vy: 0 }
+    const s1 = samples[samples.length - 1]
+    const cut = s1.t - W
+    let s0 = samples[0]
+    // 取窗口内最早样本（跳过窗口外的旧样本）
+    for (let i = 0; i < samples.length; i++) {
+      if (samples[i].t >= cut) { s0 = samples[i]; break }
+    }
+    const dt = s1.t - s0.t
+    if (dt <= 0) return { vx: 0, vy: 0 }
+    const win = Math.max(16, dt)   // 单帧下限 16ms：防除零 + 模拟一次 move 帧最短窗口
+    return { vx: (s1.x - s0.x) / win, vy: (s1.y - s0.y) / win }
+  }
+
+  // ── 纯函数：惯性一帧（iOS DecelerationRate 衰减 + 步进）──
+  // camera 当前相机；vel = {vx, vy}（px/ms，屏幕方向）；dtMs 步进时长；返回 { camera, vel }。
+  // 衰减：v *= DecelerationRate^dt（每 ms 乘以保留比例，iOS UIScrollView 标准模型）；
+  // 位移：dxScreen = vx·dt（经 CAM.panBy 走世界/旋转换算），收当前速度（而非衰减后）作本帧位移
+  // ——第一帧全速、后续递减，起步不弹跳、收尾平滑。
+  function inertiaStep(camera, vel, dtMs) {
+    const dt = (typeof dtMs === 'number' && dtMs > 0) ? dtMs : 16
+    const f = Math.pow(FLING_DECELERATION_RATE, dt)
+    const nv = { vx: vel.vx * f, vy: vel.vy * f }
+    return {
+      camera: CAM.panBy(camera, vel.vx * dt, vel.vy * dt),
+      vel: { vx: nv.vx, vy: nv.vy }
+    }
+  }
+
+  // ── 纯函数：惯性是否应收尾（速度低于停止阈值 或 超过最大时长）──
+  function inertiaDone(vel, elapsedMs) {
+    if (!vel) return true
+    if (typeof elapsedMs === 'number' && elapsedMs > FLING_MAX_MS) return true
+    return Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy) < FLING_STOP_SPEED
+  }
+
   // ══ 单指手势状态机（阶段 B）：pending → tap / marquee / pickedup → dragmove ══
   // 判定规则（先到先得）：位移先超阈值 → 框选；停留先超长按时长 → 拿起；快速抬起 → tap。
   const TAP_THRESHOLD = 6      // px，tap/拖拽判定阈值
   const LONGPRESS_MS = 500     // ms，长按拿起触发时长
+
+  // ══ 单指 pan 惯性（动量）参数：采用 iOS UIScrollView 的 DecelerationRate 成熟模型。 ══
+  // 手感基准 = 图片查看器/相册"放大后滑动、滑一段就平滑停"的标准手感（Apple 官方文档化参数）。
+  // DecelerationRate 语义：每毫秒速度乘以该比例（v(t) = v0 · d^t），是照片/画廊类 app 公认手感的来源：
+  //   normal = 0.998 → 滚动很长才停（长列表、翻页）；fast = 0.99 → 一小段就平滑停（浏览器/图片查看器滚动）。
+  // 本需求是"移动一小段即停"，故取 fast = 0.99。速度单位 px/ms（viewport 局部坐标，与 pan 屏幕位移一致）。
+  // 配套成熟做法（根治"滚太远""急停"）：
+  //   ① 停止阈值降到接近不可见（0.005 px/ms ≈ 每帧 0.08px），避免滑动未消、视觉可感时被一刀切 → 急停感。
+  //   ② 时长上限放宽为纯防死循环兜底（不主动截断，让指数衰减自然收尾，收尾平滑）。
+  //   ③ 速度上限（Android VelocityTracker maxVelocity 标准做法）：防极用力甩导致速度失控滚太远。
+  const FLING_VELOCITY_WINDOW_MS = 100    // 速度采样窗口（px/ms，与 drawer-swipe 一致）
+  const FLING_SPEED_THRESHOLD = 0.2       // 触发惯性的最小松手速度（px/ms，低于即跟手停）
+  const FLING_DECELERATION_RATE = 0.99    // iOS UIScrollView.DecelerationRate.fast（每 ms 保留比例）
+  const FLING_STOP_SPEED = 0.005          // 停止阈值（px/ms，视觉不可见时才停 → 无急停感）
+  const FLING_MAX_MS = 3000               // 最大时长（纯防死循环，指数衰减会提前自然收尾）
+  const FLING_MAX_SPEED = 4               // 速度上限（px/ms，防失控滚太远；Android maxVelocity 标准约 5）
 
   function createSingle() {
     return { phase: 'idle', hitType: 'empty', startX: 0, startY: 0, startT: 0, lastX: 0, lastY: 0 }
@@ -157,6 +216,13 @@ App.DesktopGesture = (function () {
   let _cb = null         // 语义事件回调集合
   let _opts = null       // 阈值配置 {tapThreshold, longPressMs}
   let _browseMode = false  // 高级浏览模式标志（Desktop.setBrowseMode 驱动）
+  // 单指 pan 惯性（动量）：_panSamples 记录最近一次 pan 的触点轨迹（VelocityTracker 采样），
+  // 松手时用末段速度驱动 _flingVel（RAF 循环）；新手势/touchcancel/目录切换打断。
+  let _panSamples = null // [{x, y, t}] 最近一次 pan 触点采样（viewport 局部坐标 + 时间戳）
+  let _flingVel = null   // 惯性当前速度 {vx, vy}（px/ms），null = 无惯性在跑
+  let _flingRaf = null   // 惯性 RAF id（借用 _raf(_caf) 驱动）
+  let _flingT0 = 0       // 惯性起始时间（性能.now）
+  let _flingLastT = 0    // 上一帧时间（性能.now）
 
   function toLocal(t) {
     if (!_rect) _rect = _viewport.getBoundingClientRect()
@@ -260,8 +326,91 @@ App.DesktopGesture = (function () {
     }
   }
 
+  // ── RAF 驱动（无 RAF 环境兜底 setTimeout ~16ms）──
+  function _now() {
+    return (typeof performance === 'object' && typeof performance.now === 'function')
+      ? performance.now() : Date.now()
+  }
+  function _raf(cb) {
+    if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(cb)
+    return setTimeout(function () { cb(_now()) }, 16)
+  }
+  function _caf(id) {
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id)
+    else clearTimeout(id)
+  }
+
+  // ── 单指 pan 惯性驱动（动量）：松手后按末段速度平滑滑行，指数摩擦衰减 ──
+  // 触发（touchend pan 相位）：用 VelocityTracker 窗口速度；速度低于阈值不触发（跟手即停）。
+  // 循环（RAF）：每帧 inertiaStep 步进 + _applyClamp 钳制（folder 边界 或 desktop 自由）+ commit。
+  // 打断（onStart 新手势 / setCamera 目录切换 / touchcancel）：cancelFling 立即停，绝不让惯性
+  // 与手势/动画抢相机——用户一碰或目录一切换就归直控。
+  function startFling(vel) {
+    if (!vel) return
+    const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy)
+    if (speed < FLING_SPEED_THRESHOLD) return   // 慢拖即停，不滑行
+    // 速度上限（Android VelocityTracker maxVelocity 标准做法）：极用力甩的末段速度可能异常高，
+    // 若原样授权会让惯性滚太远 —— 按比例缩到上限，方向不变。阈值已过才钳制（不误伤正常滑动）。
+    let vx = vel.vx
+    let vy = vel.vy
+    if (speed > FLING_MAX_SPEED) {
+      const k = FLING_MAX_SPEED / speed
+      vx *= k
+      vy *= k
+    }
+    _flingVel = { vx: vx, vy: vy }
+    _flingT0 = _now()
+    _flingLastT = _flingT0
+    _flingRaf = _raf(flingFrame)
+  }
+
+  function flingFrame(now) {
+    if (!_flingVel) { _flingRaf = null; return }
+    const t = (typeof now === 'number') ? now : _now()
+    const dt = Math.max(0, t - _flingLastT)
+    _flingLastT = t
+    const before = _camera
+    const step = inertiaStep(before, _flingVel, dt)
+    const clamped = _applyClamp(step.camera)
+    _camera = clamped
+    // 关键：把衰减后的速度写回 _flingVel —— 否则每一帧都用同一个初始速度，
+    // 速度永不衰减 → 匀速无限滑（"滚太远""无摩擦"的根因，2026-08-25 真机反馈）。
+    // 注意衰减后的 step.vel 才是本帧的当前速度，先写回再对钳制轴清零（清零优先覆盖）。
+    _flingVel = { vx: step.vel.vx, vy: step.vel.vy }
+    // 轴被钳制（本应移动但位置未变 → 撞到 folder 边界）：该轴速度清零，防贴边抖动/推墙。
+    // desktop 空间无 onClamp → _applyClamp 原样返回，两轴都不会被清零，惯性自由衰减。
+    if (clamped.x === before.x) _flingVel.vx = 0
+    if (clamped.y === before.y) _flingVel.vy = 0
+    commit()
+    if (inertiaDone(_flingVel, t - _flingT0)) {
+      _flingVel = null
+      _flingRaf = null
+      return
+    }
+    _flingRaf = _raf(flingFrame)
+  }
+
+  function cancelFling() {
+    if (_flingRaf !== null) {
+      _caf(_flingRaf)
+      _flingRaf = null
+    }
+    _flingVel = null
+  }
+
+  // 记录一次 pan 触点采样（VelocityTracker 采样）：保留最近 100ms 窗口内的点，
+  // 供松手时 windowVelocity 计算末段速度；窗口前的旧点丢弃（减小数组 + 速度更准）。
+  function recordPanSample(x, y, t) {
+    if (!_panSamples) _panSamples = []
+    _panSamples.push({ x: x, y: y, t: t })
+    const cut = t - FLING_VELOCITY_WINDOW_MS
+    while (_panSamples.length > 1 && _panSamples[0].t < cut) _panSamples.shift()
+  }
+
   function onStart(e) {
     if (!_rect) _rect = _viewport.getBoundingClientRect()
+    // 任何真实手指落下都打断惯性（用户一碰就归手势直控）
+    cancelFling()
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i]
       _contacts.set(t.identifier, toLocal(t))
@@ -279,6 +428,7 @@ App.DesktopGesture = (function () {
         hitType = _cb.onHitTest(toWorld(c.x, c.y)) || 'empty'
       }
       _single = singleDown(c.x, c.y, c.t, hitType)
+      _panSamples = []   // 新手势清空上一次 pan 的速度采样
       startLongPressTimer()
     } else if (_mode === 'double') {
       // 1→2 指：取消当前单指意图（interaction.md §3——框选/长按拿起均取消）。
@@ -318,6 +468,7 @@ App.DesktopGesture = (function () {
       if (r.effect.type === 'marquee-start') cancelLongPressTimer()
       // 单指平移（高级浏览模式）：相机直接更新，与双指 pan 共用钳制+提交路径
       if (r.effect.type === 'pan') {
+        recordPanSample(c.x, c.y, c.t)
         _camera = _applyClamp(CAM.panBy(_camera, r.effect.dx, r.effect.dy))
         commit()
       }
@@ -338,12 +489,20 @@ App.DesktopGesture = (function () {
       const r = singleUp(_single, endLocal.x, endLocal.y, _opts)
       _single = r.sg
       handleEffect(r.effect)
+      // 单指 pan 松手 → 惯性滑行（仅高级浏览模式 pan 相位，其他相位无 _panSamples）
+      if (r.effect.type === 'pan-end') {
+        recordPanSample(endLocal.x, endLocal.y, endLocal.t)   // 把松手点纳入窗口
+        const vel = windowVelocity(_panSamples, FLING_VELOCITY_WINDOW_MS)
+        _panSamples = []
+        startFling(vel)
+      }
     }
     syncMode()
   }
 
   function onCancel(e) {
     cancelLongPressTimer()
+    cancelFling()   // touchcancel 打断惯性（系统接管即停，防残留滑行）
     // touchcancel（系统接管，如来电/通知/手势导航）可能发生在拿起/拖动中：
     // 派发 single-cancel 保证 picked-up 视觉与框选矩形被回收（生命周期终结路径）。
     const cancelled = singleCancel(_single)
@@ -358,6 +517,7 @@ App.DesktopGesture = (function () {
   // 目录切换后同步相机（Desktop 改了 camera 引用，手势层必须拿到同一份；folder 边界同样钳制）
   function setCamera(c) {
     if (!c) return
+    cancelFling()   // 目录切换/外部重设相机 → 停掉在跑的惯性（否则惯性会覆盖新路径相机并越界漂移）
     _camera = _applyClamp(c)
     commit()
   }
@@ -396,6 +556,8 @@ App.DesktopGesture = (function () {
     _prevDist = 0
     _rect = null
     _longPressTimer = null
+    _panSamples = []
+    cancelFling()   // 复位惯性态，防上一实例残留 RAF 驱动
     if (!_viewport) return false
     _viewport.addEventListener('touchstart', onStart, { passive: false })
     _viewport.addEventListener('touchmove', onMove, { passive: false })
@@ -413,6 +575,9 @@ App.DesktopGesture = (function () {
     centroid: centroid,
     modeAfter: modeAfter,
     panZoomStep: panZoomStep,
+    windowVelocity: windowVelocity,
+    inertiaStep: inertiaStep,
+    inertiaDone: inertiaDone,
     createSingle: createSingle,
     singleDown: singleDown,
     singleMove: singleMove,

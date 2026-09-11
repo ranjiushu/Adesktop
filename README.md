@@ -48,7 +48,7 @@ bash android/build-local.sh
 
 ### 签名
 
-默认使用 debug keystore 签名（仅适合开发/自用）。正式发布请在 `android/keystore.properties`
+默认使用 debug keystore 签名。正式发布请在 `android/keystore.properties`
 中配置正式签名（该文件已被 gitignore）：
 
 ```properties
@@ -67,13 +67,11 @@ bash tools/verify.sh      # 完整门禁：构建 + 类型检查 + 压缩 + lint
 
 ## 文档
 
-| 文档 | 说明 |
-|------|------|
-| `docs/architecture.md` | 架构分层与桥接口协议 |
-| `docs/bridge-and-data-contract.md` | FileBridge 方法面与数据契约 |
-| `docs/interaction.md` | 桌面交互设计（坐标模型 / 手势状态机） |
-| `docs/data-integrity.md` | 「文件即真相」的数据完整性纪律 |
-| `docs/viewer.md` | 文件查看器架构决策 |
+完整索引见 [`docs/README.md`](docs/README.md)（唯一权威清单）。核心入口：
+
+- `docs/architecture.md` — 架构分层与桥接口协议
+- `docs/interaction.md` — 桌面交互设计（坐标模型 / 手势状态机）
+- `docs/data-integrity.md` — 「文件即真相」的数据完整性纪律
 
 ## License
 

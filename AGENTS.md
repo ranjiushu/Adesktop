@@ -22,31 +22,39 @@ git status && git log --oneline -3     # 工作区上下文
 
 ### P0（违反即毁，绝无例外）
 
-1. **禁止直接编辑 `dist/`** —— 改 `src/` 后 `tools/build-web.sh` 重建
-2. **禁止 `git reset --hard`** —— 不可逆丢代码
-3. **禁止未经用户许可清 App 数据**
-4. **构建顺序不可变**：`build-web.sh` → `minify-bundle.js` → Gradle（串行，不可调换不可跳过）
-5. **提交前 `tools/verify.sh` 全绿**（build --strict + typecheck + minify + lint + 测试 + E2E × 6）
+1. **[P0-禁改产物] 禁止直接编辑 `dist/`** —— 改 `src/` 后 `tools/build-web.sh` 重建
+2. **[P0-禁硬重置] 禁止 `git reset --hard`** —— 不可逆丢代码
+3. **[P0-禁清数据] 禁止未经用户许可清 App 数据**
+4. **[P0-构建顺序] 构建顺序不可变**：`build-web.sh` → `minify-bundle.js` → Gradle（串行，不可调换不可跳过）
+5. **[P0-提交门禁] 提交前 `tools/verify.sh` 全绿**（build --strict + typecheck + minify + lint + 测试 + E2E 全量，步骤以脚本为准）
 
 ### P1（当次会话内纠正）
 
+**代码纪律**
+
+<!-- 同构节:begin p1-code -->
 - 数据写入路径禁止空 `catch(e){}`，失败必须返回 false + 持久告警
-- **桌面交互视觉设计（图标布局/间距/选中态/手势反馈）先参考 Windows/macOS 成熟模式
-  再动手**：图标占位（cell）尺寸固定统一、与内容解耦——缩略图大小/类型图标/文件名
-  行数只影响 cell 内部渲染，不影响 cell 尺寸；选中高亮跟随固定占位；网格步进 >
-  占位 + 余量。禁止让布局尺寸跟随内容撑开（撑开 → 高亮/间距随内容漂移 → 无止境
-  重叠补丁，踩坑教训见 `docs/interaction.md` 网格一节）
 - 文档/注释禁止 emoji（UI 字符串例外）
+- JS 用 ES6+（`const`/`let`/箭头/async-await/模板字符串），禁止新增 `var`
+<!-- 同构节:end -->
+- 桌面交互视觉设计先参考 Windows/macOS 成熟模式：图标占位（cell）尺寸固定统一、与内容解耦，禁止让布局尺寸随内容撑开（踩坑教训见 `docs/interaction.md` 网格一节）
+
+**流程纪律**
+
+<!-- 同构节:begin p1-process -->
 - 禁止以恢复旧状态为目的建长期 backup/archive 分支或标签
 - 改 `src/` 后必须构建；有意义的改动后 commit（中文，Conventional Commits）
-- topic 分支完成后当天 `merge --no-ff` 回 `feat/dev` 并 `branch-retire.sh` 退休
+- topic 分支完成后当天 `merge --no-ff` 回 `feat/dev` 并 `tools/branch-retire.sh` 退休
+- 稳定性优先于省时优化：真机实测不稳定的捷径不得自作主张引入，先问或按稳定路径做
+<!-- 同构节:end -->
 - 改存储布局/桥协议/模块边界的提交须同提交适配 `tests/` 验证套件
-- JS 用 ES6+（`const`/`let`/箭头/async-await/模板字符串），禁止新增 `var`
+
+**验证纪律**
+
+<!-- 同构节:begin p1-verify -->
 - 真机 UI 验证交用户，助手边界 = 无头 Chromium E2E + 单元测试 + logcat
-- 数据真相在文件系统：布局/相机等元数据必须走 `layout-store`/`home-store` 统一出口，
-  禁止裸改缓存对象（幽灵 positions 崩溃教训，详见 `docs/data-integrity.md`）
-- E2E 首次启动类 seed 须 `page.evaluateOnNewDocument` 注入（导航前）；
-  `file://` 下 `history.back()` 回 `about:blank` 干扰采样，避免依赖
+- E2E 首次启动类 seed 须 `page.evaluateOnNewDocument` 注入（导航前）；`file://` 下 `history.back()` 回 `about:blank` 干扰采样，避免依赖
+<!-- 同构节:end -->
 
 ## 常用命令
 
@@ -56,13 +64,14 @@ git status && git log --oneline -3     # 工作区上下文
 | `node tools/minify-bundle.js` | 压缩 → dist/adesktop.bundle.min.html |
 | `npm run typecheck` | 渐进式类型检查（tsc --noEmit，覆盖 @ts-check 模块） |
 | `bash android/build-local.sh` | 全量构建 + 归档 APK 到 /workspace/AAA 安装包/（滚动保留最新 10 个 + R8 mapping） |
-| `bash tools/verify.sh` | 提交前门禁（env-check + build --strict + typecheck + minify + lint + 测试 + E2E × 6） |
+| `bash tools/verify.sh` | 提交前门禁（env-check + build --strict + typecheck + minify + lint + 测试 + E2E 全量） |
 | `bash tools/lint.sh` | 代码检查（构建一致性/文档链接/CHANGELOG/头部注释/var 纪律） |
 | `bash tests/run-tests.sh` | 测试套件（自动发现 test-*.js / test-*.sh） |
 | `bash tools/branch-retire.sh <分支>` | 退休 topic 分支（`--force` 跳过合并检查） |
 
 ## 分支治理
 
+<!-- 同构节:begin branch-governance -->
 ```
 main ←── merge --no-ff only ── feat/dev ←── topic 分支
   (稳定发布)                       (日常开发)       (短命，当天合流)
@@ -87,10 +96,11 @@ git push origin main && git checkout feat/dev
 ```
 
 **钩子保护**（`.githooks/`，`git config core.hooksPath .githooks` 启用）：
-pre-commit 拦截墓地分支复活、`main` 直提、`src/` 与 `dist/` 不一致；commit-msg 拦截纯英文提交（merge 除外）；
+pre-commit 拦截墓地分支复活、`main` 直提、`src/` 与产物不一致；commit-msg 拦截纯英文提交（merge 除外）；
 pre-push 拦截分支命名违规 + 墓地复活 + `main` 非 merge 推送；post-commit 领先 `main` ≥50 预警。
 
 **退休**：`branch-retire.sh` 记入 `.git/branch-graveyard`，`main` 和 `feat/dev` 不可退休。快照用 `git bundle` 导出仓库外。
+<!-- 同构节:end -->
 
 ## 数据关键约束
 
@@ -127,4 +137,4 @@ pre-push 拦截分支命名违规 + 墓地复活 + `main` 非 merge 推送；pos
 - **构建管线**：`docs/build-pipeline.md`
 - **数据纪律**：`docs/data-integrity.md`
 - **架构分层**：`docs/architecture.md`
-- 技术栈基准：`/workspace/lexicull`（同构参考，禁止直接复制其业务代码）
+- 技术栈基准：LexiCull 仓库（同构参考，禁止直接复制其业务代码）

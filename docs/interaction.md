@@ -111,29 +111,39 @@ down ─────────────────────────
 
 ### 4.1 选中态视觉（定稿）
 
-参照 Windows 11 桌面 / macOS Finder 的选中范式重做。旧版是「8% 淡色直角方块 + 无描边」
+参照 Windows 桌面 / macOS Finder 的选中范式重做。旧版是「8% 淡色直角方块 + 无描边」
 （列表视图只有一条强调色下边框），在浅色点阵底上几乎看不出来——「选中了哪个文件」依赖手感记忆。
 
 | 场景 | 视觉 |
 |---|---|
-| 网格选中块（桌面空间 + folder 网格） | `inset 4px 6px`、圆角 10px、1px `--color-select-border` 描边、`--color-select-surface` 底 |
-| 选中标签 | 名字文本 `.desktop-icon-name-text` 铺 `--color-select-strong` 底 + 白字，`box-decoration-break: clone` 逐行贴合 |
+| 网格选中块（桌面空间 + folder 网格） | 方角矩形（radius 0）、`inset 2px -1px` → 块 86×102、1px `--color-select-border` 描边、`--color-select-surface` 底 |
+| 选中标签 | 名字文本 `.desktop-icon-name-text` 铺 `--color-select-strong` 底 + 白字，方角，`box-decoration-break: clone` 逐行贴合 |
 | 按压（未选中） | 只铺 `--color-select-press` 淡底，不描边不给标签芯片（按压 ≠ 选中） |
-| 列表视图行 | 整行 `--color-select-surface` 底 + 左侧 3px `--color-select-strong` 强调条（上下 inset 8px、右侧圆角）；不做选中块与名字芯片 |
-| 框选矩形 | 圆角 6px + `--color-select-marquee` 底 + 1px 强调色描边 |
+| 列表视图行 | 整行 `--color-select-surface` 底 + 左侧 3px 方角 `--color-select-strong` 强调条（上下 inset 8px）；不做选中块与名字芯片 |
+| 框选矩形 | 方角 + `--color-select-marquee` 底 + 1px 强调色描边 |
 
-- **几何**：块 `inset 4px 6px` → 占位 106px / 块 98px，四周呼吸各 4px（缩略图上方、标签下方）；
-  116px 步进下相邻块余量 18px，任何内容下不重叠。cell 尺寸仍与内容解耦（P1 铁律）。
+- **等间距几何（左右间距 = 上下间距）**：桌面空间步进 `GRID_W×GRID_H = 100×116`、单元占位 84×106。
+  两块之间的间距相等要求块宽高差恒为 16px——`左右间距 = GRID_W - W`、`上下间距 = GRID_H - H`，
+  于是 `W = 100 - G`、`H = 116 - G`。取 `G = 14px` → 块 86×102，即 `inset: 2px -1px`
+  （横向越过单元边界 1px，落在步进余量里，与邻块仍留 14px）。
+- **块边缘到内容的呼吸**：文字左右约 9px、上下约 7px（旧版贴着文字：左右 2px / 上下 4px）；
+  缩略图居中（48px），故其左右留白天然更大。cell 尺寸仍与内容解耦（P1 铁律）。
+- **方角而非圆角**：全站 radius token 本就是 0（平面语言），选中块/芯片/列表左条/框选矩形
+  统一用方角——一个形状语言，避免「圆角高亮块 + 方角对话框」的混搭。
 - **逐行芯片的前置条件**：`.desktop-icon-name-text` 这层 span 是 `box-decoration-break: clone`
   生效的前提（背景要落在内联元素上才能按行切片）——`render()` 必须保留该 span（`textContent`
   读取不受影响，`-webkit-line-clamp: 2` 与省略号行为实测不变，截断省略号同样落在芯片内）。
 - **为什么不做整块标签色带**：把 38px 名字区整条铺成强调色（Windows 10 桌面老样式），
-  单行名会变成「文字浮在大色块中间」，双行名时色带直角又与圆角选中块打架（实测对比后放弃）。
+  单行名会变成「文字浮在大色块中间」，双行名时色带边框又与选中块边界贴在一起（实测对比后放弃）。
+- **folder 容器网格的边界**：容器是自动排布（列宽 =（视口宽 - 2×16）/4，列间 8px），
+  上面那组 inset 是按**桌面空间**步进反推的常量；容器内块宽随列宽走，等间距不适用
+  （容器自己另有一套节奏，本文不重复其规则）。
 - **单一取值来源**：色值全走 `tokens.css` 的 `--color-select-*`；`strong` 取比 `--color-accent`
   深一档的 `#2563eb`（芯片白字对比度 5.2:1，13px 标签可读）。
 - **机器验证**：`tools/ui/selection-verify.js`（选中态 computed style 契约断言，含 token /
-  选中块 / 标签芯片 / 列表行 / 框选 / 按压规则）并入 `tools/verify-ui.sh`，
-  随 `tools/verify.sh` 的 ui-verify 步骤跑；步骤清单以脚本为准。
+  块几何与等间距不变量 / 标签芯片 / 列表行 / 框选 / 按压规则）并入 `tools/verify-ui.sh`，
+  随 `tools/verify.sh` 的 ui-verify 步骤跑；步骤清单以脚本为准。等间距不变量由
+  `GRID_W/GRID_H` 与 inset 现场反推，不写死数字——改步进或改 inset 若破坏等式，门禁直接红。
 
 ## 5. Morph FAB 操作栏（选中态）
 

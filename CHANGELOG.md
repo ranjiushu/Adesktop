@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### 预览加载性能（刀 1：交互队列解耦 + 图片预览档）（2026-09-13）
+
+- **动机**：进入目录后打开文件（尤其全屏预览）体感「要等老半天」。取证得到两条独立原因：
+  ① 桥层所有调用共用**单线程** executor，而进目录时前端会为目录内每个图片/视频图标发起
+  `thumb`，用户随后的 `read`/`resolveUri` 被排在缩略图队尾（「一进目录，点什么都要等」）；
+  ② 图片全屏预览直接加载原图，相机原图（12MP~50MP）每次打开都要解码几十 MB 位图
+  （慢，且逼近 WebView 堆上限）
+- **桥层队列解耦**：`thumb` 改走独立的 `BridgeContext.thumbExecutor`（仍单线程、不增并发，
+  位图内存不受影响）；数据操作（`read`/`list`/`resolveUri`/`copy`/`move`…）保持原串行
+  executor，传输取消标志与 copy/move 竞态语义不变——看图准备不再阻塞用户发起的操作
+- **新增 `previewUri` 桥方法（图片预览档）**：`inSampleSize` 取 2 的幂采样解码到 1920px
+  最长边（不过采样失真）→ JPEG 原子写 `cacheDir/previews`（key 含 path/mtime/size，文件改动
+  自然失效；文件数超限按最旧修改时间回收）→ 返回 `file://` 缓存 URI（不经
+  `evaluateJavascript` 传 base64 大串）；原图小于该尺寸直接返回原图 URI；
+  非位图格式或生成失败报错 → 前端回退 `resolveUri` 原图
+- **Viewer 图片挂载两档降级**：`previewUri` 优先，reject 或 `<img>` onerror 两级回退原图
+  （WebView 策略差异下不丢功能）；视频/音频仍走 `resolveUri` 流式
+- **真机可观测**：`ThumbnailService` 每次 thumb/preview 打一行 `Log.d` 计时
+  （TAG `Thumbnail`：命中/生成 + 耗时 + 原图字节数），供下一刀「缩略图按需分批」取舍取证
+- 契约与文档同步：`tests/test-bridge-contract.js`（方法面 +previewUri）、`types/global.d.ts`、
+  `tools/ui/viewer-modules-verify.js`（预览档优先 + 两级回退断言）、
+  `docs/bridge-and-data-contract.md`、`docs/architecture.md`、`docs/viewer.md`
+  （含已知限制：预览档 1920px 上限，超出部分不做像素级放大）
+
 ### 开源准备（GPL-3.0）（2026-09-08）
 
 - **新增 LICENSE**：GNU General Public License v3（全文本入库，README 附版权声明）

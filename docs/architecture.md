@@ -39,6 +39,8 @@
 | `mkdir(path)` / `delete(path)` | 目录/文件操作 |
 | `rename(old, new)` | 重命名/移动 |
 | `resolveUri(path)` | 文件 → WebView 可直接加载的 URI（content:// / file://），媒体流式访问用 |
+| `previewUri(path)` | 图片全屏预览档：采样解码到屏幕级尺寸（1920px）缓存后返回 URI；小图直接返回原图，非位图格式报错 |
+| `thumb(path)` | 缩略图（256px 最长边，磁盘缓存 + data URI；图片采样解码 / 视频首帧提取） |
 | `openExternal(path)` | 交外部应用打开（ACTION_VIEW + MIME + 读授权；无可用应用报错） |
 | `meta(path)` | 单文件元数据 |
 | `rootInfo(cb)` | 根目录信息 {rootName, mode: saf\|all-files\|private} |

@@ -12,7 +12,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# 项目根：默认 = 脚本所在仓库（构建时调用）；测试可经 ADESKTOP_PROJECT_ROOT 指向临时项目，
+# 否则测试会读到真实仓库的版本号/产物（曾致 test-collect-apk 断言随版本号漂移）
+PROJECT_ROOT="${ADESKTOP_PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 OUT_DIR="${1:-$PROJECT_ROOT/../AAA 安装包}"
 KEEP=10
 

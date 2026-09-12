@@ -28,12 +28,13 @@ InternalViewer 按文件语义分三个模块，每个模块都有两个状态�
        ├─ 内部格式 → InternalViewer（viewer.js，Overlay Layer 组件）
        │     ├─ text  纯文本 read → 渲染（TXT）
        │     ├─ parsed 解析渲染（MD / JSON / HTML）
-       │     └─ media 媒体 resolveUri 流式（图片 / 视频 / 音频 / SVG）
+       │     └─ media 媒体（图片走 previewUri 预览档；视频 / 音频 / SVG 走 resolveUri 流式）
        └─ 无法处理 → FileBridge.openExternal → Android ACTION_VIEW Intent
 ```
 
-- **FileBridge 边界不变**：只做文件系统操作。新增 `resolveUri`（文件 → 可加载 URI）与
-  `openExternal`（交外部应用）两个寻址/移交方法，仍属文件系统层，不掺 Viewer 业务。
+- **FileBridge 边界不变**：只做文件系统操作。新增 `resolveUri`（文件 → 可加载 URI）、
+  `previewUri`（图片预览档：采样解码后的屏幕级尺寸缓存 URI）与
+  `openExternal`（交外部应用）等寻址/移交方法，仍属文件系统层，不掺 Viewer 业务。
 - **InternalViewer 是独立通用组件**：不引用 Desktop（不持有画布/网格/布局状态），
   通过 `open({path,name,kind,anchor,camera,onFallback})` 与宿主协作。
 
@@ -46,7 +47,7 @@ InternalViewer 按文件语义分三个模块，每个模块都有两个状态�
 | JSON | `FileAPI.read` → JSON.parse → 可折叠树（`<details>`，textContent 构建防注入） |
 | HTML / HTM | `FileAPI.read` + `resolveUri` → `iframe srcdoc` + `sandbox="allow-scripts"` |
 | SVG | `FileAPI.read` → `data:image/svg+xml` 注入 `<img>`（img 内 SVG 不执行脚本） |
-| JPG/PNG/WebP/GIF/BMP | `resolveUri` → `<img src=content://…>` |
+| JPG/PNG/WebP/GIF/BMP | `previewUri` → `<img src=…>`（预览档：桥层采样解码到 1920px 缓存；不可用/加载失败回退 `resolveUri` 原图） |
 | MP4/WebM 等 | `resolveUri` → `<video controls>` |
 | MP3/M4A/WAV 等 | `resolveUri` → 3:4 封面卡片（占位封面 + `<audio controls>`） |
 | 其他（PDF/DOCX/ZIP…） | `FileBridge.openExternal` → 系统应用 |
@@ -191,7 +192,8 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
     全屏进出/位置保留/选中态绑定关闭/静态预览（canvas 零交互 ⇄ 全屏可交互）
   - `tools/ui/viewer-folder-verify.js`：folder 全屏新页面 + 返回键退出关闭 + 目录保持
   - `tools/ui/viewer-modules-verify.js`：三模块 × 两状态——3:4 卡片/原地展开锚点/
-    reader 工具条（缩放+换行）/音频封面卡片/框选触发选中/模块映射
+    reader 工具条（缩放+换行）/音频封面卡片/框选触发选中/模块映射/
+    图片预览档（previewUri 优先 + reject 与 onerror 两级回退）
 
 ## 已知限制（本阶段接受）
 
@@ -203,5 +205,7 @@ HTML 在 WebView 内渲染，其脚本必须无法触达 `window.FileBridge`：
 - 音频封面为占位图标（不解码内嵌封面，符合「不自行实现媒体解码器」原则）
 - 文本自动换行为主流单词边界换行（`overflow-wrap: break-word` + `word-break: normal`），
   长单词不拆散、超长行在容器边缘断开
+- 图片全屏预览默认走 1920px 预览档（`previewUri`）：加载快、内存可控，代价是超出该尺寸的
+  原图细节不做像素级放大；预览档不可用或加载失败时自动回退原图全分辨率
 - 画布实体在低 zoom 下内容随实体缩小（实体行为）；canvas 态内容不滚动不交互
   （静态预览）——阅读/滚动/网页操作一律进「全屏预览」

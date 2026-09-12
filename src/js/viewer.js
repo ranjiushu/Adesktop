@@ -21,7 +21,8 @@
  *     视频/音频保留原生控件（唯一例外）。拖动手柄已随交互模型统一删除：
  *     选中即可直接拖动、未选中长按拿起，与文件图标同一套手势，无需辅助入口。
  * 顶栏文件名 + 全屏态返回按钮；全屏入口在 Morph FAB（Viewer 选中时）。
- * 类型：text/markdown/json/html/svg/image/video/audio；媒体走 URI 流式。
+ * 类型：text/markdown/json/html/svg/image/video/audio；媒体走 URI 流式
+ * （图片另走 previewUri 预览档：桥层采样解码的屏幕级尺寸，避免每次解原图全分辨率）。
  * anchor 语义：canvas 态传入图标左上世界坐标（原地展开）；null = 沉浸式全屏
  * （folder 容器）。此前 text/parsed 曾锚定视觉中心 + 级联错位（窗口凭空出现
  * 时代的产物），已随「Viewer 即文件」重构删除。
@@ -605,34 +606,60 @@ App.InternalViewer = (function () {
       }
     }
 
+    // 媒体挂载：图片优先「预览档」（桥层采样解码的屏幕级尺寸缓存 URI）——避免每次打开都解
+    // 原图全分辨率；预览档不可用（reject）或 <img> 加载失败 → 回退 resolveUri 原图（渐进降级，
+    // file:// 预览档在 WebView 被策略拦下时也能照常显示）。视频/音频始终走 resolveUri 流式。
     function mountMedia(tag, cls) {
-      App.FileAPI.resolveUri(state.path).then(function (uri) {
-        state.uri = uri
-        body.innerHTML = ''
-        const el = document.createElement(tag)
-        el.className = cls
-        if (tag === 'video' || tag === 'audio') {
-          el.controls = true
-          el.preload = 'metadata'
+      const isImage = tag === 'img'
+      const preview = isImage && App.FileAPI && typeof App.FileAPI.previewUri === 'function'
+        ? App.FileAPI.previewUri(state.path).catch(function () { return '' })
+        : Promise.resolve('')
+      preview.then(function (previewUri) {
+        if (previewUri) {
+          attachMedia(tag, cls, previewUri, function () {
+            // 预览档加载失败 → 原图兜底（二次失败才报错）
+            App.FileAPI.resolveUri(state.path).then(function (uri) {
+              attachMedia(tag, cls, uri, null)
+            }).catch(function (err) {
+              showError(err && err.message || '无法解析文件 URI')
+            })
+          })
+          return
         }
-        el.src = uri
-        el.addEventListener('error', function () {
-          showError('无法加载媒体（当前内核可能不支持该格式）')
+        App.FileAPI.resolveUri(state.path).then(function (uri) {
+          attachMedia(tag, cls, uri, null)
+        }).catch(function (err) {
+          showError(err && err.message || '无法解析文件 URI')
         })
-        body.appendChild(el)
-        fitCanvasToMedia()
-        // 视频：未播放时展示**实际首帧封面**（复用缩略图服务取帧，data URI 自带），
-        // 而非黑底/类型占位；浏览器播放时自动以视频内容替换 poster。
-        // 取帧失败（如内核不支持编解码）→ 保持默认呈现，不阻塞打开。
-        if (tag === 'video' && App.Thumbnail &&
-            typeof App.Thumbnail.request === 'function') {
-          App.Thumbnail.request(state.path, state.name, 'video', function (thumbUri) {
-            if (el && el.poster !== thumbUri) el.poster = thumbUri
-          }, function () {})
-        }
-      }).catch(function (err) {
-        showError(err && err.message || '无法解析文件 URI')
       })
+    }
+
+    // 挂载单个媒体元素；onErrorFallback 非 null 时加载失败先走它（图片预览档 → 原图）
+    function attachMedia(tag, cls, uri, onErrorFallback) {
+      state.uri = uri
+      body.innerHTML = ''
+      const el = document.createElement(tag)
+      el.className = cls
+      if (tag === 'video' || tag === 'audio') {
+        el.controls = true
+        el.preload = 'metadata'
+      }
+      el.src = uri
+      el.addEventListener('error', function () {
+        if (typeof onErrorFallback === 'function') { onErrorFallback(); return }
+        showError('无法加载媒体（当前内核可能不支持该格式）')
+      })
+      body.appendChild(el)
+      fitCanvasToMedia()
+      // 视频：未播放时展示**实际首帧封面**（复用缩略图服务取帧，data URI 自带），
+      // 而非黑底/类型占位；浏览器播放时自动以视频内容替换 poster。
+      // 取帧失败（如内核不支持编解码）→ 保持默认呈现，不阻塞打开。
+      if (tag === 'video' && App.Thumbnail &&
+          typeof App.Thumbnail.request === 'function') {
+        App.Thumbnail.request(state.path, state.name, 'video', function (thumbUri) {
+          if (el && el.poster !== thumbUri) el.poster = thumbUri
+        }, function () {})
+      }
     }
 
     // 音频：3:4 封面卡片（占位封面 + 原生播放控制，进度由 <audio controls> 自带）

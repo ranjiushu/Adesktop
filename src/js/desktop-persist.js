@@ -3,6 +3,8 @@
  * 启动布局加载（initLayout）、视图偏好变更（applyViewPrefs/getViewPrefs）、
  * 布局保存（saveLayout，铁律：写入失败必须告警）。
  * 数据真相在文件系统：LayoutStore/HomeStore/ViewStore 统一出口，不裸改缓存。
+ * 目录导航秒开（refresh({nav:true})）：复用内存根信息 + 目录清单缓存先同步渲染，
+ * 随后静默向桥层重取对齐（stale-while-revalidate；缓存只是显示加速层，见 _dirCache 注释）。
  * 依赖: namespace.js, desktop-core.js, desktop-render.js, file-api.js,
  *       layout-store.js, home-store.js, view-store.js, loading.js, drawer.js
  * 导出: App.DesktopPersist
@@ -21,6 +23,26 @@ App.DesktopPersist = (function () {
   // 启动快照缓存 key（localStorage）：最近一次成功刷新的**桌面空间**快照（mode/curPath/items 等）。
   // 仅作首屏先行渲染（进入桌面秒出图标）；真实数据仍走 refresh 拉文件系统——文件即真相不破。
   const STARTUP_CACHE_KEY = 'desktop.startup-cache.v1'
+
+  // ── 目录导航秒开的两个前提（会话内缓存，不落盘）──
+  // ① _dirCache：目录清单缓存（path → items）。导航（进/退/前进）命中时**同步渲染**
+  //    （不等桥往返、不弹 loading），随后立即向桥层重取一次对齐——stale-while-revalidate：
+  //    文件系统仍是唯一真相，缓存只是显示加速层；内容有变才重渲染（_sameItems 比对），
+  //    无变化零打扰。因此「退出文件夹」这类回到已看过的目录不再有加载等待。
+  /** @type {Record<string, Array<FileItem>>} */
+  let _dirCache = {}
+  /** @type {Array<string>} 插入顺序（配 DIR_CACHE_MAX 做简单 LRU 淘汰） */
+  let _dirCacheKeys = []
+  const DIR_CACHE_MAX = 24
+  // ② _rootInfoCache：最近一次 rootInfo（rootName/mode/trashName/rootId/displayPath 在
+  //    会话内不随目录切换变化）。导航复用 → 省一次桥往返（SAF 模式 rootInfo 还会
+  //    ensureTrash 查一次目录）；根授权变更/权限变化走非导航 refresh，仍取真实值。
+  /** @type {any} */
+  let _rootInfoCache = null
+  // loading 延迟显示（导航时避免「闪一下」）；非导航（变更操作，带进度语义）仍立即显示
+  /** @type {any} */
+  let _loadingTimer = null
+  const LOADING_DELAY_MS = 180
 
   /** 校验桌面根：允许 ''（全盘根）；拒绝绝对路径 / 空段 / .. 逃逸 */
   /** @param {string} dir @returns {boolean} */
@@ -76,18 +98,39 @@ App.DesktopPersist = (function () {
   // 视图模式（isFolderView）由 curPath 同步切换，但 items 异步加载——
   // 间隙经 App.Loading 显示不确定进度条（条纹滑动），加载完成隐藏，
   // 避免「先切视图再变目录」的空白/错位感。
-  function refresh() {
+  /** @param {{nav?: boolean}} [opts] opts.nav = 目录导航（进/退/前进）→ 复用根信息 + 允许清单缓存 */
+  function refresh(opts) {
+    opts = opts || {}
+    const nav = !!opts.nav
     const seq = ++C._refreshSeq
     // 首屏已用缓存渲染（C._bootstrapShown=true）→ 本次 refresh 是后台对齐，不弹 loading 转圈
     // （避免「图标已出又转圈」的撕裂感）；仅首屏这一次，之后刷新照常弹（标志已重置）。
     const isFirstAlign = C._bootstrapShown
     if (isFirstAlign) C._bootstrapShown = false
-    if (!isFirstAlign && App.Loading && typeof App.Loading.show === 'function') {
-      App.Loading.show({ title: '加载中' })   // 不确定进度：无 total → 条纹滑动
+
+    // ── 秒开路径：导航 + 目标目录清单已缓存 → 同步渲染（不等桥往返、不弹 loading），
+    //    随后 _revalidate 静默对齐文件系统（内容有变才重渲染）。退出/重进看过的目录走这条。──
+    if (nav && !isFirstAlign) {
+      const navPath = C.state.curPath
+      const cached = _dirCache[navPath]
+      if (cached) {
+        _hideLoading()
+        _applyItems(cached)
+        _revalidate(navPath, seq)
+        return Promise.resolve()
+      }
     }
-    return App.FileAPI.rootInfo()
+
+    if (isFirstAlign) _hideLoading()
+    else if (nav) _showLoading(LOADING_DELAY_MS)   // 导航：延迟显示——快目录不闪「加载中」
+    else _showLoading(0)                           // 变更操作/启动：立即显示（进度语义）
+    const infoPromise = (nav && _rootInfoCache)
+      ? Promise.resolve(_rootInfoCache)            // 导航：根信息会话内不变，复用省一次桥往返
+      : App.FileAPI.rootInfo()
+    return infoPromise
       .then(function (info) {
         if (seq !== C._refreshSeq) return null   // 过期响应：丢弃，不写状态
+        _rootInfoCache = info                    // 缓存根信息（导航复用；授权变更走非导航 refresh）
         C.state.rootName = info.rootName
         C.state.mode = info.mode
         C.state.trashName = info.trashName || ''
@@ -164,69 +207,144 @@ App.DesktopPersist = (function () {
       .then(function (items) {
         if (seq !== C._refreshSeq) return null
         if (!items) return null
-        C.state.items = items
-        // 清理失效布局条目（仅 desktop 空间；folder 容器位置是自动的，不存 positions）
-        if (!C.isFolderView()) {
-          /** @type {Record<string, boolean>} */
-          const valid = {}
-          items.forEach(function (it) { valid[C.fullPath(it.name)] = true })
-          // 布局 key = 相对桥层根的完整路径；「当前目录」判定 = 前缀匹配且无更深段：
-          //   curPath=''（SAF/私有根）→ prefix=''，key 无 '/' 即根级（原语义）；
-          //   curPath='Desktop'（桌面根）→ prefix='Desktop/'，直接子项才保留——
-          //   Bug 修复（2026-08-19）：此前按「key 无 '/'」判定，桌面根 fullPath 全含
-          //   '/' → 每次刷新清空全部 positions，布局持久化被破坏
-          const prefix = C.state.curPath ? C.state.curPath + '/' : ''
-          Object.keys(C.positions).forEach(function (key) {
-            // 虚拟回收站（all-files 桌面空间）：key = trashName（桥层根固定串），恒保留
-            const isVirtualTrash = C.state.mode === 'all-files' &&
-              key === C.state.trashName
-            if (isVirtualTrash) return
-            const inCur = key.indexOf(prefix) === 0 && key.indexOf('/', prefix.length) < 0
-            if (!inCur) {
-              delete C.positions[key]        // 非当前目录 key 残留清理（folder 自动排布，非桌面布局）
-            } else if (!valid[key]) {
-              delete C.positions[key]        // 失效 key（文件已删/隐藏文件）
-            }
-          })
-        }
-        App.DesktopRender.render()
-        //（桌面空间）写最新启动快照：下次启动首屏秒出用；文件夹视图不缓存，避免启动错进子目录。
-        if (!C.isFolderView()) {
-          _saveStartupCache({
-            version: 1,
-            mode: C.state.mode,
-            curPath: C.state.curPath,
-            desktopRoot: C.state.desktopRoot,
-            trashName: C.state.trashName,
-            rootId: C.state.rootId,
-            rootName: C.state.rootName,
-            displayPath: C.state.curPath ? C.state.rootName + '/' + C.state.curPath : C.state.rootName,
-            items: items
-          })
-        }
-        // 恢复上次会话的 Viewer（桌面空间；幂等，文件已删/已打开自动跳过）
-        if (!C.isFolderView() && App.DesktopViewerLink &&
-            typeof App.DesktopViewerLink.restoreViewers === 'function') {
-          App.DesktopViewerLink.restoreViewers()
-        }
-        // 后退/前进按钮禁用态随目录切换更新
-        if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
-          App.BottomBar.updateNavButtons()
-        }
-        // 目录加载完成：隐藏对话框
-        if (App.Loading && typeof App.Loading.hide === 'function') {
-          App.Loading.hide()
-        }
+        _cachePut(C.state.curPath, items)   // 清单缓存（导航秒开用）
+        _applyItems(items)
+        _hideLoading()
       })
       .catch(function (err) {
         if (seq !== C._refreshSeq) return
-        if (App.Loading && typeof App.Loading.hide === 'function') {
-          App.Loading.hide()
-        }
+        _hideLoading()
         if (App.toast && typeof App.toast.show === 'function') {
           App.toast.show('读取失败: ' + err.message)
         }
       })
+  }
+
+  // ── 刷新收尾（完整路径与秒开路径共用）──
+  // items 已确认为**当前目录**内容：落状态 → 清理失效布局条目 → 渲染 → 快照/Viewer/导航按钮收尾
+  /** @param {Array<FileItem>} items @returns {void} */
+  function _applyItems(items) {
+    C.state.items = items
+    // 清理失效布局条目（仅 desktop 空间；folder 容器位置是自动的，不存 positions）
+    if (!C.isFolderView()) {
+      /** @type {Record<string, boolean>} */
+      const valid = {}
+      items.forEach(function (it) { valid[C.fullPath(it.name)] = true })
+      // 布局 key = 相对桥层根的完整路径；「当前目录」判定 = 前缀匹配且无更深段：
+      //   curPath=''（SAF/私有根）→ prefix=''，key 无 '/' 即根级（原语义）；
+      //   curPath='Desktop'（桌面根）→ prefix='Desktop/'，直接子项才保留——
+      //   Bug 修复（2026-08-19）：此前按「key 无 '/'」判定，桌面根 fullPath 全含
+      //   '/' → 每次刷新清空全部 positions，布局持久化被破坏
+      const prefix = C.state.curPath ? C.state.curPath + '/' : ''
+      Object.keys(C.positions).forEach(function (key) {
+        // 虚拟回收站（all-files 桌面空间）：key = trashName（桥层根固定串），恒保留
+        const isVirtualTrash = C.state.mode === 'all-files' &&
+          key === C.state.trashName
+        if (isVirtualTrash) return
+        const inCur = key.indexOf(prefix) === 0 && key.indexOf('/', prefix.length) < 0
+        if (!inCur) {
+          delete C.positions[key]        // 非当前目录 key 残留清理（folder 自动排布，非桌面布局）
+        } else if (!valid[key]) {
+          delete C.positions[key]        // 失效 key（文件已删/隐藏文件）
+        }
+      })
+    }
+    App.DesktopRender.render()
+    //（桌面空间）写最新启动快照：下次启动首屏秒出用；文件夹视图不缓存，避免启动错进子目录。
+    if (!C.isFolderView()) {
+      _saveStartupCache({
+        version: 1,
+        mode: C.state.mode,
+        curPath: C.state.curPath,
+        desktopRoot: C.state.desktopRoot,
+        trashName: C.state.trashName,
+        rootId: C.state.rootId,
+        rootName: C.state.rootName,
+        displayPath: C.state.curPath ? C.state.rootName + '/' + C.state.curPath : C.state.rootName,
+        items: items
+      })
+    }
+    // 恢复上次会话的 Viewer（桌面空间；幂等，文件已删/已打开自动跳过）
+    if (!C.isFolderView() && App.DesktopViewerLink &&
+        typeof App.DesktopViewerLink.restoreViewers === 'function') {
+      App.DesktopViewerLink.restoreViewers()
+    }
+    // 后退/前进按钮禁用态随目录切换更新
+    if (App.BottomBar && typeof App.BottomBar.updateNavButtons === 'function') {
+      App.BottomBar.updateNavButtons()
+    }
+  }
+
+  // ── 清单缓存：写入（带简单 LRU 上限）/ 静默对齐 ──
+  /** @param {string} path @param {Array<FileItem>} items @returns {void} */
+  function _cachePut(path, items) {
+    if (!path && path !== '') return
+    _dirCache[path] = items
+    _dirCacheKeys = _dirCacheKeys.filter(function (k) { return k !== path })
+    _dirCacheKeys.push(path)
+    while (_dirCacheKeys.length > DIR_CACHE_MAX) {
+      const oldest = _dirCacheKeys.shift()
+      if (oldest === undefined) break
+      delete _dirCache[oldest]
+    }
+  }
+
+  // 秒开后的后台对齐：向桥层重取清单 → 同样的代际守卫；内容与已渲染的一致则**不重渲染**
+  // （零打扰，绝大多数导航属于这种）；不一致才重渲染（文件系统是真相，缓存只是加速层）。
+  // 对齐失败静默（保持缓存渲染，不弹错误——用户没主动发起任何文件操作）。
+  /** @param {string} path @param {number} seq @returns {void} */
+  function _revalidate(path, seq) {
+    App.FileAPI.list(path).then(function (items) {
+      if (seq !== C._refreshSeq) return
+      if (!items) return
+      _cachePut(path, items)
+      if (C.state.curPath !== path) return
+      if (_sameItems(C.state.items, items)) return
+      _applyItems(items)
+    }).catch(function () { /* 静默：下次导航/操作再对齐 */ })
+  }
+
+  // 清单等价判定（导航对齐用）：顺序 + 四项条目字段全等即视为无变化
+  /** @param {Array<FileItem>} a @param {Array<FileItem>} b @returns {boolean} */
+  function _sameItems(a, b) {
+    if (!a || !b || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      const x = a[i]
+      const y = b[i]
+      if (!x || !y) return false
+      if (x.name !== y.name || !!x.isDir !== !!y.isDir ||
+          x.size !== y.size || x.mtime !== y.mtime) return false
+    }
+    return true
+  }
+
+  // ── loading 显隐（延迟显示：导航时避免「闪一下」）──
+  /** @param {number} delayMs @returns {void} */
+  function _showLoading(delayMs) {
+    if (!App.Loading || typeof App.Loading.show !== 'function') return
+    if (_loadingTimer) {
+      clearTimeout(_loadingTimer)
+      _loadingTimer = null
+    }
+    if (!delayMs) {
+      App.Loading.show({ title: '加载中' })   // 不确定进度：无 total → 条纹滑动
+      return
+    }
+    _loadingTimer = setTimeout(function () {
+      _loadingTimer = null
+      App.Loading.show({ title: '加载中' })
+    }, delayMs)
+  }
+
+  /** @returns {void} */
+  function _hideLoading() {
+    if (_loadingTimer) {
+      clearTimeout(_loadingTimer)
+      _loadingTimer = null
+    }
+    if (App.Loading && typeof App.Loading.hide === 'function') {
+      App.Loading.hide()
+    }
   }
 
   // 加载布局（positions）+ 相机（Home 快照 > 布局相机）——initLayout 与 rootId 就绪后重载共用。
@@ -374,7 +492,9 @@ App.DesktopPersist = (function () {
     if (!App.ViewStore.save(prefs)) {
       if (App.toast && typeof App.toast.show === 'function') App.toast.show('视图偏好保存失败')
     }
-    refresh()
+    // 视图偏好只影响排序/排布（清单内容不变）→ 直接重渲染：不向桥层重取、不弹「加载中」。
+    // 原先走整轮 refresh 会闪一次模态 + 白跑一次 list（网格↔列表每切必闪）。
+    App.DesktopRender.render()
   }
 
   // 当前视图偏好（ViewMenu 渲染选中态用）

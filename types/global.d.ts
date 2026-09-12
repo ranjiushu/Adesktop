@@ -61,6 +61,7 @@ interface FileApi {
   move(srcPath: string, dstPath: string, onProgress?: (p: FbProgress) => void): Promise<any>
   cancelTransfer(): Promise<any>
   resolveUri(path: string): Promise<any>
+  previewUri(path: string): Promise<any>
   thumb(path: string): Promise<any>
   openExternal(path: string): Promise<any>
   openUrl(url: string): Promise<any>
@@ -264,7 +265,7 @@ interface ViewStore {
 
 /** 目录刷新 + 布局/视图持久化（App.DesktopPersist） */
 interface DesktopPersist {
-  refresh(): Promise<any>
+  refresh(opts?: { nav?: boolean }): Promise<any>
   initLayout(): void
   renderFromCache(): boolean
   applyViewPrefs(prefs: ViewPrefs): void

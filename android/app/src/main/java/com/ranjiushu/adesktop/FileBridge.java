@@ -291,9 +291,24 @@ public class FileBridge {
 
     @JavascriptInterface
     public void thumb(String path, String cbId) {
-        ctx.executor.execute(() -> {
+        // 走 thumbExecutor（非数据队列）：预取工作不得阻塞用户发起的 read/list/resolveUri
+        ctx.thumbExecutor.execute(() -> {
             try {
                 ctx.resolveOk(cbId, thumbnailService.thumb(path));
+            } catch (Exception e) {
+                ctx.resolveErr(cbId, e.getMessage(), e);
+            }
+        });
+    }
+
+    /* 图片全屏预览档：大图采样解码到屏幕级尺寸（磁盘缓存）后返回 URI，避免每次打开都解原图
+     * 全分辨率（相机原图 12MP+ 单次解码几十 MB 位图，慢且逼近 WebView 堆上限）。
+     * 走数据队列（用户发起、等结果），与 read/resolveUri 同一串行语义。 */
+    @JavascriptInterface
+    public void previewUri(String path, String cbId) {
+        ctx.executor.execute(() -> {
+            try {
+                ctx.resolveOk(cbId, thumbnailService.preview(path));
             } catch (Exception e) {
                 ctx.resolveErr(cbId, e.getMessage(), e);
             }

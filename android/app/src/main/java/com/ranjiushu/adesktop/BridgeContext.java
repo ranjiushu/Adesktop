@@ -41,7 +41,14 @@ class BridgeContext {
 
     final Activity activity;
     final WebView webView;
+    /** 数据操作队列（read/list/write/copy/move/resolveUri/previewUri…）：单线程串行，
+     *  保证 copy/move 与 cancelTransfer 的竞态语义不变（同一时刻仅一个传输）。 */
     final ExecutorService executor = Executors.newSingleThreadExecutor();
+    /** 缩略图队列（预取/装饰工作，与数据队列分离）：进目录时前端会为目录内每个图片/视频
+     *  图标发起 thumb，若与数据操作共用单线程，用户随后的「打开文件」会被排在缩略图队尾
+     *  （真机表现为「一进目录，点什么都要等」）。单线程非 1 并发是为控制位图内存
+     *  （视频首帧提取一次可达几十 MB），并发度不做提升。 */
+    final ExecutorService thumbExecutor = Executors.newSingleThreadExecutor();
 
     /** 传输取消标志：cancelTransfer() 置位，copy 循环检查并尽快中止（单线程串行，同一时刻仅一个传输） */
     volatile boolean cancelRequested = false;

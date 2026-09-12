@@ -33,7 +33,8 @@
 | `FileAPI.move(src, dst, onProgress)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+delete；onProgress 同上） |
 | `FileAPI.cancelTransfer()` | `cancelTransfer` | 无 | `true` | 取消当前传输（置取消标志，当前任务中止 + 清理半成品） |
 | `FileAPI.resolveUri(path)` | `resolveUri` | `path` | `uri` | 转 WebView 可直接加载的 URI |
-| `FileAPI.thumb(path)` | `thumb` | `path` | `file://` URI | 缩略图（磁盘缓存） |
+| `FileAPI.previewUri(path)` | `previewUri` | `path` | `uri` | 图片全屏预览档：采样解码到屏幕级尺寸（1920px 最长边，磁盘缓存 `cacheDir/previews`）后返回 URI；原图小于该尺寸时直接返回原图 URI；非位图格式/失败时报错（前端回退 `resolveUri` 原图） |
+| `FileAPI.thumb(path)` | `thumb` | `path` | `data:image/jpeg;base64,...` | 缩略图（磁盘缓存 `cacheDir/thumbs`，256px 最长边；data URI 规避 file:// 时效问题） |
 | `FileAPI.openExternal(path)` | `openExternal` | `path` | `true` | 交外部应用打开，无可用应用时报错 |
 | `FileAPI.openUrl(url)` | `openUrl` | `url` | `true` | 用系统浏览器打开网址（网站快捷方式加载失败兜底） |
 | `FileAPI.completeUpload(paths)` | `completeUpload` | `paths` | `true` | 网页上传：回传待上传文件路径（resolveUri 后回传网页） |

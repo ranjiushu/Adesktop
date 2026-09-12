@@ -45,6 +45,8 @@ App.Desktop = (function () {
       /** @param {DesktopCameraState} c @returns {void} */
       onUpdate: function (c) {
         C.camera = c
+        // 相机变化（拖动/惯性/滚动）→ 节流补齐新进入视口的缩略图（按需加载，见 desktop-render）
+        if (R && typeof R.scheduleVisibleThumbs === 'function') R.scheduleVisibleThumbs()
       },
       // 手势开始 → 打断进行中的 Home 平滑过渡（手势直控优先）
       onGestureStart: N.cancelCameraAnim,
@@ -66,7 +68,8 @@ App.Desktop = (function () {
   }
 
   // 导航模块依赖注入：目录切换后刷新渲染（persist 域 refresh）
-  N.setRefresh(P.refresh)
+  // nav:true —— 导航复用根信息 + 允许清单缓存（已看过的目录同步渲染，退出不再等加载）
+  N.setRefresh(function () { P.refresh({ nav: true }) })
 
   // 旋转画布 toggle（view-menu 驱动）：桌面空间 0↔90 toggle；folder 容器无意义，忽略。
   // 旋转是瞬时两态（无过渡动画）。**纯保中心旋转**（2026-08-19）：只改 rotation，

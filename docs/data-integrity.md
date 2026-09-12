@@ -14,6 +14,17 @@
 
 **铁律：用户数据的唯一真相在文件系统。前端内存中的 File 对象、缓存、选中态都只是投影。**
 
+### 显示加速缓存（非真相，可丢弃）
+
+- `desktop-persist.js` 的**目录清单缓存**（`_dirCache`）与**根信息缓存**（`_rootInfoCache`）只服务于
+  导航秒开（进退目录同步渲染、省一次 rootInfo 桥往返），不参与任何写入路径，也不跨进程存活。
+- 契约：用缓存渲染后**立即**向桥层重取一次对齐（stale-while-revalidate）；清单内容有变才重渲染
+  ——缓存允许短暂陈旧（毫秒级），但不得长期遮蔽真相；对齐失败静默保持缓存渲染，下次导航/操作再对齐。
+- 因此只有导航类刷新（`refresh({nav:true})`）走缓存捷径；**启动 / 根授权变更 / 文件操作后 /
+  视图偏好变更**一律走 `refresh()`（非导航）= 强制向文件系统取真相。
+- 回归护栏：`tests/test-desktop-nav-cache.js`（缓存命中同步渲染 / 对齐发现新增文件后重渲染 /
+  loading 延迟显示）、`scripts/verify-folder-nav.js`（E2E 门禁）。
+
 ## 二、元数据写入纪律（防幽灵 positions）
 
 - 布局写入必须走 `layout-store` / `home-store` 的统一出口（`savePositions` / `saveCamera` 等），
@@ -53,5 +64,6 @@
 ## 六、验证
 
 - 单元测试：`test-layout-store` / `test-home-store` / `test-bridge` / `test-fileapi` 等
-- E2E：`scripts/verify-home.js`（位置快照持久化）、`tools/ui/*-verify.js`（缩略图/回收站/查看器）
+- E2E：`scripts/verify-home.js`（位置快照持久化）、`scripts/verify-folder-nav.js`（目录导航秒开）、
+  `tools/ui/*-verify.js`（缩略图/回收站/查看器）
 - 新增元数据读写路径时，须配套测试覆盖「写入 → 重载 → 读回」闭环

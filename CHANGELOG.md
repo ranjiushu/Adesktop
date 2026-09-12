@@ -1,6 +1,67 @@
 # Adesktop 更新日志
 
-## Unreleased
+## 0.3.0（2026-09-13）
+
+### 缩略图按需加载（刀 3：视口优先，进大目录不再排满整目录任务）（2026-09-13）
+
+- **动机**：`render()` 无条件为目录内**每个**图片/视频图标请求缩略图——进 200 张图的目录就
+  排 200 个 thumb 任务（桥层采样解码/首帧提取 + base64 传输 + JS 内存常驻），首屏可见的
+  那十几个反而排在队尾。
+- **视口优先派发**：`render()` 只为视口内（外扩半屏预取，`THUMB_OVERSCAN`）条目发请求；
+  离屏条目不生成。实测同一目录首屏请求数从「等于条目数」降到「约一屏 + 半屏」。
+- **滚动/平移按需补齐**：相机变化（手势拖动/惯性/滚动/Home 飞行）经
+  `App.DesktopRender.scheduleVisibleThumbs` 节流（`THUMB_REFILL_MS`）派发新进入视口的条目。
+- **防类型图标卡住**：同一路径只派发一次；每次渲染重建派发集合，使「等待中的缩略图落地时
+  DOM 元素已被替换」能由下一次渲染重新派发（Thumbnail 侧 pending 合并 waiter）。
+- **验证**：新增单元测试 `tests/test-desktop-thumb-viewport.js`（只派发视口内 / 滚动补齐 /
+  不重复派发 / 重渲染重派发）与 E2E 门禁 `scripts/verify-thumb-viewport.js`（200 张图目录：
+  首屏请求数 < 条目数 → 滚动中段补齐 → 滚动到底补齐末尾，已接入 `tools/verify.sh`）。
+- 交互文档同步：`docs/interaction.md` 新增 6.1 缩略图按需加载（视口优先）。
+
+### 目录导航性能（刀 2：进退目录秒开——清单缓存 + 根信息复用）（2026-09-13）
+
+- **动机**：退出文件夹也要等加载，但父目录内容明明刚看过。取证发现退出走的是**完整刷新**：
+  每次都向桥层取 rootInfo（SAF 模式下还要 `ensureTrash` 查一次目录）→ 读布局文件 → list →
+  重建渲染，且非首屏刷新一律弹模态「加载中」——对一个已经看过的目录，这些等待都是白付的。
+- **清单缓存（stale-while-revalidate）**：新增 `_dirCache`（path → items，LRU 上限 24 条）。
+  导航命中时**同步渲染**（不等桥、不弹 loading），随后立即 `_revalidate` 向桥层重取对齐，
+  内容有变才重渲染（四项字段全等即跳过，零打扰）。文件系统仍是唯一真相，缓存只是显示加速层。
+- **根信息复用**：`_rootInfoCache` 缓存 rootInfo（会话内 rootName/mode/trashName/rootId/displayPath
+  不随目录切换变化）——导航不再取，省一次桥往返。根授权变更/启动走非导航 refresh 仍取真实值。
+- **loading 延迟显示**：导航类刷新 180ms 后才弹「加载中」（快目录不再闪一下）；超时仍在加载才弹，
+  完成即关。带进度语义的变更操作（非导航）保持立即显示。
+- **视图偏好切换只重渲染**：网格↔列表/排序变更不再走整轮 refresh（原先每切一次都闪模态「加载中」
+  并白跑一次 list）——清单内容与视图偏好无关，`render()` 即可。
+- **导航与非导航分流**：`refresh({nav:true})` = 进出/前进后退（可用缓存）；`refresh()` = 启动、
+  根授权变更、文件操作后、视图偏好变更（强制取真相，不受缓存影响）。缓存不得遮蔽真相的契约
+  写入 `docs/data-integrity.md`。
+- **验证**：新增单元测试 `tests/test-desktop-nav-cache.js`（复用根信息 / 退出同步渲染 /
+  未变不重渲染 / 对齐发现新增文件后重渲染 / loading 延迟与关闭 / 视图偏好只重渲染）与 E2E 门禁
+  `scripts/verify-folder-nav.js`（已接入 `tools/verify.sh`）。
+
+### 预览加载性能（刀 1：交互队列解耦 + 图片预览档）（2026-09-13）
+
+- **动机**：进入目录后打开文件（尤其全屏预览）体感「要等老半天」。取证得到两条独立原因：
+  ① 桥层所有调用共用**单线程** executor，而进目录时前端会为目录内每个图片/视频图标发起
+  `thumb`，用户随后的 `read`/`resolveUri` 被排在缩略图队尾（「一进目录，点什么都要等」）；
+  ② 图片全屏预览直接加载原图，相机原图（12MP~50MP）每次打开都要解码几十 MB 位图
+  （慢，且逼近 WebView 堆上限）
+- **桥层队列解耦**：`thumb` 改走独立的 `BridgeContext.thumbExecutor`（仍单线程、不增并发，
+  位图内存不受影响）；数据操作（`read`/`list`/`resolveUri`/`copy`/`move`…）保持原串行
+  executor，传输取消标志与 copy/move 竞态语义不变——看图准备不再阻塞用户发起的操作
+- **新增 `previewUri` 桥方法（图片预览档）**：`inSampleSize` 取 2 的幂采样解码到 1920px
+  最长边（不过采样失真）→ JPEG 原子写 `cacheDir/previews`（key 含 path/mtime/size，文件改动
+  自然失效；文件数超限按最旧修改时间回收）→ 返回 `file://` 缓存 URI（不经
+  `evaluateJavascript` 传 base64 大串）；原图小于该尺寸直接返回原图 URI；
+  非位图格式或生成失败报错 → 前端回退 `resolveUri` 原图
+- **Viewer 图片挂载两档降级**：`previewUri` 优先，reject 或 `<img>` onerror 两级回退原图
+  （WebView 策略差异下不丢功能）；视频/音频仍走 `resolveUri` 流式
+- **真机可观测**：`ThumbnailService` 每次 thumb/preview 打一行 `Log.d` 计时
+  （TAG `Thumbnail`：命中/生成 + 耗时 + 原图字节数），供下一刀「缩略图按需分批」取舍取证
+- 契约与文档同步：`tests/test-bridge-contract.js`（方法面 +previewUri）、`types/global.d.ts`、
+  `tools/ui/viewer-modules-verify.js`（预览档优先 + 两级回退断言）、
+  `docs/bridge-and-data-contract.md`、`docs/architecture.md`、`docs/viewer.md`
+  （含已知限制：预览档 1920px 上限，超出部分不做像素级放大）
 
 ### 开源准备（GPL-3.0）（2026-09-08）
 
@@ -490,8 +551,6 @@
 - 壳层零改动：`MainActivity` 的 `new FileBridge(this, webView, rootUri)` 签名不变；
   前端 `bridge.js`/`file-api.js`/测试套件零改动
 - 验证：`verify.sh` 10/10 全绿 + Gradle assembleRelease 构建通过 + APK 归档
-
-## Unreleased
 
 ### Viewer 拖动手柄（辅助拖动区）（2026-08-16）
 

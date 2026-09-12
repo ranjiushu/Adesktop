@@ -115,6 +115,7 @@ e2e_step "fit-e2e"         scripts/verify-fit.js
 e2e_step "snapshot-sheet-e2e" scripts/verify-snapshot-sheet.js
 e2e_step "viewer-e2e"         scripts/verify-viewer.js
 e2e_step "folder-nav-e2e"     scripts/verify-folder-nav.js
+e2e_step "thumb-viewport-e2e" scripts/verify-thumb-viewport.js
 
 # ── 摘要 ──
 echo ""

@@ -2,6 +2,8 @@
  * 拆分自 desktop.js 的渲染域：自动排布（layout）+ 图标网格渲染（render）+
  * 选中态视觉同步（applySelection/syncFab/clearSelection/hasSelection）+
  * 选中查询（getSelectionNames/getSelectionEntries）。
+ * 缩略图按需加载：render 只为视口内（含半屏外扩）条目派发缩略图请求，相机变化（拖动/
+ * 惯性/滚动/Home 飞行）经 scheduleVisibleThumbs 节流补齐——大目录不再一次性排满整目录任务。
  * 「打开」态文件（Viewer 即文件）在 layout 阶段退出网格渲染，原格子释放为
  * 普通空格（desktop-viewer-link.isDesktopEntityPath 判定）。
  * 只读写 App.DesktopCore 状态，不持有业务编排；Viewer 联动模块经
@@ -96,6 +98,10 @@ App.DesktopRender = (function () {
     gridEl.innerHTML = ''
     C.iconEls = {}
     C.bounds = {}   // 清空重建，防止已删/不可见文件（如隐藏文件）的旧 bounds 残留导致命中测试选中幽灵项
+    // 缩略图候选/已派发集合随渲染重建：DOM 元素每次渲染都是新的，重建保证「等待中的缩略图落地时
+    // 元素已被替换」这类情况能在下次渲染重新派发（Thumbnail 侧 pending 会合并 waiter 回调）
+    _thumbCandidates = {}
+    _thumbRequested = {}
 
     // folder 容器：画布尺寸 = 内容（滚动边界的基础；无卡片视觉）
     const canvasEl = document.getElementById('desktop-canvas')
@@ -143,11 +149,10 @@ App.DesktopRender = (function () {
           deferApplyIcon(icon, uri, kind)
         }, function () { /* 失败：保持类型图标 */ })
       } else if (App.Thumbnail && App.Thumbnail.canThumbnail(kind)) {
-        // 先类型图标（fallback 基线），异步请求缩略图，成功替换（渐进式：类型图标 → 真缩略图）
+        // 先类型图标（fallback 基线）；缩略图**不在此处立即请求**——渲染末尾按视口可见性派发
+        // （见 _dispatchVisibleThumbs：离屏条目不生成，省桥层解码与内存；平移/滚动到位再补）
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.iconFor(p.item.name, p.item.isDir) : '📄'
-        App.Thumbnail.request(p.key, p.item.name, kind, function (uri) {
-          deferApplyIcon(icon, uri, kind)
-        }, function () { /* 失败：保持类型图标 */ })
+        _thumbCandidates[p.key] = { name: p.item.name, kind: kind }
       } else {
         icon.innerHTML = App.TypeIcons ? App.TypeIcons.iconFor(p.item.name, p.item.isDir) : (p.item.isDir ? '📁' : '📄')
       }
@@ -179,6 +184,71 @@ App.DesktopRender = (function () {
       C.bounds[key].w = node.offsetWidth || ICON_W
       C.bounds[key].h = node.offsetHeight || ICON_H
     })
+
+    // 缩略图派发（渲染末尾：bounds 已校准，视口内先出图）
+    _dispatchVisibleThumbs()
+  }
+
+  // ── 缩略图按需加载（视口优先）──
+  // 只为**当前视口内**（含半屏外扩预取）的文件请求缩略图：大目录进目录不再一次性排满
+  // 整目录的缩略图任务（离屏条目不生成 → 省桥层采样解码/首帧提取与 base64 内存），
+  // 平移/滚动到位后再按需补齐（scheduleVisibleThumbs，节流 120ms）。
+  /** @type {Record<string, {name: string, kind: string}>} 本轮渲染收集的候选（render 时重建） */
+  let _thumbCandidates = {}
+  /** @type {Record<string, boolean>} 已派发（render 时重建；相机变化补齐时避免重复派发） */
+  let _thumbRequested = {}
+  /** @type {any} 节流定时器 */
+  let _thumbTimer = null
+  const THUMB_REFILL_MS = 120   // 相机连续变化（拖动/惯性/滚动）时的补齐节流
+  const THUMB_OVERSCAN = 0.5    // 视口外扩比例（预取半屏，滚动更顺）
+
+  // 世界矩形是否与视口（外扩后）相交。相机/尺寸缺失 → 视为可见（宁可多请求，不丢图）。
+  /** @param {string} path @returns {boolean} */
+  function _thumbVisible(path) {
+    const r = C.bounds[path]
+    if (!r || !App.DesktopCamera || typeof App.DesktopCamera.worldToScreen !== 'function') return true
+    const cam = C.camera || App.DesktopCamera.create()
+    const vw = C.viewportWidth()
+    const vh = C.viewportHeight()
+    if (!(vw > 0) || !(vh > 0)) return true
+    const p = App.DesktopCamera.worldToScreen(r.x, r.y, cam, vw, vh)
+    const z = cam.zoom || 1
+    const rot = cam.rotation === 90
+    const w = (rot ? r.h : r.w) * z    // rotation=90 时世界宽/高在屏幕上互换
+    const h = (rot ? r.w : r.h) * z
+    const mx = vw * THUMB_OVERSCAN
+    const my = vh * THUMB_OVERSCAN
+    return !(p.x + w < -mx || p.x > vw + mx || p.y + h < -my || p.y > vh + my)
+  }
+
+  // 派发可见且未派发的候选缩略图（元素缺失则跳过——留着下次渲染派发）
+  /** @returns {void} */
+  function _dispatchVisibleThumbs() {
+    if (!App.Thumbnail || typeof App.Thumbnail.request !== 'function') return
+    Object.keys(_thumbCandidates).forEach(function (path) {
+      if (_thumbRequested[path]) return
+      if (!_thumbVisible(path)) return
+      const card = C.iconEls[path]
+      const iconEl = (card && typeof card.querySelector === 'function')
+        ? card.querySelector('.desktop-icon-glyph') : null
+      if (!iconEl) return
+      const c = _thumbCandidates[path]
+      _thumbRequested[path] = true
+      App.Thumbnail.request(path, c.name, c.kind, function (uri) {
+        deferApplyIcon(iconEl, uri, c.kind)
+      }, function () { /* 失败：保持类型图标 */ })
+    })
+  }
+
+  // 相机变化（拖动/惯性/滚轮滚动/Home 飞行）→ 节流补齐新进入视口的缩略图。
+  // 连续变化期间每 THUMB_REFILL_MS 至多跑一次（只派发新增可见项，已派发的被 _thumbRequested 挡住）。
+  /** @returns {void} */
+  function scheduleVisibleThumbs() {
+    if (_thumbTimer) return
+    _thumbTimer = setTimeout(function () {
+      _thumbTimer = null
+      _dispatchVisibleThumbs()
+    }, THUMB_REFILL_MS)
   }
 
   // ── 选中态同步：图标 class + Viewer 实体视觉 + FAB 操作栏路由 ──
@@ -237,6 +307,7 @@ App.DesktopRender = (function () {
   return {
     layout: layout,
     render: render,
+    scheduleVisibleThumbs: scheduleVisibleThumbs,
     applySelection: applySelection,
     syncFab: syncFab,
     clearSelection: clearSelection,

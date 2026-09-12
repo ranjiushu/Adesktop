@@ -252,6 +252,10 @@ App.DesktopNavigation = (function () {
       if (App.DesktopGesture && typeof App.DesktopGesture.setCamera === 'function') {
         App.DesktopGesture.setCamera(C.camera)
       }
+      // 相机飞行（Home）途中经过的区域 → 节流补齐缩略图（按需加载，见 desktop-render）
+      if (App.DesktopRender && typeof App.DesktopRender.scheduleVisibleThumbs === 'function') {
+        App.DesktopRender.scheduleVisibleThumbs()
+      }
       if (k >= 1) { C._animRaf = null; return }
       C._animRaf = C._raf(frame)
     }

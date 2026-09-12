@@ -45,6 +45,8 @@ App.Desktop = (function () {
       /** @param {DesktopCameraState} c @returns {void} */
       onUpdate: function (c) {
         C.camera = c
+        // 相机变化（拖动/惯性/滚动）→ 节流补齐新进入视口的缩略图（按需加载，见 desktop-render）
+        if (R && typeof R.scheduleVisibleThumbs === 'function') R.scheduleVisibleThumbs()
       },
       // 手势开始 → 打断进行中的 Home 平滑过渡（手势直控优先）
       onGestureStart: N.cancelCameraAnim,

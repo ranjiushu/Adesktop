@@ -114,6 +114,7 @@ e2e_step "rotate-e2e"      scripts/verify-rotate.js
 e2e_step "fit-e2e"         scripts/verify-fit.js
 e2e_step "snapshot-sheet-e2e" scripts/verify-snapshot-sheet.js
 e2e_step "viewer-e2e"         scripts/verify-viewer.js
+e2e_step "folder-nav-e2e"     scripts/verify-folder-nav.js
 
 # ── 摘要 ──
 echo ""

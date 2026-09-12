@@ -265,7 +265,7 @@ interface ViewStore {
 
 /** 目录刷新 + 布局/视图持久化（App.DesktopPersist） */
 interface DesktopPersist {
-  refresh(): Promise<any>
+  refresh(opts?: { nav?: boolean }): Promise<any>
   initLayout(): void
   renderFromCache(): boolean
   applyViewPrefs(prefs: ViewPrefs): void

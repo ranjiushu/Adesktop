@@ -109,6 +109,32 @@ down ─────────────────────────
 - 拖动取消（single-cancel）→ 选中保留（取消 = 什么都没发生）。
 - 后退/前进/上级目录 → 保留选中（Windows 按文件夹记忆选中态）。
 
+### 4.1 选中态视觉（定稿）
+
+参照 Windows 11 桌面 / macOS Finder 的选中范式重做。旧版是「8% 淡色直角方块 + 无描边」
+（列表视图只有一条强调色下边框），在浅色点阵底上几乎看不出来——「选中了哪个文件」依赖手感记忆。
+
+| 场景 | 视觉 |
+|---|---|
+| 网格选中块（桌面空间 + folder 网格） | `inset 4px 6px`、圆角 10px、1px `--color-select-border` 描边、`--color-select-surface` 底 |
+| 选中标签 | 名字文本 `.desktop-icon-name-text` 铺 `--color-select-strong` 底 + 白字，`box-decoration-break: clone` 逐行贴合 |
+| 按压（未选中） | 只铺 `--color-select-press` 淡底，不描边不给标签芯片（按压 ≠ 选中） |
+| 列表视图行 | 整行 `--color-select-surface` 底 + 左侧 3px `--color-select-strong` 强调条（上下 inset 8px、右侧圆角）；不做选中块与名字芯片 |
+| 框选矩形 | 圆角 6px + `--color-select-marquee` 底 + 1px 强调色描边 |
+
+- **几何**：块 `inset 4px 6px` → 占位 106px / 块 98px，四周呼吸各 4px（缩略图上方、标签下方）；
+  116px 步进下相邻块余量 18px，任何内容下不重叠。cell 尺寸仍与内容解耦（P1 铁律）。
+- **逐行芯片的前置条件**：`.desktop-icon-name-text` 这层 span 是 `box-decoration-break: clone`
+  生效的前提（背景要落在内联元素上才能按行切片）——`render()` 必须保留该 span（`textContent`
+  读取不受影响，`-webkit-line-clamp: 2` 与省略号行为实测不变，截断省略号同样落在芯片内）。
+- **为什么不做整块标签色带**：把 38px 名字区整条铺成强调色（Windows 10 桌面老样式），
+  单行名会变成「文字浮在大色块中间」，双行名时色带直角又与圆角选中块打架（实测对比后放弃）。
+- **单一取值来源**：色值全走 `tokens.css` 的 `--color-select-*`；`strong` 取比 `--color-accent`
+  深一档的 `#2563eb`（芯片白字对比度 5.2:1，13px 标签可读）。
+- **机器验证**：`tools/ui/selection-verify.js`（选中态 computed style 契约断言，含 token /
+  选中块 / 标签芯片 / 列表行 / 框选 / 按压规则）并入 `tools/verify-ui.sh`，
+  随 `tools/verify.sh` 的 ui-verify 步骤跑；步骤清单以脚本为准。
+
 ## 5. Morph FAB 操作栏（选中态）
 
 - 选中集合为空 → FAB 展开 `fab-set-preview`（新建/刷新/切换根目录，现状不变）。

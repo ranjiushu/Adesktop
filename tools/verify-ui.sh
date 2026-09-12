@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# verify-ui.sh — UI 实地验证门禁（无头 Chromium + 安全区断言）
+# verify-ui.sh — UI 实地验证门禁（无头 Chromium + 安全区断言 + 选中态视觉断言）
 # ═══════════════════════════════════════════════════════════════
 #  由 tools/verify.sh 调用（G1：把 UI 回归从"LLM 自觉跑"升级为"机器强制"）。
-#  沉浸式安全区三变量注入验证（verify-insets.js + judge 路径模式断言）。
+#  1) 沉浸式安全区三变量注入验证（verify-insets.js + judge 路径模式断言）。
+#  2) 桌面选中态视觉契约（tools/ui/selection-verify.js：选中块/标签芯片/列表行/框选）。
 #  断言失败 → exit 1 → verify.sh run_step 捕获。
 #  无 Chromium 环境自动 SKIP。
 #  用法: bash tools/verify-ui.sh
@@ -25,3 +26,6 @@ node "$VERIFY" "$HTML" \
   --assert "base.header.paddingTop == 41.2px" \
   --assert "base.bottomBar.paddingBottom == 24px" \
   --assert "nc.gap == nc.gapTop (tol 1)"
+
+echo "── 桌面选中态视觉断言（选中块 / 标签芯片 / 列表行 / 框选）──"
+DESKTOP_BUNDLE="$HTML" node tools/ui/selection-verify.js || exit 1

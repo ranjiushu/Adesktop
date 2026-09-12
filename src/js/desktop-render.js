@@ -163,7 +163,10 @@ App.DesktopRender = (function () {
       } else if (!p.item.isDir && App.Shortcut && App.Shortcut.isShortcutName(p.item.name)) {
         displayName = p.item.name.slice(0, p.item.name.lastIndexOf('.'))
       }
-      let name = C.el('div', 'desktop-icon-name', displayName)
+      // 名字文本包一层 span：选中态标签芯片按行贴合（box-decoration-break: clone 生效前置条件，
+      // 见 desktop.css「选中标签芯片」）——textContent 读取不受影响
+      let name = C.el('div', 'desktop-icon-name')
+      name.appendChild(C.el('span', 'desktop-icon-name-text', displayName))
       card.appendChild(icon)
       card.appendChild(name)
       // 列表视图：右侧元信息（文件夹 / 文件大小）

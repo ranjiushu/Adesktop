@@ -7,6 +7,14 @@
   --color-accent: #3b82f6;
   --color-border: #e5e7eb;
 
+  /* 选中态（Windows/macOS 桌面范式：淡强调色圆角块 + 强调色标签芯片）
+   * strong 取比 accent 更深的蓝：白字对比度 5.2:1，13px 标签文字可读 */
+  --color-select-surface: rgba(59, 130, 246, 0.14);  /* 选中块 / 列表行底 */
+  --color-select-border: rgba(37, 99, 235, 0.65);    /* 选中块描边 */
+  --color-select-strong: #2563eb;                    /* 标签芯片 / 列表左条 */
+  --color-select-press: rgba(59, 130, 246, 0.07);    /* 按压反馈（未选中） */
+  --color-select-marquee: rgba(59, 130, 246, 0.08);  /* 框选矩形底色 */
+
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;

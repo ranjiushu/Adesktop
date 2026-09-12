@@ -1,6 +1,6 @@
 {
   "name": "adesktop",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Adesktop 构建工具依赖（运行时零依赖，仅构建期使用）",
   "scripts": {

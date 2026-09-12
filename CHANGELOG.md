@@ -1,6 +1,6 @@
 # Adesktop 更新日志
 
-## Unreleased
+## 0.3.0（2026-09-13）
 
 ### 缩略图按需加载（刀 3：视口优先，进大目录不再排满整目录任务）（2026-09-13）
 
@@ -551,8 +551,6 @@
 - 壳层零改动：`MainActivity` 的 `new FileBridge(this, webView, rootUri)` 签名不变；
   前端 `bridge.js`/`file-api.js`/测试套件零改动
 - 验证：`verify.sh` 10/10 全绿 + Gradle assembleRelease 构建通过 + APK 归档
-
-## Unreleased
 
 ### Viewer 拖动手柄（辅助拖动区）（2026-08-16）
 

@@ -86,6 +86,9 @@ App.FileAPI = (function () {
     cancelTransfer: function () { return call('cancelTransfer', [], 10000) },
     // 文件 → WebView 可直接加载的 URI（content:// 或 file://），媒体流式访问用（不搬入内存）
     resolveUri: function (path) { return call('resolveUri', [path]) },
+    // 图片全屏预览档：桥层采样解码到屏幕级尺寸（磁盘缓存）后返回 URI（大图不每次解原分辨率）。
+    // 小图直接返回原图 URI；失败（非位图格式等）→ reject，调用方回退 resolveUri 原图
+    previewUri: function (path) { return call('previewUri', [path]) },
     // 缩略图：桥层采样解码 / 视频首帧提取 → file:// 缓存 URI（磁盘缓存 + 内存可控）
     thumb: function (path) { return call('thumb', [path]) },
     // 交外部应用打开（ACTION_VIEW；无可用应用时 reject）

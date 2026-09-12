@@ -61,6 +61,7 @@ interface FileApi {
   move(srcPath: string, dstPath: string, onProgress?: (p: FbProgress) => void): Promise<any>
   cancelTransfer(): Promise<any>
   resolveUri(path: string): Promise<any>
+  previewUri(path: string): Promise<any>
   thumb(path: string): Promise<any>
   openExternal(path: string): Promise<any>
   openUrl(url: string): Promise<any>

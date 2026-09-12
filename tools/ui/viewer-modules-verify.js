@@ -31,6 +31,8 @@ async function main() {
     }
     var WAV = silentWav()
     var SVG_IMG = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#3b82f6"/></svg>')
+    // 预览档用不同色（绿）标记：区分「走了 previewUri」与「回退 resolveUri 原图」
+    var SVG_PREVIEW = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#22c55e"/></svg>')
     const FILES = {
       '': [
         { name: 'readme.md', isDir: false, size: 1, mtime: 0 },
@@ -47,6 +49,7 @@ async function main() {
       list: function (p, cb) { __ok(cb, FILES[p || ''] || []) },
       read: function (p, cb) { if (p in CONTENT) __ok(cb, CONTENT[p]); else __err(cb, 'x') },
       resolveUri: function (p, cb) { __ok(cb, p.indexOf('.mp3') >= 0 ? WAV : SVG_IMG) },
+      previewUri: function (p, cb) { if (p === 'photo.png') __ok(cb, SVG_PREVIEW); else __err(cb, '无预览档') },
       openExternal: function (p, cb) { __err(cb, 'x') },
       vibrate: function () {}, requestRootAccess: function () {}
     }
@@ -137,9 +140,10 @@ async function main() {
   await new Promise(function (res) { setTimeout(res, 300) })  // 等 load 事件 + fitAspectRect
   const rImg = await page.evaluate(function () {
     const card = document.querySelector('.viewer-card-canvas')
-    return { w: parseFloat(card.style.width), h: parseFloat(card.style.height), ratio: parseFloat(card.style.width) / parseFloat(card.style.height) }
+    return { w: parseFloat(card.style.width), h: parseFloat(card.style.height), ratio: parseFloat(card.style.width) / parseFloat(card.style.height), src: document.querySelector('.viewer-media-img').getAttribute('src') }
   })
   check(Math.abs(rImg.ratio - 320 / 180) < 0.03, '图片 Viewer 态 = 原始比例（320:180 ≈ 1.78，实测 ' + rImg.ratio.toFixed(3) + '）')
+  check(rImg.src.indexOf('22c55e') >= 0, '图片走预览档 previewUri（桥层采样解码 URI，非原图全分辨率）')
 
   console.log('═══ 5b. media 文件名栏 = 覆盖式（选中显示名字不改变媒体缩放比例） ═══')
   const rImgSel = await page.evaluate(function () {
@@ -178,6 +182,32 @@ async function main() {
     '选中显示文件名 → 卡片尺寸不变（不占位）')
   check(Math.abs(rImgSel.imgAfter.w - rImgSel.imgBefore.w) < 1 && Math.abs(rImgSel.imgAfter.h - rImgSel.imgBefore.h) < 1,
     '选中显示文件名 → 媒体缩放比例不变（320:180 保持）')
+
+  console.log('═══ 5d. 图片预览档降级：previewUri 不可用 / 加载失败 → 回退原图 ═══')
+  // ① previewUri reject（桥层降级：非位图格式 / 生成失败）→ 回退 resolveUri 原图
+  await page.evaluate(function () {
+    App.InternalViewer.closeAll()
+    App.FileAPI.previewUri = function () { return Promise.reject(new Error('无预览档')) }
+  })
+  await page.evaluate(function () { App.Desktop.openItem('photo.png') })
+  await page.waitForFunction(function () {
+    const i = document.querySelector('.viewer-media-img')
+    return !!i && i.getAttribute('src').indexOf('3b82f6') >= 0
+  }, { timeout: 5000 })
+  check(true, 'previewUri reject → 回退 resolveUri 原图（仍显示图片）')
+
+  // ② previewUri 返回坏 URI（<img> onerror）→ 回退原图
+  await page.evaluate(function () {
+    App.InternalViewer.closeAll()
+    App.FileAPI.previewUri = function () { return Promise.resolve('file:///nonexistent/preview.jpg') }
+  })
+  await page.evaluate(function () { App.Desktop.openItem('photo.png') })
+  await page.waitForFunction(function () {
+    const i = document.querySelector('.viewer-media-img')
+    return !!i && i.getAttribute('src').indexOf('3b82f6') >= 0
+  }, { timeout: 5000 })
+  check(true, '预览档加载失败 onerror → 回退原图（仍显示图片）')
+  await page.evaluate(function () { App.InternalViewer.closeAll() })
 
   console.log('═══ 5c. 文档类文件名栏 = 占位式（底部条，非覆盖） ═══')
   await page.evaluate(function () { App.InternalViewer.closeAll() })

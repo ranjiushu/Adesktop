@@ -1,7 +1,8 @@
-// 桌面选中态视觉验证（Windows/macOS 桌面范式：淡强调色圆角块 + 强调色标签芯片）。
+// 桌面选中态视觉验证（方角矩形选中块 + 强调色标签芯片 + 左右/上下等间距）。
 // ═══════════════════════════════════════════════════════════════
 //  断言的是**视觉契约**（computed style），不是手势逻辑（手势由 test-desktop-* 覆盖）：
-//    1. 网格选中块：圆角 10px + 1px 强调色描边 + 淡强调色底（不再是无描边的淡色方块）
+//    1. 网格选中块：方角矩形 + 1px 强调色描边 + 淡强调色底；块 86×102、左右与上下间距均为 14px
+//       （等间距不变量用 GRID_W/GRID_H 与 inset 现场反推，不写死数字）
 //    2. 选中标签芯片：逐行贴合（span + box-decoration-break: clone）+ 强调色底白字
 //    3. 未选中项无高亮块；按压态只铺淡底（不描边、不给芯片）
 //    4. 列表视图行：整行淡底 + 左侧 3px 强调条（不显示网格态的块与芯片）
@@ -96,6 +97,10 @@ async function main() {
     const before = getComputedStyle(el, '::before')
     const chip = el.querySelector('.desktop-icon-name-text')
     const chipCs = chip ? getComputedStyle(chip) : null
+    // 等间距不变量：块宽/高由 inset 反推，间距用网格步进（GRID_W/GRID_H）算——不写死数字
+    const G = App.DesktopGrid
+    const W = el.offsetWidth - parseFloat(before.left) - parseFloat(before.right)
+    const H = el.offsetHeight - parseFloat(before.top) - parseFloat(before.bottom)
     return {
       selected: el.classList.contains('selected'),
       radius: before.borderRadius,
@@ -104,6 +109,12 @@ async function main() {
       borderColor: before.borderTopColor,
       blockBg: before.backgroundColor,
       blockInset: before.top + ' / ' + before.right,
+      blockW: W,
+      blockH: H,
+      gapH: G.GRID_W - W,
+      gapV: G.GRID_H - H,
+      gridW: G.GRID_W,
+      gridH: G.GRID_H,
       chipExists: !!chip,
       chipBg: chipCs ? chipCs.backgroundColor : null,
       chipColor: chipCs ? chipCs.color : null,
@@ -116,14 +127,17 @@ async function main() {
     }
   })
   check(grid.selected, '点按后图标进入选中态')
-  check(grid.radius === '10px', '选中块圆角 10px（当前 ' + grid.radius + '）')
+  check(grid.radius === '0px', '选中块方角矩形（border-radius: 0，当前 ' + grid.radius + '）')
   check(grid.borderWidth === '1px' && grid.borderStyle === 'solid', '选中块 1px 描边（当前 ' + grid.borderWidth + ' ' + grid.borderStyle + '）')
   check(grid.borderColor === 'rgba(37, 99, 235, 0.65)', '描边走 --color-select-border（当前 ' + grid.borderColor + '）')
   check(grid.blockBg === 'rgba(59, 130, 246, 0.14)', '块底走 --color-select-surface（当前 ' + grid.blockBg + '）')
-  check(grid.blockInset === '4px / 6px', '块 inset 4px/6px（四周呼吸均匀，当前 ' + grid.blockInset + '）')
+  check(grid.blockInset === '2px / -1px', '块 inset 上下 2px / 左右 -1px（当前 ' + grid.blockInset + '）')
+  check(grid.gapH > 0 && Math.abs(grid.gapH - grid.gapV) < 0.01,
+    '左右间距 = 上下间距（' + grid.gapH + 'px / ' + grid.gapV + 'px，步进 ' + grid.gridW + '×' + grid.gridH + '）')
+  check(grid.blockW === 86 && grid.blockH === 102, '块尺寸 86×102（当前 ' + grid.blockW + '×' + grid.blockH + '）')
   check(grid.chipExists && grid.chipText === 'note.txt', '标签文本包在 .desktop-icon-name-text 里（芯片前置）')
   check(grid.chipBg === 'rgb(37, 99, 235)' && grid.chipColor === 'rgb(255, 255, 255)', '芯片：强调色底 + 白字')
-  check(grid.chipRadius === '5px' && grid.chipPadding === '5px', '芯片圆角 5px / 左右内边距 5px')
+  check(grid.chipRadius === '0px' && grid.chipPadding === '5px', '芯片方角 / 左右内边距 5px（当前 ' + grid.chipRadius + ' / ' + grid.chipPadding + '）')
   check(grid.chipClone === 'clone', '芯片 box-decoration-break: clone（换行逐行贴合，当前 ' + grid.chipClone + '）')
   check(grid.clamp === '2', '名字仍受两行截断约束（-webkit-line-clamp: 2）')
   check(grid.otherBefore === 'none', '未选中项无高亮块（::before content: none）')
@@ -162,7 +176,7 @@ async function main() {
   check(list.bg === 'rgba(59, 130, 246, 0.14)', '整行淡底走 --color-select-surface（当前 ' + list.bg + '）')
   check(list.beforeContent === 'none', '列表行不显示网格态的选中块')
   check(list.barWidth === '3px' && list.barBg === 'rgb(37, 99, 235)', '左侧 3px 强调条（当前 ' + list.barWidth + ' / ' + list.barBg + '）')
-  check(list.barRadius === '0px 3px 3px 0px', '强调条右侧圆角（当前 ' + list.barRadius + '）')
+  check(list.barRadius === '0px', '强调条方角（当前 ' + list.barRadius + '）')
   check(list.chipBg === 'rgba(0, 0, 0, 0)', '列表行名字不做芯片（背景透明）')
 
   // ── 4. 按压态规则（:active 无法在无头里直接触发，改断言样式表契约）──
@@ -191,7 +205,7 @@ async function main() {
     const cs = getComputedStyle(document.getElementById('desktop-marquee'))
     return { radius: cs.borderRadius, bg: cs.backgroundColor }
   })
-  check(marquee.radius === '6px', '框选矩形圆角 6px（当前 ' + marquee.radius + '）')
+  check(marquee.radius === '0px', '框选矩形方角（当前 ' + marquee.radius + '）')
   check(marquee.bg === 'rgba(59, 130, 246, 0.08)', '框选矩形底走 --color-select-marquee（当前 ' + marquee.bg + '）')
 
   check(pageErrors.length === 0, '全程零 pageerror' + (pageErrors.length ? '：' + pageErrors.join(' | ') : ''))

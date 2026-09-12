@@ -60,17 +60,43 @@
   /* 无卡片背景（真实桌面隐喻）：默认透明，选中/按压时显示淡色圆角底 */
 }
 
-/* 选中/按压高亮：跟随固定占位的圆角块（inset 8px，四周留白）。
- * 占位 106px → 高亮 90px；旧版 92px 网格位置下互不干涉（余量 2px），
- * 新 116px 步进下余量 26px。高度全为 CSS 硬值，不随字体渲染差异变化 */
-.desktop-icon.selected::before,
-.desktop-icon:active::before {
+/* 选中块（Windows 11 桌面式选中）：跟随固定占位的圆角块，淡强调色底 + 强调色描边。
+ * inset 4px 6px：上下 4 / 左右 6，四周呼吸均匀（缩略图上方 4px、标签下方 4px）；
+ * 占位 106px → 块 98px 高，116px 步进下相邻块留 18px 余量，永不重叠。
+ * 高度全为 CSS 硬值，不随字体渲染差异变化 */
+.desktop-icon.selected::before {
   content: '';
   position: absolute;
-  inset: 8px;
-  border-radius: 0;
-  background: rgba(59, 130, 246, 0.12);
+  inset: 4px 6px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: var(--color-select-surface);
+  border: 1px solid var(--color-select-border);
   z-index: -1;
+}
+
+/* 按压反馈（未选中）：只铺一层更淡的底色，不描边不给标签芯片——
+ * 按压不等于选中，避免手指落下瞬间就摆出完整选中态 */
+.desktop-icon:active:not(.selected)::before {
+  content: '';
+  position: absolute;
+  inset: 4px 6px;
+  border-radius: 10px;
+  background: var(--color-select-press);
+  z-index: -1;
+}
+
+/* 选中标签芯片（Windows/macOS 同款强调色标签，白字）：
+ * 名字文本包在 .desktop-icon-name-text 里，box-decoration-break: clone 让换行时
+ * **逐行**生成贴合文字的芯片（两行名 = 上下两块小芯片，而非一整条 38px 色带）；
+ * 长名截断时省略号同样落在芯片内（实测 -webkit-line-clamp 兼容） */
+.desktop-icon.selected .desktop-icon-name-text {
+  background: var(--color-select-strong);
+  color: #fff;
+  border-radius: 5px;
+  padding: 0 5px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .desktop-icon-glyph {
@@ -127,13 +153,13 @@
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
-/* 框选矩形：屏幕空间 overlay（不随画布缩放），pointer-events 穿透 */
+/* 框选矩形：屏幕空间 overlay（不随画布缩放），圆角与选中块同语言，pointer-events 穿透 */
 .desktop-marquee {
   position: absolute;
   display: none;
   border: 1px solid var(--color-accent);
-  background: rgba(59, 130, 246, 0.08);
-  border-radius: 0;
+  background: var(--color-select-marquee);
+  border-radius: 6px;
   pointer-events: none;
   z-index: 4;
 }
@@ -177,15 +203,31 @@
   margin-left: var(--space-sm);
 }
 
-.desktop-icon.desktop-list-row.selected {
-  border-bottom-color: var(--color-accent);
-  background: rgba(59, 130, 246, 0.08);
-}
-/* 列表视图行：整行高亮（行高 56px 固定，无重叠问题），不显示 inset 小块 */
-.desktop-icon.desktop-list-row.selected::before,
-.desktop-icon.desktop-list-row:active::before {
+/* ── 列表视图行选中（Windows 11 资源管理器式）：整行淡色底 + 左侧强调条 ──
+ * 行高 56px 固定，无重叠问题；列表行不显示网格态的圆角块与标签芯片
+ * （行内芯片会浮成一块，与连续整行高亮冲突）。 */
+.desktop-icon.desktop-list-row::before {
   content: none;
 }
+.desktop-icon.desktop-list-row.selected {
+  background: var(--color-select-surface);
+}
+.desktop-icon.desktop-list-row.selected::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-select-strong);
+}
+.desktop-icon.desktop-list-row.selected .desktop-icon-name-text {
+  background: none;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+}
 .desktop-icon.desktop-list-row:active {
-  background: rgba(59, 130, 246, 0.12);
+  background: var(--color-select-press);
 }

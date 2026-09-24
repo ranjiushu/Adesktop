@@ -35,13 +35,13 @@ fi
 
 # >>> repo-resume: entry-doc-governance (start) >>>
 # 由 repo-resume 技能（子技能 entry-doc-governance）的 install-hook.sh 写入，**勿手改**；
-# 更新走上游重跑安装脚本（幂等）。守卫本体：tools/guards/guard.py
+# 更新走上游重跑安装脚本（幂等）。守卫本体：tools/repo-resume/governance/guard.py
 {
   _gd_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-  _gd_guard="$_gd_root/tools/guards/guard.py"
+  _gd_guard="$_gd_root/tools/repo-resume/governance/guard.py"
   if [ -z "$_gd_root" ] || [ ! -f "$_gd_guard" ]; then
-    echo "[pre-commit] ❌ 文档守卫缺失（tools/guards/guard.py）—— fail-closed，拒绝提交" >&2
-    echo "[pre-commit]    修复：重跑上游 install-hook.sh（幂等；上游位置见 tools/guards/SOURCE.md）" >&2
+    echo "[pre-commit] ❌ 文档守卫缺失（tools/repo-resume/governance/guard.py）—— fail-closed，拒绝提交" >&2
+    echo "[pre-commit]    修复：重跑上游 install-hook.sh（幂等；上游位置见 tools/repo-resume/governance/SOURCE.md）" >&2
     exit 1
   fi
   if ! command -v python3 >/dev/null 2>&1; then

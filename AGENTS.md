@@ -7,7 +7,7 @@
 ## 会话启动
 
 ```bash
-bash /workspace/probes/probe-repo.sh /workspace/Adesktop   # 分支/同步/产物年龄/一致性/墓地
+bash /workspace/probes/probe-repo.sh /workspace/projects/Adesktop   # 分支/同步/产物年龄/一致性/墓地
 git status && git log --oneline -3                         # 工作区上下文
 ```
 

@@ -2,7 +2,7 @@
 # [常驻] APK 收集归档：构建完成后把安装包复制到外部目录，滚动保留最新 10 个
 # ═══════════════════════════════════════════════════════════════
 # 用法: bash tools/collect-apk.sh [目标目录]
-# 默认目标: <项目根>/../AAA 安装包（当前环境即 /workspace/AAA 安装包）
+# 默认目标: /workspace/AAA 安装包
 # 命名: Adesktop_v<versionName>_<YYYYMMDD_HHMMSS>.apk
 #       —— 时间戳精确到秒，避免固定名 app-release.apk 互相覆盖
 # 保留: 仅清理本脚本命名模式（Adesktop_*.apk），按 mtime 保留最新 10 个，
@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 项目根：默认 = 脚本所在仓库（构建时调用）；测试可经 ADESKTOP_PROJECT_ROOT 指向临时项目，
 # 否则测试会读到真实仓库的版本号/产物（曾致 test-collect-apk 断言随版本号漂移）
 PROJECT_ROOT="${ADESKTOP_PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-OUT_DIR="${1:-$PROJECT_ROOT/../AAA 安装包}"
+OUT_DIR="${1:-/workspace/AAA 安装包}"
 KEEP=10
 
 # ── 1. 定位最新 APK 产物（release 优先，取修改时间最新） ──

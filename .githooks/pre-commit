@@ -33,30 +33,28 @@ if command -v node &>/dev/null && [ -f tools/build-web.sh ] && git diff --cached
   fi
 fi
 
-# ── 防线 3: AGENTS.md 信息密度守卫（>2500 token 提醒，>3000 token 拒绝；gzip 后 >5000 字节附加告警） ──
-# token 近似（零依赖）：CJK 1 字≈1 token + ASCII 4 字符≈1 token + 换行 1；gzip 为净信息量探针
-python3 << 'PYHOOK2' || exit 1
-import gzip, re, subprocess, sys
-
-for fn in ('AGENTS.md', 'AGENT.md'):
-    try:
-        shown = subprocess.run(['git', 'show', ':' + fn], capture_output=True, timeout=5)
-        raw = shown.stdout if shown.returncode == 0 else open(fn, 'rb').read()
-    except Exception:
-        continue  # 文件不存在则跳过
-    text = raw.decode('utf-8', errors='replace')
-    cjk = len(re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf]', text))
-    ascii_chars = len(re.sub(r'[\u4e00-\u9fff\u3400-\u4dbf\s]', '', text))
-    tokens = int(cjk + ascii_chars / 4 + text.count('\n'))
-    gz = len(gzip.compress(raw, 9))
-    if tokens > 3000:
-        print('[pre-commit] ❌ %s 已达约 %d token（上限 3000），拒绝提交' % (fn, tokens), file=sys.stderr)
-        print('[pre-commit]    请先精简：指针化下沉到 docs/，或归档历史内容', file=sys.stderr)
-        sys.exit(1)
-    elif tokens > 2500:
-        print('[pre-commit] ⚠️  %s 已达约 %d token（提醒线 2500），建议精简后再提交' % (fn, tokens), file=sys.stderr)
-    if gz > 5000:
-        print('[pre-commit] ⚠️  %s gzip 后 %d 字节（>5000，冗余探针），建议检查是否有重复/灌水内容' % (fn, gz), file=sys.stderr)
-PYHOOK2
-
+# >>> repo-resume: entry-doc-governance (start) >>>
+# 由 repo-resume 技能（子技能 entry-doc-governance）的 install-hook.sh 写入，**勿手改**；
+# 更新走上游重跑安装脚本（幂等）。守卫本体：tools/guards/guard.py
+{
+  _gd_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  _gd_guard="$_gd_root/tools/guards/guard.py"
+  if [ -z "$_gd_root" ] || [ ! -f "$_gd_guard" ]; then
+    echo "[pre-commit] ❌ 文档守卫缺失（tools/guards/guard.py）—— fail-closed，拒绝提交" >&2
+    echo "[pre-commit]    修复：重跑上游 install-hook.sh（幂等；上游位置见 tools/guards/SOURCE.md）" >&2
+    exit 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "[pre-commit] ❌ 缺 python3，无法校验 AGENTS.md 信息密度 —— fail-closed，拒绝提交" >&2
+    exit 1
+  fi
+  ( cd "$_gd_root" && PYTHONDONTWRITEBYTECODE=1 python3 "$_gd_guard" --staged )
+  _gd_rc=$?
+  if [ "$_gd_rc" -eq 1 ]; then exit 1; fi
+  if [ "$_gd_rc" -ne 0 ] && [ "$_gd_rc" -ne 2 ]; then
+    echo "[pre-commit] ❌ 文档守卫异常退出（rc=$_gd_rc）—— fail-closed，拒绝提交" >&2
+    exit 1
+  fi
+}
+# <<< repo-resume: entry-doc-governance (end) <<<
 exit 0

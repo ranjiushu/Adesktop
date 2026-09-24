@@ -7,7 +7,7 @@
 ## 会话启动
 
 ```bash
-bash /workspace/probes/probe-repo.sh /workspace/projects/Adesktop   # 分支/同步/产物年龄/一致性/墓地
+bash /workspace/ops/probes/probe-repo.sh /workspace/projects/Adesktop   # 分支/同步/产物年龄/一致性/墓地
 git status && git log --oneline -3                         # 工作区上下文
 ```
 
@@ -78,7 +78,7 @@ git checkout feat/dev && git merge --no-ff feat/xxx -m "merge: <摘要>"
 bash tools/branch-retire.sh feat/xxx
 ```
 
-> 长周期/实验性任务可开独立 worktree（置于 `/workspace/wt/`，用完合流回主线并 `worktree remove`），规范见 `/skills/toolchain-skills/git-workflow/SKILL.md`「Work Tree 使用规范」。
+> 长周期/实验性任务可开独立 worktree（置于 `/workspace/ops/wt/`，用完合流回主线并 `worktree remove`），规范见 `/skills/toolchain-skills/git-workflow/SKILL.md`「Work Tree 使用规范」。
 
 **发布**（仅用户批准后执行）：
 

@@ -4,7 +4,9 @@
 
 开发基线是 `feat/dev`（日常 commit、topic 合流目标）；`main` 是发布线，只走 `merge --no-ff`，需用户批准。
 
-## 会话启动
+## 探针按需
+
+任务落到本项目时才先跑探针取现状；改文档、改记忆、纯问答这类不落地到构建的任务不跑。
 
 ```bash
 bash /workspace/ops/probes/probe-repo.sh /workspace/projects/Adesktop   # 分支/同步/产物年龄/一致性/墓地

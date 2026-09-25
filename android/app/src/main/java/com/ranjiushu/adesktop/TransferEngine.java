@@ -121,57 +121,9 @@ class TransferEngine {
         }
     }
 
-    /** 清理本次创建的目标（递归删除）+ 向上清理 resolveOrCreateParent 创建的空父目录 */
+    /** 清理本次创建的目标（实现在 BridgeContext.cleanupCreated，ZipEngine 共用） */
     private void cleanupDst(String dstPath) {
-        if (ctx.isSafMode()) {
-            try {
-                DocumentFile df = (DocumentFile) ctx.resolve(dstPath);
-                if (df != null) df.delete();
-            } catch (Exception ignored) {}
-            // 向上清理空目录（resolveOrCreateParent 可能逐级创建了父目录）
-            DocumentFile root = DocumentFile.fromTreeUri(ctx.activity, ctx.rootUri);
-            if (root != null) {
-                int i = dstPath.lastIndexOf('/');
-                while (i > 0) {
-                    String parentPath = dstPath.substring(0, i);
-                    try {
-                        DocumentFile dir = (DocumentFile) ctx.resolve(parentPath);
-                        if (dir != null && dir.listFiles().length == 0) {
-                            dir.delete();
-                        } else {
-                            break;  // 非空，停止
-                        }
-                    } catch (Exception e) {
-                        break;  // 路径不存在，停止
-                    }
-                    i = parentPath.lastIndexOf('/');
-                }
-            }
-        } else {
-            File root = ctx.fileRoot();
-            deleteRecursive(new File(root, dstPath));
-            // 向上清理空目录
-            File f = new File(root, dstPath).getParentFile();
-            while (f != null && !f.equals(root)) {
-                String[] children = f.list();
-                if (children != null && children.length == 0) {
-                    f.delete();
-                    f = f.getParentFile();
-                } else {
-                    break;
-                }
-            }
-        }
-    }
-
-    private void deleteRecursive(File f) {
-        if (f.isDirectory()) {
-            File[] children = f.listFiles();
-            if (children != null) {
-                for (File c : children) deleteRecursive(c);
-            }
-        }
-        f.delete();
+        ctx.cleanupCreated(dstPath);
     }
 
     /* 解析 relPath 的父目录 DocumentFile（'' 或 '/' → 根）。供 move 的 sourceParentUri 使用。 */
@@ -199,25 +151,9 @@ class TransferEngine {
         return new DocumentFile[] { src, parent };
     }
 
-    /* 解析 dstPath 的父目录 DocumentFile，不存在则逐级创建（回收站首删 / 粘贴到新目录场景）。 */
-    private DocumentFile resolveOrCreateParent(String dstPath) throws IOException {
-        DocumentFile root = DocumentFile.fromTreeUri(ctx.activity, ctx.rootUri);
-        if (root == null) throw new IOException("根目录不可用");
-        String[] parts = dstPath.split("/");
-        DocumentFile cur = root;
-        for (int i = 0; i < parts.length - 1; i++) {
-            if (parts[i].isEmpty()) continue;
-            DocumentFile next = cur.findFile(parts[i]);
-            if (next == null) next = cur.createDirectory(parts[i]);
-            if (next == null || !next.isDirectory()) throw new IOException("无法进入目录: " + parts[i]);
-            cur = next;
-        }
-        return cur;
-    }
-
     /* SAF 递归拷贝：dstPath 逐级解析/创建目录，文件流拷贝；pr 上报进度 + 响应取消 */
     private void copySaf(DocumentFile src, String dstPath, ProgressReporter pr) throws IOException {
-        DocumentFile cur = resolveOrCreateParent(dstPath);
+        DocumentFile cur = ctx.resolveOrCreateParent(dstPath);
         String[] parts = dstPath.split("/");
         String name = parts[parts.length - 1];
         if (name.isEmpty()) throw new IOException("非法目标名: " + dstPath);
@@ -304,7 +240,7 @@ class TransferEngine {
         DocumentFile src = sp[0];
         DocumentFile srcParent = sp[1];
         if (leafOf(srcPath).equals(leafOf(dstPath))) {
-            DocumentFile dstParent = resolveOrCreateParent(dstPath);
+            DocumentFile dstParent = ctx.resolveOrCreateParent(dstPath);
             // 1) 真移动：provider 级 moveDocument（API 24 = minSdk，恒可用；provider 不支持时抛异常/返回 null）
             try {
                 Uri moved = DocumentsContract.moveDocument(

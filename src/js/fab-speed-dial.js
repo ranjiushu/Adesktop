@@ -104,6 +104,18 @@ App.fabSpeedDial = (function () {
         App.Actions.paste()
         collapse()
         return
+      case 'compress':
+        // 压缩为 zip：先捕获选中快照（collapse 会清空选中）→ 弹「创建压缩文件」对话框
+        if (App.Desktop && typeof App.Desktop.getSelectionEntries === 'function') {
+          const entries = App.Desktop.getSelectionEntries()
+          if (entries && entries.length && App.CompressDialog && typeof App.CompressDialog.open === 'function') {
+            collapse()
+            App.CompressDialog.open(entries)
+            return
+          }
+        }
+        collapse()
+        return
       case 'rename':
         // 重命名：单选才可用（多选提示）
         if (App.Desktop && typeof App.Desktop.getSelectionNames === 'function') {
@@ -201,6 +213,7 @@ App.fabSpeedDial = (function () {
       _setBtnVisible(sd, 'copy', fileOps)
       _setBtnVisible(sd, 'cut', fileOps && !inTrash)
       _setBtnVisible(sd, 'move', fileOps && !inTrash)
+      _setBtnVisible(sd, 'compress', fileOps && !inTrash)
       _setBtnVisible(sd, 'rename', fileOps && !inTrash)
       _setBtnVisible(sd, 'delete', fileOps && !inTrash)
     }

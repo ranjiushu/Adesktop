@@ -84,6 +84,12 @@ App.FileAPI = (function () {
     move: function (srcPath, dstPath, onProgress) { return call('move', [srcPath, dstPath], 300000, onProgress) },
     // 取消当前传输（复制/移动降级路径）：桥层置取消标志，当前任务尽快中止并清理半成品
     cancelTransfer: function () { return call('cancelTransfer', [], 10000) },
+    // 压缩为 zip 归档：srcPaths（完整相对路径，文件/目录皆可）→ dstPath 单归档（流式，不整读内存）。
+    // level: -1 = 仅存储（不压缩）；0..9 = deflate 级别。长超时 + onProgress 同 copy；
+    // 取消同样走 cancelTransfer（同一取消标志，中止 + 清理半成品）
+    compress: function (srcPaths, dstPath, level, onProgress) {
+      return call('compress', [srcPaths, dstPath, level], 300000, onProgress)
+    },
     // 文件 → WebView 可直接加载的 URI（content:// 或 file://），媒体流式访问用（不搬入内存）
     resolveUri: function (path) { return call('resolveUri', [path]) },
     // 图片全屏预览档：桥层采样解码到屏幕级尺寸（磁盘缓存）后返回 URI（大图不每次解原分辨率）。

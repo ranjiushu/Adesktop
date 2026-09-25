@@ -1,5 +1,6 @@
 /* 文件系统动作（FAB / Drawer / 新建对话框共享）：
- * 新建文件夹/新建文件/刷新/授权手机存储（全盘访问引导） + 阶段 C：重命名/复制/剪切/粘贴。
+ * 新建文件夹/新建文件/刷新/授权手机存储（全盘访问引导） + 阶段 C：重命名/复制/剪切/粘贴，
+ * 以及删除（进回收站）、移动、压缩为 zip。
  * 复制/剪切只写剪贴板（内存态，Windows 模型），粘贴时才真正 copy / move（cut）。
  * 移动 = 真移动优先（FileBridge.move：私有 File.renameTo / SAF moveDocument），失败降级 copy+del。
  * 路径约定：全部使用完整相对路径（含当前目录前缀），FileAPI 桥天然匹配。
@@ -509,6 +510,199 @@ App.Actions = (function () {
     _transfer({ mode: 'cut', entries: entries }, dirPath, { keepClipboard: true })
   }
 
+  // ── 压缩为 zip（Morph FAB「压缩」→ CompressDialog 收集参数后执行）──
+  // 产物 = 当前目录下的 <名>.zip（重名自动加序号，与 create/paste 同一命名入口 uniqueName）。
+  // opts.separate = 单独压缩每个文件/文件夹（每项各出一个 <主名>.zip，规划名互不相同）；
+  // opts.deleteAfter = 压缩成功后删除源——走删除管道**进回收站**（可恢复，不做彻底删除，
+  //   失败安全语义见 operation-contract.md 2.5）；只删归档成功的源（失败项源保留可重试）。
+  // 进度/取消：桥层字节级进度（__fbProgress）+ cancelTransfer（同一传输取消语义）；
+  //   取消后剩余归档不再启动，取消 ≠ 失败（见 operation-contract.md 2.8）。
+
+  // 压缩级别键 → 桥层数值：store = -1（仅存储，zip method=STORED）；其余 = deflate 级别
+  /** @type {Record<string, number>} */
+  const _ZIP_LEVELS = { store: -1, fast: 1, normal: 6, best: 9 }
+  /** @param {string} key @returns {number} */
+  function _levelOf(key) {
+    const v = _ZIP_LEVELS[key]
+    return typeof v === 'number' ? v : _ZIP_LEVELS.normal
+  }
+
+  // 归一化压缩文件名：去空白；空回退「压缩包」；缺 .zip 后缀补上（大小写不敏感）
+  /** @param {string} raw @returns {string} */
+  function _zipName(raw) {
+    let name = (raw || '').trim()
+    if (!name) name = '压缩包'
+    if (!/\.zip$/i.test(name)) name += '.zip'
+    return name
+  }
+
+  // 完整路径 → 去扩展名主名（'docs/报告.txt' → '报告'；目录/无扩展名原样）
+  /** @param {string} path @returns {string} */
+  function _zipBaseOf(path) {
+    const leaf = path.indexOf('/') >= 0 ? path.slice(path.lastIndexOf('/') + 1) : path
+    const dot = leaf.lastIndexOf('.')
+    return dot > 0 ? leaf.slice(0, dot) : leaf
+  }
+
+  /** @param {Array<ClipboardEntry>} entries @param {CompressOptions} opts @returns {void} */
+  function compressSelection(entries, opts) {
+    if (!entries || !entries.length) return
+    const separate = !!(opts && opts.separate)
+    const deleteAfter = !!(opts && opts.deleteAfter)
+    const level = _levelOf(opts && opts.level)
+    if (_lockedEntry(entries)) {
+      App.toast.show('文件正在预览（锁定），不可压缩')
+      return
+    }
+    // 回收站自身不进压缩（与删除/剪切同一守卫）
+    const safe = entries.filter(function (e) {
+      return !(App.Desktop && typeof App.Desktop.isTrashPath === 'function' && App.Desktop.isTrashPath(e.path))
+    })
+    if (!safe.length) {
+      App.toast.show('回收站不可压缩')
+      return
+    }
+    // 文件名校验只针对整包模式（单独压缩时每项用自身主名，忽略输入）
+    const rawName = (opts && opts.name || '').trim()
+    if (!separate && rawName.indexOf('/') >= 0) {
+      App.toast.show('压缩失败: 文件名不能包含路径分隔符')
+      return
+    }
+    App.FileAPI.list(_curPath()).then(function (items) {
+      // 命名规划（唯一入口 uniqueName，重名自动加序号）：
+      // 整包 = <文件名>.zip；单独压缩 = 每项 <主名>.zip，规划名互不相同（taken 同时记入）
+      /** @type {Array<{srcPaths: Array<string>, dstName: string, entry: ClipboardEntry | null}>} */
+      const jobs = []
+      const taken = (items || []).map(function (it) { return it.name })
+      if (separate) {
+        safe.forEach(function (e) {
+          const dstName = App.Clipboard.uniqueName(taken, _zipName(_zipBaseOf(e.path)), false)
+          taken.push(dstName)
+          jobs.push({ srcPaths: [e.path], dstName: dstName, entry: e })
+        })
+      } else {
+        const dstName = App.Clipboard.uniqueName(taken, _zipName(rawName), false)
+        jobs.push({
+          srcPaths: safe.map(function (e) { return e.path }),
+          dstName: dstName,
+          entry: null
+        })
+      }
+      const title = '正在压缩'
+      const totalSteps = jobs.length
+      /** @type {Array<{name: string, ok: boolean, error: string | null}>} */
+      let results = []      // 逐项结果 [{name, ok, error}]（失败汇总）
+      let done = 0
+      let cancelSent = false
+      let cancelled = false      // 已请求取消：剩余归档不再启动（与 _transfer 同一取消语义）
+      /** @type {Array<string>} */
+      let cancelledItems = []    // 被取消项，取消 ≠ 失败
+      /** @type {Array<ClipboardEntry>} */
+      let succeeded = []         // 归档成功的源项（压缩后删除源只删这些）
+      /** @returns {void} */
+      function requestCancel() {
+        if (cancelSent) return
+        cancelSent = true
+        cancelled = true
+        if (App.FileAPI && typeof App.FileAPI.cancelTransfer === 'function') {
+          App.FileAPI.cancelTransfer()
+        }
+      }
+      /** @param {{srcPaths: Array<string>, dstName: string}} job @returns {(p: FbProgress) => void} */
+      function makeOnProgress(job) {
+        return function (p) {
+          if (!p || !p.path) return
+          if (App.Loading && typeof App.Loading.show === 'function') {
+            App.Loading.show({
+              title: title,
+              phaseLabel: '压缩',
+              phaseDone: done, phaseTotal: jobs.length,
+              totalLabel: '总进度',
+              totalDone: done, totalTotal: totalSteps,
+              current: { name: p.path, done: p.done, total: p.total },
+              cancellable: true,
+              onCancel: requestCancel
+            })
+          }
+        }
+      }
+      /** @returns {void} */
+      function showLoading() {
+        if (App.Loading && typeof App.Loading.show === 'function') {
+          App.Loading.show({
+            title: title,
+            phaseLabel: '压缩',
+            phaseDone: done, phaseTotal: jobs.length,
+            totalLabel: '总进度',
+            totalDone: done, totalTotal: totalSteps,
+            cancellable: true,
+            onCancel: requestCancel
+          })
+        }
+      }
+      showLoading()
+      // 逐项执行：失败不中断（逐项收集），全部结束后统一汇总
+      let chain = Promise.resolve()
+      jobs.forEach(function (job) {
+        chain = chain.then(function () {
+          if (cancelled) {
+            cancelledItems.push(job.dstName)
+            return
+          }
+          return App.FileAPI.compress(job.srcPaths, _joinPath(job.dstName), level, makeOnProgress(job))
+            .then(function () {
+              done++
+              results.push({ name: job.dstName, ok: true, error: null })
+              if (job.entry) {
+                succeeded.push(job.entry)
+              } else {
+                succeeded.push.apply(succeeded, safe)   // 整包成功 = 全部源可删
+              }
+              showLoading()
+            }).catch(function (err) {
+              done++
+              if (cancelled) {
+                cancelledItems.push(job.dstName)
+                return
+              }
+              results.push({ name: job.dstName, ok: false, error: (err && err.message) || String(err) })
+            })
+        })
+      })
+      return chain.then(function () {
+        const okCount = results.filter(function (r) { return r.ok }).length
+        const failList = results.filter(function (r) { return !r.ok })
+        if (App.Loading && typeof App.Loading.hide === 'function') App.Loading.hide()
+        const names = results.filter(function (r) { return r.ok }).map(function (r) { return r.name })
+        if (cancelledItems.length) {
+          App.toast.show('已创建 ' + okCount + ' 个压缩文件，已取消 ' + cancelledItems.length + ' 项')
+        } else if (failList.length) {
+          App.toast.show('已创建 ' + okCount + ' 个压缩文件，失败 ' + failList.length + ' 项')
+          _showFailSummary(failList)
+        } else if (names.length === 1) {
+          App.toast.show('已创建压缩文件: ' + names[0])
+        } else {
+          App.toast.show('已创建 ' + names.length + ' 个压缩文件')
+        }
+        if (deleteAfter && succeeded.length) {
+          // 压缩后删除源：走删除管道进回收站（其自带 Loading/toast/refresh，可恢复）
+          deleteSelection(succeeded)
+          return
+        }
+        App.Desktop.clearSelection()
+        App.Desktop.refresh()
+      }).catch(function (err) {
+        if (App.Loading && typeof App.Loading.hide === 'function') App.Loading.hide()
+        App.toast.show('压缩失败: ' + err.message)
+        App.Desktop.clearSelection()
+        App.Desktop.refresh()
+      })
+    }).catch(function (err) {
+      if (App.Loading && typeof App.Loading.hide === 'function') App.Loading.hide()
+      App.toast.show('压缩失败: ' + err.message)
+    })
+  }
+
   /** @type {Actions} */
   return {
     createFolder: createFolder,
@@ -522,6 +716,7 @@ App.Actions = (function () {
     cutSelection: cutSelection,
     paste: paste,
     deleteSelection: deleteSelection,
-    moveIntoFolder: moveIntoFolder
+    moveIntoFolder: moveIntoFolder,
+    compressSelection: compressSelection
   }
 })()

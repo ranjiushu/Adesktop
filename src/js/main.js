@@ -56,6 +56,10 @@ App.boot = function boot() {
   if (App.RenameDialog && typeof App.RenameDialog.init === 'function') {
     App.RenameDialog.init()
   }
+  // 创建压缩文件对话框（选中态操作栏「压缩」弹出）
+  if (App.CompressDialog && typeof App.CompressDialog.init === 'function') {
+    App.CompressDialog.init()
+  }
   // 移动目标选择器（Morph FAB「移动」弹出：级联浏览文件夹选目标）
   if (App.MoveTarget && typeof App.MoveTarget.init === 'function') {
     App.MoveTarget.init()

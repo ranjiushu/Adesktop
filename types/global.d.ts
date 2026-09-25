@@ -60,6 +60,7 @@ interface FileApi {
   copy(srcPath: string, dstPath: string, onProgress?: (p: FbProgress) => void): Promise<any>
   move(srcPath: string, dstPath: string, onProgress?: (p: FbProgress) => void): Promise<any>
   cancelTransfer(): Promise<any>
+  compress(srcPaths: string[], dstPath: string, level: number, onProgress?: (p: FbProgress) => void): Promise<any>
   resolveUri(path: string): Promise<any>
   previewUri(path: string): Promise<any>
   thumb(path: string): Promise<any>
@@ -842,6 +843,26 @@ interface WebsiteDialog {
   init(): void
 }
 
+/** 创建压缩文件参数（CompressDialog 收集，Actions.compressSelection 执行） */
+interface CompressOptions {
+  /** 整包文件名（单独压缩时忽略）；最终命名由 uniqueName 规划，重名自动加序号 */
+  name: string
+  /** 压缩级别键：store（仅存储）/ fast / normal / best → 桥层 -1/1/6/9 */
+  level: string
+  /** 单独压缩每个文件/文件夹（每项各出一个 <主名>.zip） */
+  separate: boolean
+  /** 压缩后删除源文件（走删除管道进回收站，可恢复） */
+  deleteAfter: boolean
+}
+
+/** 创建压缩文件对话框（App.CompressDialog） */
+interface CompressDialog {
+  open(entries: Array<ClipboardEntry>): void
+  close(): void
+  isOpen(): boolean
+  init(): void
+}
+
 /** 移动目标选择器（App.MoveTarget） */
 interface MoveTarget {
   open(entries: Array<ClipboardEntry>): void
@@ -864,6 +885,7 @@ interface Actions {
   paste(): void
   deleteSelection(entries: Array<ClipboardEntry>): void
   moveIntoFolder(entries: Array<ClipboardEntry>, dirPath: string): void
+  compressSelection(entries: Array<ClipboardEntry>, opts: CompressOptions): void
 }
 
 /** 构建注入变量（build-web.sh 注入，见 tools/build-web.sh） */
@@ -914,6 +936,7 @@ interface AppNamespace {
   ViewMenu: ViewMenu
   CreateDialog: CreateDialog
   RenameDialog: RenameDialog
+  CompressDialog: CompressDialog
   WebsiteDialog: WebsiteDialog
   MoveTarget: MoveTarget
   Actions: Actions

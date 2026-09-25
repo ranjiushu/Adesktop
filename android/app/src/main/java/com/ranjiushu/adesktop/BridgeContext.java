@@ -264,6 +264,78 @@ class BridgeContext {
         }
     }
 
+    /* ── 目标路径工具（TransferEngine / ZipEngine 共用）── */
+
+    /* 解析 dstPath 的父目录 DocumentFile，不存在则逐级创建（回收站首删 / 粘贴到新目录场景）。 */
+    DocumentFile resolveOrCreateParent(String dstPath) throws IOException {
+        DocumentFile root = DocumentFile.fromTreeUri(activity, rootUri);
+        if (root == null) throw new IOException("根目录不可用");
+        String[] parts = dstPath.split("/");
+        DocumentFile cur = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            if (parts[i].isEmpty()) continue;
+            DocumentFile next = cur.findFile(parts[i]);
+            if (next == null) next = cur.createDirectory(parts[i]);
+            if (next == null || !next.isDirectory()) throw new IOException("无法进入目录: " + parts[i]);
+            cur = next;
+        }
+        return cur;
+    }
+
+    /** 清理本次创建的目标（递归删除）+ 向上清理 resolveOrCreateParent 创建的空父目录。
+     *  失败安全配套：取消/失败的传输与压缩只删「本次创建的半成品」（目标原本不存在才调用）。 */
+    void cleanupCreated(String dstPath) {
+        if (isSafMode()) {
+            try {
+                DocumentFile df = (DocumentFile) resolve(dstPath);
+                if (df != null) df.delete();
+            } catch (Exception ignored) {}
+            // 向上清理空目录（resolveOrCreateParent 可能逐级创建了父目录）
+            DocumentFile root = DocumentFile.fromTreeUri(activity, rootUri);
+            if (root != null) {
+                int i = dstPath.lastIndexOf('/');
+                while (i > 0) {
+                    String parentPath = dstPath.substring(0, i);
+                    try {
+                        DocumentFile dir = (DocumentFile) resolve(parentPath);
+                        if (dir != null && dir.listFiles().length == 0) {
+                            dir.delete();
+                        } else {
+                            break;  // 非空，停止
+                        }
+                    } catch (Exception e) {
+                        break;  // 路径不存在，停止
+                    }
+                    i = parentPath.lastIndexOf('/');
+                }
+            }
+        } else {
+            File root = fileRoot();
+            deleteRecursive(new File(root, dstPath));
+            // 向上清理空目录
+            File f = new File(root, dstPath).getParentFile();
+            while (f != null && !f.equals(root)) {
+                String[] children = f.list();
+                if (children != null && children.length == 0) {
+                    f.delete();
+                    f = f.getParentFile();
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void deleteRecursive(File f) {
+        if (f.isDirectory()) {
+            File[] children = f.listFiles();
+            if (children != null) {
+                for (File c : children) deleteRecursive(c);
+            }
+        }
+        f.delete();
+    }
+
     /* SAF tree uri → 可显示路径：tree/primary%3ADesktop → "内部存储/Desktop" */
     String safDisplayPath(Uri treeUri) {
         String seg = treeUri.getLastPathSegment();

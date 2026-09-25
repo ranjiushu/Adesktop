@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### 压缩到 zip（创建压缩文件）（2026-09-25）
+
+- **功能**：选中态操作栏新增「压缩」→「创建压缩文件」对话框（布局参考 MT 管理器）：
+  文件名（默认主名 + `.zip`，主名自动选中；重名自动加序号）/ 格式（现阶段仅 zip）/
+  压缩级别（仅存储·最快·标准·最好，映射 zip STORED / deflate 1·6·9，**默认标准**）/
+  单独压缩每个文件/文件夹（每项各出一个 `<主名>.zip`）/ 压缩后删除源文件。
+- **压缩后删除源 = 进回收站**：走现有删除管道（可恢复、失败安全），只删归档成功的源；
+  不做彻底删除。
+- **桥契约**：新增 `FileBridge.compress(srcPaths, dstPath, level)`（流式，`java.util.zip`
+  zip64 自动处理；目标已存在报错不覆盖；归档不得自包含），实现拆分出 `ZipEngine`
+  （File/DocumentFile 双后端适配）+ `ZipWriter`（纯 JVM 写出器，可在桌面 JVM 直测）；
+  取消复用 `cancelTransfer` 同一取消标志，半成品清理上提 `BridgeContext.cleanupCreated`
+  （TransferEngine/ZipEngine 共用）。契约同步 `docs/bridge-and-data-contract.md`。
+- **交互修正**：对话框勾选行整行可点——遮罩 bindPress 对非可编辑目标 `preventDefault`
+  会压掉 label 原生激活（点行内文字不切换复选框，真机同样），改为行内手动切换 +
+  派发 change，直点复选框走原生路径不重复切。
+- **v1 裁剪**（对照 MT 同款对话框）：密码不做（`java.util.zip` 无加密能力，ZipCrypto 是
+  过时弱加密）、分卷不做（`.z01`/`.z02` 兼容性差）、压缩到另一窗口路径不做（无双窗格，
+  产物落当前目录）。语义详见 `docs/operation-contract.md` 2.8。
+- **验证**：`tests/test-zip-writer.sh`（zip 产物 JVM 直测：级别/取消/空源/中文名/空目录/
+  大文件，unzip -t + python zipfile 双重校验）、`tests/test-compress.js`（编排语义）、
+  `scripts/verify-compress.js`（E2E，接入 `tools/verify.sh`）；桥契约锁
+  `tests/test-bridge-contract.js` 同步。
+
 ### 选中态视觉重做（Windows / macOS 桌面范式：矩形选中块 + 强调色标签芯片）（2026-09-13）
 
 - **动机**：旧选中态是 8% 淡色直角方块（`inset 8px`、`border-radius: 0`、无描边），

@@ -2,7 +2,7 @@
 # 完整验证门禁（治理移植：LexiCull verify 框架因地制宜版）
 # ═══════════════════════════════════════════════════════════════
 #  Adesktop - 提交前验证门禁
-#  按序执行: env-check → build --strict → minify-bundle → lint → 测试套件 → E2E × 5
+#  按序执行: env-check → build --strict → minify-bundle → typecheck → lint → 测试套件 → E2E 逐项
 #  任何一步失败则 exit 1。输出机器可读 PASS/FAIL 摘要。
 #  用法: bash tools/verify.sh
 # ═══════════════════════════════════════════════════════════════
@@ -116,6 +116,7 @@ e2e_step "snapshot-sheet-e2e" scripts/verify-snapshot-sheet.js
 e2e_step "viewer-e2e"         scripts/verify-viewer.js
 e2e_step "folder-nav-e2e"     scripts/verify-folder-nav.js
 e2e_step "thumb-viewport-e2e" scripts/verify-thumb-viewport.js
+e2e_step "compress-e2e"       scripts/verify-compress.js
 
 # ── 摘要 ──
 echo ""

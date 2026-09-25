@@ -170,6 +170,26 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 
 现有测试：`tests/test-file-opener.js`（kindFor 分派）、`tests/test-desktop-viewerlink-lock.js`（打开态生命周期：派生锁定/落位/集合 diff 渲染/落位动画）。
 
+### 2.8 compress（压缩为 zip，2026-09-25 新增）
+
+| 属性 | 契约 |
+|------|------|
+| 输入 | `compressSelection(entries, opts)`：entries = 选中项 `[{path,isDir}]`（完整相对路径）；opts = `{name, level, separate, deleteAfter}`（CompressDialog 收集）；级别键 → 桥层 `store=-1`（仅存储）/`fast=1`/`normal=6`/`best=9` |
+| 前置 | 源未被锁定（含锁定目录内子项）；回收站自身不可压缩（与删除/剪切同一守卫）；目标目录可列（命名规划）；整包文件名非空（缺省「压缩包」）且不含 `/`（路径注入拒绝） |
+| 成功 | 当前目录出现 `<名>.zip`（重名自动加序号，唯一入口 `uniqueName`，与 create/paste 同规则）；`separate` = 每项各出一个 `<主名>.zip`（规划名互不相同，同名拆主名加序号）；toast「已创建压缩文件: N」/「已创建 N 个压缩文件」；clearSelection + refresh |
+| 失败 | 单归档失败**不中断**（逐项收集，失败汇总弹窗，同 2.3）；桥层失败/取消时清理本次创建的半成品（目标原本不存在才删，`BridgeContext.cleanupCreated`）；目标已存在报「已存在同名项」，**不覆盖** |
+| 取消 | `cancelTransfer` 置同一取消标志 → 当前归档中止 + 清理半成品；**剩余归档不再启动**；结束态报「已创建 N 个，已取消 M 项」（取消 ≠ 失败，同 1.3） |
+| UI 状态 | Loading「正在压缩」字节级进度（当前条目行 + 总进度）+ 取消按钮；对话框默认级别=标准、两个勾选项=关；单独压缩模式下文件名输入禁用（每项用自身主名） |
+| deleteAfter | 压缩成功后**只删归档成功的源**（失败项源保留可重试），走删除管道**进回收站**（`deleteSelection`，可恢复，不做彻底删除；失败安全见 2.5） |
+| 后端 | `ZipEngine`（File/DocumentFile 双后端适配 → `ZipWriter.Node`）+ `ZipWriter`（纯 JVM 流式 zip：STORED 预读算 CRC32、DEFLATED 直写；zip64 由 `ZipOutputStream` 自动处理）；串行于 `BridgeContext` 同一 executor |
+
+**v1 范围裁剪**（对照 MT 管理器「创建压缩文件」对话框）：**密码**不做——`java.util.zip` 无加密能力，
+手写 ZipCrypto 是过时弱加密；**分卷**不做——zip 分卷格式（`.z01`/`.z02`）兼容性差；**压缩到另一窗口路径**
+不做——Adesktop 无双窗格概念，产物落当前目录。格式下拉仅 zip（为后续格式留位）。
+
+现有测试：`tests/test-zip-writer.sh`（zip 产物正确性 JVM 直测：级别/取消/空源拒绝/中文名/空目录/大文件）、
+`tests/test-compress.js`（编排语义：命名/级别映射/调度/取消/删除源/守卫）、`scripts/verify-compress.js`（E2E）。
+
 ## 三、命名规划器（唯一入口）
 
 - 唯一入口：`App.Clipboard.uniqueName(takenNames, desiredName, isDir)`（2026-08-17 收口）。
@@ -193,6 +213,7 @@ mtime 差异影响**——该差异已**文档化接受（2026-08-17）**，本�
 | 9 | delete 进 .trash 重名加序号 / 回收站自身不可删 / 未授权拒绝 | test-actions.js | 已有 |
 | 10 | open 打开态生命周期（派生锁定 / 落位 / 图标退场重现） | test-desktop-viewerlink-lock.js + test-viewer-lock-sync.js | 已有 |
 | 11 | SAF/private 双后端等价（Operation Contract Test） | SAF move 改名语义已修（TransferEngine leafOf 分支）；mtime 差异已文档化接受；Java 侧依赖 Android，退化为真机手工验收矩阵（待生成） | 部分完成 |
+| 12 | compress 命名/级别映射/取消停止调度/删除源只删成功项（进回收站）/守卫 + zip 产物正确性 | test-compress.js + test-zip-writer.sh（JVM 直测）+ verify-compress.js（E2E） | 已有（2026-09-25） |
 
 ## 五、变更规则
 

@@ -3,9 +3,10 @@
  * 私有目录 filesDir/root（兜底），三模式由 BridgeContext 判定。
  * 路径一律相对根目录；校验拒绝绝对路径与 .. 逃逸。
  * 回调协议: JS 调用 list(path, cbId)，完成后 evaluateJavascript("window.__fbResolve('cbId', 'json')")
- * 本类只保留 22 个 @JavascriptInterface 方法签名（window.FileBridge API 面不可变），
- * 实现按职责委托给 BridgeContext / FileStore / TransferEngine / ThumbnailService /
- * AppBridge / ExternalOpen / UploadBridge；文件操作仍串行于 BridgeContext 的同一 executor。
+ * 本类只保留 @JavascriptInterface 方法签名（window.FileBridge API 面），
+ * 实现按职责委托给 BridgeContext / FileStore / TransferEngine / ZipEngine /
+ * ThumbnailService / AppBridge / ExternalOpen / UploadBridge；
+ * 文件操作仍串行于 BridgeContext 的同一 executor。
  */
 package com.ranjiushu.adesktop;
 
@@ -26,6 +27,7 @@ public class FileBridge {
     private final BridgeContext ctx;
     private final FileStore fileStore;
     private final TransferEngine transferEngine;
+    private final ZipEngine zipEngine;
     private final ThumbnailService thumbnailService;
     private final AppBridge appBridge;
     private final ExternalOpen externalOpen;
@@ -35,6 +37,7 @@ public class FileBridge {
         this.ctx = new BridgeContext(activity, webView, rootUri, allFilesRoot, forceSafMode);
         this.fileStore = new FileStore(ctx);
         this.transferEngine = new TransferEngine(ctx);
+        this.zipEngine = new ZipEngine(ctx);
         this.thumbnailService = new ThumbnailService(ctx);
         this.appBridge = new AppBridge(ctx);
         this.externalOpen = new ExternalOpen(ctx);
@@ -220,6 +223,14 @@ public class FileBridge {
     @JavascriptInterface
     public void cancelTransfer(String cbId) {
         transferEngine.cancelTransfer(cbId);
+    }
+
+    /* 压缩为 zip 归档：srcPaths（完整相对路径，文件/目录皆可）→ dstPath 单归档。
+     * level: -1 = 仅存储（不压缩）；0..9 = deflate 级别。目标名由前端规划，不覆盖已有文件。
+     * 串行于同一 executor；取消走 cancelTransfer（同一取消标志，中止 + 清理半成品）。 */
+    @JavascriptInterface
+    public void compress(String[] srcPaths, String dstPath, int level, String cbId) {
+        ctx.executor.execute(() -> zipEngine.compress(srcPaths, dstPath, level, cbId));
     }
 
     @JavascriptInterface

@@ -1,7 +1,7 @@
 # 桥与数据契约清单
 
 本文件不是新规范，是把散落在 `FileBridge.java`（及其拆分后的实现类：`BridgeContext`/
-`FileStore`/`TransferEngine`/`ThumbnailService`/`AppBridge`/`ExternalOpen`/`UploadBridge`）、
+`FileStore`/`TransferEngine`/`ZipEngine`/`ThumbnailService`/`AppBridge`/`ExternalOpen`/`UploadBridge`）、
 `src/js/file-api.js`、`src/js/bridge.js`、
 `docs/architecture.md`、`docs/data-integrity.md` 里的规则收拢成一份**可对照的清单**。
 
@@ -32,6 +32,7 @@
 | `FileAPI.copy(src, dst, onProgress)` | `copy` | `srcPath, dstPath` | `true` | 复制（onProgress 可选：字节级进度回调） |
 | `FileAPI.move(src, dst, onProgress)` | `move` | `srcPath, dstPath` | `true` | 移动（真移动优先，失败降级 copy+delete；onProgress 同上） |
 | `FileAPI.cancelTransfer()` | `cancelTransfer` | 无 | `true` | 取消当前传输（置取消标志，当前任务中止 + 清理半成品） |
+| `FileAPI.compress(srcPaths, dstPath, level)` | `compress` | `srcPaths, dstPath, level` | `true` | 压缩为 zip 归档（流式；`srcPaths` 为完整相对路径数组，文件/目录皆可；`level`：-1=仅存储，0..9=deflate 级别；目标名由前端规划，**目标已存在即报错不覆盖**；归档不得自包含——目标位于源目录内拒绝；取消走 `cancelTransfer`，语义见 operation-contract.md 2.8） |
 | `FileAPI.resolveUri(path)` | `resolveUri` | `path` | `uri` | 转 WebView 可直接加载的 URI |
 | `FileAPI.previewUri(path)` | `previewUri` | `path` | `uri` | 图片全屏预览档：采样解码到屏幕级尺寸（1920px 最长边，磁盘缓存 `cacheDir/previews`）后返回 URI；原图小于该尺寸时直接返回原图 URI；非位图格式/失败时报错（前端回退 `resolveUri` 原图） |
 | `FileAPI.thumb(path)` | `thumb` | `path` | `data:image/jpeg;base64,...` | 缩略图（磁盘缓存 `cacheDir/thumbs`，256px 最长边；data URI 规避 file:// 时效问题） |
@@ -57,8 +58,8 @@
 - 传输进度（copy/move 降级路径）：桥层约 200ms 节流推送
   `evaluateJavascript("window.__fbProgress('cbId', {path, done, total})")`（字节），
   `window.__fbProgress` 由 `file-api.js` 注册并转发给当前操作的 `onProgress` 回调（不触发 Promise）。
-- 前端默认超时 10 秒（`call()` 的 `timeoutMs || 10000`）；copy/move 用 300 秒长超时
-  （大文件/大目录降级复制；超时只兜底不取消，避免误报失败）。
+- 前端默认超时 10 秒（`call()` 的 `timeoutMs || 10000`）；copy/move/compress 用 300 秒长超时
+  （大文件/大目录降级复制、大归档；超时只兜底不取消，避免误报失败）。
 
 ### 1.3 返回形状
 

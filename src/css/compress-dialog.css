@@ -1,0 +1,65 @@
+/* 创建压缩文件对话框表单：文件名 / 格式 + 压缩级别双列 / 勾选项。
+   复用 dialog.css 基座（标题/输入/按钮），这里只补表单排布与 select 样式。
+   select 保留原生外观（不移除 appearance）：下拉箭头由平台渲染，移动端可点区域可靠。 */
+.compress-field {
+  margin-bottom: var(--space-sm);
+  min-width: 0;
+}
+
+.compress-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.compress-row {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.compress-field-half {
+  flex: 1;
+  min-width: 0;
+}
+
+.compress-select {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background: var(--color-bg);
+  outline: none;
+}
+
+.compress-select:focus {
+  border-color: var(--color-accent);
+}
+
+/* 勾选项（单独压缩 / 压缩后删除源）：整行可点（行内手动切换，见 compress-dialog.js） */
+.compress-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: 2px;
+  padding: var(--space-sm) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  user-select: none;
+  cursor: pointer;
+}
+
+.compress-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+/* 单独压缩模式：文件名输入禁用（每项用自身主名，输入框不参与） */
+.compress-field input.dialog-input:disabled {
+  color: var(--color-text-tertiary, #b0b6c0);
+}

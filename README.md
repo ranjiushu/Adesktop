@@ -73,6 +73,10 @@ bash tools/verify.sh      # 完整门禁：构建 + 类型检查 + 压缩 + lint
 - `docs/interaction.md` — 桌面交互设计（坐标模型 / 手势状态机）
 - `docs/data-integrity.md` — 「文件即真相」的数据完整性纪律
 
+## 贡献
+
+提交前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md)：门禁、分支治理与贡献授权约定都在那里。
+
 ## License
 
 [GPL-3.0](LICENSE) — Copyright (C) 2026 ranjiushu

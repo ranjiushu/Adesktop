@@ -11,5 +11,6 @@
 | `fs-scope.md` | 文件系统范围决策（SAF 授权目录为主 + 私有目录兜底） |
 | `interaction.md` | 桌面交互设计定稿（坐标模型 / 手势状态机 / 目录导航 / 视图模式 / 旋转画布 / Loading Feedback） |
 | `viewer.md` | 文件查看器架构决策（FileOpener 分派 / InternalViewer / HTML 桥隔离 / 锚点跟随） |
+| `third-party.md` | 第三方来源台账（非自研代码 / 图标 / 素材的来源与许可，唯一事实源） |
 | `repo-map.md` | 仓库地图（逐源文件行数 + 职责，构建时自动生成，不入库） |
 

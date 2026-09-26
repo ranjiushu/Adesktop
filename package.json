@@ -2,6 +2,7 @@
   "name": "adesktop",
   "version": "0.3.0",
   "private": true,
+  "license": "GPL-3.0-only",
   "description": "Adesktop 构建工具依赖（运行时零依赖，仅构建期使用）",
   "scripts": {
     "typecheck": "tsc --noEmit"

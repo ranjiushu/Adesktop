@@ -11,6 +11,9 @@
   npm 依赖、本人跨项目移植代码），作为「哪部分不可改许可」的唯一事实源；不复制会漂移的版本号，
   版本以 `package.json` / `android/app/build.gradle` 声明为准。
 - **README 增「贡献」节**：指向 `CONTRIBUTING.md`；`docs/README.md` 索引同步补 `third-party.md`。
+- **新增 lint 检查 5「License 一致性」**：校验 README `[<协议标识>](LICENSE)` ↔ `LICENSE` 正文首部
+  ↔ `package.json` 的 `license` 字段三者一致（GPL / AGPL / MIT / Apache 四族，AGPL 与 GPL 区分），
+  防协议漂移；`package.json` 补 `"license": "GPL-3.0-only"`。
 - **不变**：LICENSE 维持 GPL-3.0（版权人可自行以其他条款分发，无需换协议）。
 
 ### 压缩到 zip（创建压缩文件）（2026-09-25）
